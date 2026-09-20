@@ -236,6 +236,44 @@ class GlobalExceptionHandlerTest {
         assertEquals("/api/test", response.getBody().getPath());
     }
 
+    @Test
+    @DisplayName("Test handleIllegalArgument -> 400 Bad Request")
+    void testHandleIllegalArgument() {
+        IllegalArgumentException ex = new IllegalArgumentException("Invalid sort field");
+        ResponseEntity<ErrorResponse> response = exceptionHandler.handleIllegalArgument(ex, request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(400, response.getBody().getStatus());
+        assertEquals("Invalid sort field", response.getBody().getMessage());
+        assertEquals("/api/test", response.getBody().getPath());
+    }
+
+    @Test
+    @DisplayName("Test handleConstraintViolation with violations and empty violations -> 400 Bad Request")
+    void testHandleConstraintViolation() {
+        jakarta.validation.ConstraintViolation<?> violation = mock(jakarta.validation.ConstraintViolation.class);
+        when(violation.getMessage()).thenReturn("Page must be at least 1");
+
+        jakarta.validation.ConstraintViolationException exWithViolations =
+                new jakarta.validation.ConstraintViolationException("Validation error", java.util.Set.of(violation));
+        ResponseEntity<ErrorResponse> response1 = exceptionHandler.handleConstraintViolation(exWithViolations, request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response1.getStatusCode());
+        assertNotNull(response1.getBody());
+        assertEquals(400, response1.getBody().getStatus());
+        assertEquals("Page must be at least 1", response1.getBody().getMessage());
+
+        jakarta.validation.ConstraintViolationException exEmpty =
+                new jakarta.validation.ConstraintViolationException("Validation error", java.util.Collections.emptySet());
+        ResponseEntity<ErrorResponse> response2 = exceptionHandler.handleConstraintViolation(exEmpty, request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response2.getStatusCode());
+        assertNotNull(response2.getBody());
+        assertEquals(400, response2.getBody().getStatus());
+        assertEquals("Validation constraint violation", response2.getBody().getMessage());
+    }
+
     private void dummyMethod(String param) {
     }
 }

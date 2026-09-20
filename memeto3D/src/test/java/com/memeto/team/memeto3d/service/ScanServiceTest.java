@@ -1,6 +1,7 @@
 package com.memeto.team.memeto3d.service;
 
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
+import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.entity.InputMode;
 import com.memeto.team.memeto3d.entity.Role;
@@ -16,11 +17,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -163,5 +171,168 @@ class ScanServiceTest {
         );
 
         verify(scanRepository, never()).save(any(Scan.class));
+    }
+
+    @Test
+    @DisplayName("getScans returns user scans without status filter, sorted by created_at DESC by default")
+    void testGetScansWithoutFilter() {
+        Scan scan = Scan.builder()
+                .id(UUID.randomUUID())
+                .user(mockUser)
+                .name("Scan 1")
+                .status(ScanStatus.draft)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+
+        Page<Scan> page = new PageImpl<>(List.of(scan));
+        when(scanRepository.findByUserIdAndDeletedAtIsNull(eq(userId), any(Pageable.class)))
+                .thenReturn(page);
+
+        ScanListResponse response = scanService.getScans(userId, null, 1, 20, null);
+
+        assertNotNull(response);
+        assertEquals(1, response.getScans().size());
+        assertEquals(1, response.getItems().size());
+        assertEquals(1L, response.getTotalCount());
+        assertEquals(1, response.getPage());
+        assertEquals(20, response.getLimit());
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(scanRepository).findByUserIdAndDeletedAtIsNull(eq(userId), pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertEquals(0, pageable.getPageNumber());
+        assertEquals(20, pageable.getPageSize());
+        assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("createdAt").getDirection());
+    }
+
+    @Test
+    @DisplayName("getScans filters by status correctly when provided")
+    void testGetScansWithStatusFilter() {
+        Scan scan = Scan.builder()
+                .id(UUID.randomUUID())
+                .user(mockUser)
+                .name("Scan 2")
+                .status(ScanStatus.ready)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+
+        Page<Scan> page = new PageImpl<>(List.of(scan));
+        when(scanRepository.findByUserIdAndStatusAndDeletedAtIsNull(eq(userId), eq(ScanStatus.ready), any(Pageable.class)))
+                .thenReturn(page);
+
+        ScanListResponse response = scanService.getScans(userId, "ready", 1, 10, "created_at,desc");
+
+        assertNotNull(response);
+        assertEquals(1, response.getScans().size());
+        assertEquals("ready", response.getScans().get(0).getStatus());
+
+        verify(scanRepository, times(1))
+                .findByUserIdAndStatusAndDeletedAtIsNull(eq(userId), eq(ScanStatus.ready), any(Pageable.class));
+        verify(scanRepository, never())
+                .findByUserIdAndDeletedAtIsNull(any(), any());
+    }
+
+    @Test
+    @DisplayName("getScans ignores blank status and queries all scans")
+    void testGetScansWithBlankStatus() {
+        Page<Scan> emptyPage = new PageImpl<>(Collections.emptyList());
+        when(scanRepository.findByUserIdAndDeletedAtIsNull(eq(userId), any(Pageable.class)))
+                .thenReturn(emptyPage);
+
+        ScanListResponse response = scanService.getScans(userId, "   ", 1, 20, "");
+
+        assertNotNull(response);
+        assertEquals(0, response.getScans().size());
+        verify(scanRepository).findByUserIdAndDeletedAtIsNull(eq(userId), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("getScans throws IllegalArgumentException when status is invalid")
+    void testGetScansWithInvalidStatus() {
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> scanService.getScans(userId, "not_a_valid_status", 1, 20, null)
+        );
+        assertTrue(ex.getMessage().contains("Invalid status: not_a_valid_status"));
+    }
+
+    @Test
+    @DisplayName("getScans throws IllegalArgumentException when userId is null")
+    void testGetScansNullUserId() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> scanService.getScans(null, null, 1, 20, null)
+        );
+    }
+
+    @Test
+    @DisplayName("getScans throws IllegalArgumentException when page < 1")
+    void testGetScansInvalidPage() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> scanService.getScans(userId, null, 0, 20, null)
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> scanService.getScans(userId, null, -1, 20, null)
+        );
+    }
+
+    @Test
+    @DisplayName("getScans throws IllegalArgumentException when limit is out of range [1, 100]")
+    void testGetScansInvalidLimit() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> scanService.getScans(userId, null, 1, 0, null)
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> scanService.getScans(userId, null, 1, 101, null)
+        );
+    }
+
+    @Test
+    @DisplayName("getScans parses various valid sort options")
+    void testGetScansVariousSorts() {
+        Page<Scan> emptyPage = new PageImpl<>(Collections.emptyList());
+        when(scanRepository.findByUserIdAndDeletedAtIsNull(eq(userId), any(Pageable.class)))
+                .thenReturn(emptyPage);
+
+        // 1. name,asc
+        scanService.getScans(userId, null, 1, 20, "name,asc");
+        // 2. updated_at:desc
+        scanService.getScans(userId, null, 1, 20, "updated_at:desc");
+        // 3. file_count asc
+        scanService.getScans(userId, null, 1, 20, "file_count asc");
+        // 4. total_size_bytes,desc
+        scanService.getScans(userId, null, 1, 20, "total_size_bytes,desc");
+        // 5. status:asc
+        scanService.getScans(userId, null, 1, 20, "status:asc");
+        // 6. name (no direction -> defaults to DESC)
+        scanService.getScans(userId, null, 1, 20, "name");
+
+        verify(scanRepository, times(6)).findByUserIdAndDeletedAtIsNull(eq(userId), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("getScans throws IllegalArgumentException when sort field is invalid")
+    void testGetScansInvalidSortField() {
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> scanService.getScans(userId, null, 1, 20, "disallowed_field,asc")
+        );
+        assertTrue(ex.getMessage().contains("Invalid sort field"));
+    }
+
+    @Test
+    @DisplayName("getScans throws IllegalArgumentException when sort direction is invalid")
+    void testGetScansInvalidSortDirection() {
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> scanService.getScans(userId, null, 1, 20, "name,sideways")
+        );
+        assertTrue(ex.getMessage().contains("Invalid sort direction: sideways"));
     }
 }
