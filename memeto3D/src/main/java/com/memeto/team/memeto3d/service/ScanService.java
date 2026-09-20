@@ -11,7 +11,6 @@ public interface ScanService {
 
     ScanResponse createScan(CreateScanRequest request, UUID userId);
 
-    ScanResponse getScanById(UUID id, UUID currentUserId, Role currentUserRole);
     ScanListResponse getScans(UUID userId, String status, int page, int limit, String sort);
 
     ScanResponse getScanById(UUID id, UUID currentUserId, Role currentUserRole);
