@@ -129,7 +129,11 @@ go test ./... -coverprofile=coverage.out
 go tool cover -func=coverage.out
 ```
 > Go chỉ đo statement coverage (C0). Muốn C1 cần công cụ bổ sung hoặc bảo đảm bằng review + table-driven test cho mọi nhánh.
+# 1. Chạy toàn bộ test và tự động cập nhật báo cáo JaCoCo:
+.\mvnw.cmd test
 
+# 2. Mở trang index.html của JaCoCo trên trình duyệt:
+Start-Process "target\site\jacoco\index.html"
 ### 1.4. Nguyên tắc viết test tốt
 
 - Mỗi test **một mục đích**, tên nói rõ: `should_return_404_when_order_not_found`.
