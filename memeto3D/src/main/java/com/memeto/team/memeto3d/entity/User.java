@@ -36,6 +36,16 @@ public class User {
     @Builder.Default
     private Role role = Role.ROLE_USER;
 
+    @org.hibernate.annotations.ColumnDefault("0")
+    @Column(name = "storage_used_bytes", nullable = false)
+    @Builder.Default
+    private Long storageUsedBytes = 0L;
+
+    @org.hibernate.annotations.ColumnDefault("10737418240")
+    @Column(name = "storage_quota_bytes", nullable = false)
+    @Builder.Default
+    private Long storageQuotaBytes = 10737418240L; // 10 GB default
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

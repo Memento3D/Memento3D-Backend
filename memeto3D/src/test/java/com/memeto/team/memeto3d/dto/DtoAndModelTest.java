@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.memeto.team.memeto3d.config.JacksonConfig;
 import com.memeto.team.memeto3d.config.OpenApiConfig;
 import com.memeto.team.memeto3d.entity.BlacklistedToken;
+import com.memeto.team.memeto3d.entity.InputMode;
 import com.memeto.team.memeto3d.entity.Role;
+import com.memeto.team.memeto3d.entity.Scan;
+import com.memeto.team.memeto3d.entity.ScanStatus;
 import com.memeto.team.memeto3d.entity.User;
 import io.swagger.v3.oas.models.OpenAPI;
 import org.junit.jupiter.api.DisplayName;
@@ -224,8 +227,129 @@ class DtoAndModelTest {
 
         assertEquals(user.getId(), user2.getId());
 
-        User userAllArgs = new User(id, "user@example.com", "password", "User Name", Role.ROLE_USER, now, now);
+        User userAllArgs = new User(id, "user@example.com", "password", "User Name", Role.ROLE_USER, 0L, 10737418240L, now, now);
         assertEquals(id, userAllArgs.getId());
+        assertEquals(0L, userAllArgs.getStorageUsedBytes());
+        assertEquals(10737418240L, userAllArgs.getStorageQuotaBytes());
+    }
+
+    @Test
+    @DisplayName("Test Scan entity, InputMode, ScanStatus")
+    void testScanEntityAndEnums() {
+        UUID scanId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().id(userId).email("u@example.com").build();
+        Instant now = Instant.now();
+
+        Scan scan = Scan.builder()
+                .id(scanId)
+                .user(user)
+                .name("Scan 1")
+                .description("Desc")
+                .notes("Notes")
+                .inputMode(InputMode.image)
+                .status(ScanStatus.draft)
+                .fileCount(0)
+                .totalSizeBytes(0L)
+                .thumbnailPath("/thumb.jpg")
+                .duplicatedFrom(null)
+                .createdAt(now)
+                .updatedAt(now)
+                .deletedAt(null)
+                .build();
+
+        assertEquals(scanId, scan.getId());
+        assertEquals(user, scan.getUser());
+        assertEquals("Scan 1", scan.getName());
+        assertEquals("Desc", scan.getDescription());
+        assertEquals("Notes", scan.getNotes());
+        assertEquals(InputMode.image, scan.getInputMode());
+        assertEquals(ScanStatus.draft, scan.getStatus());
+        assertEquals(0, scan.getFileCount());
+        assertEquals(0L, scan.getTotalSizeBytes());
+        assertEquals("/thumb.jpg", scan.getThumbnailPath());
+        assertNull(scan.getDuplicatedFrom());
+        assertEquals(now, scan.getCreatedAt());
+        assertEquals(now, scan.getUpdatedAt());
+        assertNull(scan.getDeletedAt());
+
+        Scan scan2 = new Scan();
+        scan2.setId(scanId);
+        scan2.setName("Scan 2");
+        scan2.setInputMode(InputMode.video);
+        scan2.setStatus(ScanStatus.ready);
+        assertEquals("Scan 2", scan2.getName());
+        assertEquals(InputMode.video, scan2.getInputMode());
+        assertEquals(ScanStatus.ready, scan2.getStatus());
+
+        // Test InputMode methods
+        assertTrue(InputMode.isValid("image"));
+        assertTrue(InputMode.isValid("video"));
+        assertFalse(InputMode.isValid("invalid"));
+        assertFalse(InputMode.isValid(null));
+        assertEquals(InputMode.image, InputMode.fromString(null));
+        assertEquals(InputMode.image, InputMode.fromString(""));
+        assertEquals(InputMode.video, InputMode.fromString("video"));
+        assertThrows(IllegalArgumentException.class, () -> InputMode.fromString("audio"));
+
+        // Test ScanStatus values
+        assertEquals(ScanStatus.draft, ScanStatus.valueOf("draft"));
+        assertTrue(ScanStatus.values().length >= 9);
+    }
+
+    @Test
+    @DisplayName("Test CreateScanRequest and ScanResponse")
+    void testScanDtos() {
+        CreateScanRequest req = CreateScanRequest.builder()
+                .name("Scan A")
+                .description("Desc A")
+                .notes("Notes A")
+                .inputMode("video")
+                .build();
+
+        assertEquals("Scan A", req.getName());
+        assertEquals("Desc A", req.getDescription());
+        assertEquals("Notes A", req.getNotes());
+        assertEquals("video", req.getInputMode());
+
+        CreateScanRequest reqDefault = new CreateScanRequest();
+        reqDefault.setName("Scan B");
+        assertEquals("image", reqDefault.getInputMode());
+
+        UUID id = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().id(userId).email("u@example.com").build();
+        Instant now = Instant.now();
+
+        Scan scan = Scan.builder()
+                .id(id)
+                .user(user)
+                .name("Scan A")
+                .description("Desc A")
+                .notes("Notes A")
+                .inputMode(InputMode.video)
+                .status(ScanStatus.draft)
+                .fileCount(5)
+                .totalSizeBytes(1024L)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+
+        ScanResponse res = ScanResponse.fromEntity(scan);
+        assertNotNull(res);
+        assertEquals(id, res.getId());
+        assertEquals(userId, res.getUserId());
+        assertEquals("Scan A", res.getName());
+        assertEquals("Desc A", res.getDescription());
+        assertEquals("Notes A", res.getNotes());
+        assertEquals("video", res.getInputMode());
+        assertEquals("draft", res.getStatus());
+        assertEquals(5, res.getFileCount());
+        assertEquals(1024L, res.getTotalSizeBytes());
+        assertEquals(now, res.getCreatedAt());
+        assertEquals(now, res.getUpdatedAt());
+
+        assertNull(ScanResponse.fromEntity(null));
     }
 
     @Test
