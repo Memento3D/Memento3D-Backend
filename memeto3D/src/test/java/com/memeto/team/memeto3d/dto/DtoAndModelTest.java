@@ -242,6 +242,7 @@ class DtoAndModelTest {
         User user = User.builder().id(userId).email("u@example.com").build();
         Instant now = Instant.now();
 
+        Map<String, Object> devInfo = Map.of("model", "iPhone 15");
         Scan scan = Scan.builder()
                 .id(scanId)
                 .user(user)
@@ -253,6 +254,7 @@ class DtoAndModelTest {
                 .fileCount(0)
                 .totalSizeBytes(0L)
                 .thumbnailPath("/thumb.jpg")
+                .deviceInfo(devInfo)
                 .duplicatedFrom(null)
                 .createdAt(now)
                 .updatedAt(now)
@@ -269,6 +271,7 @@ class DtoAndModelTest {
         assertEquals(0, scan.getFileCount());
         assertEquals(0L, scan.getTotalSizeBytes());
         assertEquals("/thumb.jpg", scan.getThumbnailPath());
+        assertEquals(devInfo, scan.getDeviceInfo());
         assertNull(scan.getDuplicatedFrom());
         assertEquals(now, scan.getCreatedAt());
         assertEquals(now, scan.getUpdatedAt());
@@ -279,9 +282,11 @@ class DtoAndModelTest {
         scan2.setName("Scan 2");
         scan2.setInputMode(InputMode.video);
         scan2.setStatus(ScanStatus.ready);
+        scan2.setDeviceInfo(devInfo);
         assertEquals("Scan 2", scan2.getName());
         assertEquals(InputMode.video, scan2.getInputMode());
         assertEquals(ScanStatus.ready, scan2.getStatus());
+        assertEquals(devInfo, scan2.getDeviceInfo());
 
         // Test InputMode methods
         assertTrue(InputMode.isValid("image"));
@@ -321,6 +326,7 @@ class DtoAndModelTest {
         UUID userId = UUID.randomUUID();
         User user = User.builder().id(userId).email("u@example.com").build();
         Instant now = Instant.now();
+        Map<String, Object> devInfo = Map.of("model", "Pixel 8");
 
         Scan scan = Scan.builder()
                 .id(id)
@@ -332,6 +338,8 @@ class DtoAndModelTest {
                 .status(ScanStatus.draft)
                 .fileCount(5)
                 .totalSizeBytes(1024L)
+                .deviceInfo(devInfo)
+                .thumbnailPath("/thumb.jpg")
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
@@ -347,8 +355,13 @@ class DtoAndModelTest {
         assertEquals("draft", res.getStatus());
         assertEquals(5, res.getFileCount());
         assertEquals(1024L, res.getTotalSizeBytes());
+        assertEquals(devInfo, res.getDeviceInfo());
+        assertEquals("/thumb.jpg", res.getThumbnailPath());
         assertEquals(now, res.getCreatedAt());
         assertEquals(now, res.getUpdatedAt());
+
+        res.setDeviceInfo(null);
+        assertNull(res.getDeviceInfo());
 
         assertNull(ScanResponse.fromEntity(null));
     }
@@ -389,7 +402,8 @@ class DtoAndModelTest {
     void testRoleEnum() {
         assertEquals(Role.ROLE_USER, Role.valueOf("ROLE_USER"));
         assertEquals(Role.ROLE_ADMIN, Role.valueOf("ROLE_ADMIN"));
-        assertTrue(Role.values().length >= 2);
+        assertEquals(Role.ROLE_OPERATOR, Role.valueOf("ROLE_OPERATOR"));
+        assertTrue(Role.values().length >= 3);
     }
 
     @Test

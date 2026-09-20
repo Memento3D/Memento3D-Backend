@@ -3,9 +3,12 @@ package com.memeto.team.memeto3d.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -59,6 +62,10 @@ public class Scan {
     @Column(name = "total_size_bytes", nullable = false)
     @Builder.Default
     private Long totalSizeBytes = 0L;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "device_info")
+    private Map<String, Object> deviceInfo;
 
     @Column(name = "thumbnail_path", length = 500)
     private String thumbnailPath;
