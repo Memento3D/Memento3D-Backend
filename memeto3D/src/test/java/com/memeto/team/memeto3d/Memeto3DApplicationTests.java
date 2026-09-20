@@ -13,4 +13,19 @@ class Memeto3DApplicationTests {
     void contextLoads() {
     }
 
+    @Test
+    void testMain() {
+        try (var mockedSpringApp = org.mockito.Mockito.mockStatic(org.springframework.boot.SpringApplication.class)) {
+            mockedSpringApp.when(() -> org.springframework.boot.SpringApplication.run(Memeto3DApplication.class, new String[]{}))
+                    .thenReturn(null);
+            Memeto3DApplication.main(new String[]{});
+            mockedSpringApp.verify(() -> org.springframework.boot.SpringApplication.run(Memeto3DApplication.class, new String[]{}));
+        }
+    }
+
+    @Test
+    void testInstance() {
+        org.junit.jupiter.api.Assertions.assertNotNull(new Memeto3DApplication());
+    }
+
 }

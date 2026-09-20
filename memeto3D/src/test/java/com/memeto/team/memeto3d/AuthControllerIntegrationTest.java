@@ -208,4 +208,58 @@ class AuthControllerIntegrationTest {
                         .header("Authorization", authHeader))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    @DisplayName("Kịch bản 8: Register validation error - Payload không hợp lệ trả về 400")
+    void testRegisterValidationError() throws Exception {
+        RegisterRequest request = RegisterRequest.builder()
+                .email("not-an-email")
+                .password("123")
+                .fullName("")
+                .build();
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.validationErrors.email", notNullValue()))
+                .andExpect(jsonPath("$.validationErrors.password", notNullValue()))
+                .andExpect(jsonPath("$.validationErrors.fullName", notNullValue()));
+    }
+
+    @Test
+    @DisplayName("Kịch bản 9: Login validation error - Payload thiếu email/password trả về 400")
+    void testLoginValidationError() throws Exception {
+        LoginRequest request = LoginRequest.builder()
+                .email("")
+                .password("")
+                .build();
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.validationErrors.email", notNullValue()))
+                .andExpect(jsonPath("$.validationErrors.password", notNullValue()));
+    }
+
+    @Test
+    @DisplayName("Kịch bản 10: Logout không có header Authorization bị chặn bởi Spring Security 401")
+    void testLogoutWithoutHeader() throws Exception {
+        mockMvc.perform(post("/api/auth/logout"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)));
+    }
+
+    @Test
+    @DisplayName("Kịch bản 11: GET /api/auth/me với token sai định dạng trả về 401 Unauthorized")
+    void testGetMeWithMalformedToken() throws Exception {
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer invalid.malformed.token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)));
+    }
 }
+

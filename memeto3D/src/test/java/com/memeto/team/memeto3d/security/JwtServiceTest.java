@@ -76,4 +76,58 @@ class JwtServiceTest {
 
         assertThrows(JwtException.class, () -> jwtService.extractUsername(invalidToken));
     }
+
+    @Test
+    @DisplayName("Test expiration getters and token extraction")
+    void testExpirationGettersAndClaims() {
+        assertEquals(3600L, jwtService.getExpirationInSeconds());
+        assertEquals(3600000L, jwtService.getJwtExpirationMs());
+
+        String token = jwtService.generateToken(testUser);
+        assertNotNull(jwtService.extractExpiration(token));
+
+        // Token without userId claim
+        String tokenWithoutUserId = jwtService.generateToken(Collections.emptyMap(), "simple@example.com", 60000);
+        assertNull(jwtService.extractUserId(tokenWithoutUserId));
+    }
+
+    @Test
+    @DisplayName("Test non-base64 raw secret and short secret fallback to SHA-256")
+    void testSigningKeyFallbacks() {
+        JwtService rawSecretJwtService = new JwtService();
+        ReflectionTestUtils.setField(rawSecretJwtService, "jwtSecret", "non-base64-plain-text-secret-key-that-is-not-valid-base64!@#$%");
+        ReflectionTestUtils.setField(rawSecretJwtService, "jwtExpirationMs", 3600000L);
+
+        String token = rawSecretJwtService.generateToken(testUser);
+        assertNotNull(token);
+        assertEquals(testUser.getEmail(), rawSecretJwtService.extractUsername(token));
+
+        JwtService shortSecretJwtService = new JwtService();
+        // Base64 of a short string (< 32 bytes)
+        ReflectionTestUtils.setField(shortSecretJwtService, "jwtSecret", "c2hvcnQ=");
+        ReflectionTestUtils.setField(shortSecretJwtService, "jwtExpirationMs", 3600000L);
+
+        String shortKeyToken = shortSecretJwtService.generateToken(testUser);
+        assertNotNull(shortKeyToken);
+        assertEquals(testUser.getEmail(), shortSecretJwtService.extractUsername(shortKeyToken));
+    }
+
+    @Test
+    @DisplayName("isTokenValid returns false when username does not match UserDetails")
+    void testTokenInvalidWhenUsernameMismatch() {
+        String token = jwtService.generateToken(testUser);
+
+        User anotherUser = User.builder()
+                .id(UUID.randomUUID())
+                .email("different@example.com")
+                .password("pass")
+                .fullName("Different User")
+                .role(Role.ROLE_USER)
+                .build();
+        CustomUserDetails differentUserDetails = new CustomUserDetails(anotherUser);
+
+        assertFalse(jwtService.isTokenValid(token, differentUserDetails));
+    }
 }
+
+
