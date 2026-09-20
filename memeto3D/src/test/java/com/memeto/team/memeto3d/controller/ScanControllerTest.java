@@ -294,6 +294,23 @@ class ScanControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/v1/scans/{id} - Lấy chi tiết scan thành công trả về 200 + đầy đủ fields")
+    void testGetScanByIdSuccess() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        java.util.Map<String, Object> deviceInfo = java.util.Map.of("model", "iPhone 15 Pro", "os", "iOS 17.2");
+        ScanResponse mockResponse = ScanResponse.builder()
+                .id(scanId)
+                .userId(testUserId)
+                .name("Antique Vase")
+                .description("Detailed description")
+                .notes("Turntable 360")
+                .inputMode("image")
+                .status("draft")
+                .fileCount(45)
+                .totalSizeBytes(1048576L)
+                .thumbnailPath("/storage/thumbnails/vase.jpg")
+                .deviceInfo(deviceInfo)
+                .duplicatedFrom(null)
     @DisplayName("GET /api/v1/scans - Lấy danh sách thành công với tham số mặc định")
     void testGetScansDefaultParams() throws Exception {
         ScanResponse scan1 = ScanResponse.builder()
@@ -305,6 +322,129 @@ class ScanControllerTest {
                 .updatedAt(Instant.now())
                 .build();
 
+        when(scanService.getScanById(eq(scanId), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenReturn(mockResponse);
+
+        mockMvc.perform(get("/api/v1/scans/{id}", scanId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(scanId.toString())))
+                .andExpect(jsonPath("$.user_id", is(testUserId.toString())))
+                .andExpect(jsonPath("$.name", is("Antique Vase")))
+                .andExpect(jsonPath("$.description", is("Detailed description")))
+                .andExpect(jsonPath("$.notes", is("Turntable 360")))
+                .andExpect(jsonPath("$.input_mode", is("image")))
+                .andExpect(jsonPath("$.status", is("draft")))
+                .andExpect(jsonPath("$.file_count", is(45)))
+                .andExpect(jsonPath("$.total_size_bytes", is(1048576)))
+                .andExpect(jsonPath("$.thumbnail_path", is("/storage/thumbnails/vase.jpg")))
+                .andExpect(jsonPath("$.device_info.model", is("iPhone 15 Pro")))
+                .andExpect(jsonPath("$.device_info.os", is("iOS 17.2")))
+                .andExpect(jsonPath("$.created_at", notNullValue()))
+                .andExpect(jsonPath("$.updated_at", notNullValue()));
+
+        verify(scanService, times(1)).getScanById(eq(scanId), eq(testUserId), eq(Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id} - Scan không tồn tại hoặc không thuộc quyền sở hữu -> 404")
+    void testGetScanByIdNotFound() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.getScanById(eq(scanId), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenThrow(new com.memeto.team.memeto3d.exception.ResourceNotFoundException("Scan not found with ID: " + scanId));
+
+        mockMvc.perform(get("/api/v1/scans/{id}", scanId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)))
+                .andExpect(jsonPath("$.message", is("Scan not found with ID: " + scanId)));
+
+        verify(scanService, times(1)).getScanById(eq(scanId), eq(testUserId), eq(Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id} - Authentication null trong context -> 401 Unauthorized")
+    void testGetScanByIdUnauthenticatedContext() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        SecurityContextHolder.clearContext();
+
+        mockMvc.perform(get("/api/v1/scans/{id}", scanId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.message", is("No authenticated user in security context")));
+
+        verify(scanService, never()).getScanById(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id} - Principal không hợp lệ trong context -> 401 Unauthorized")
+    void testGetScanByIdInvalidPrincipalContext() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UsernamePasswordAuthenticationToken invalidAuth = new UsernamePasswordAuthenticationToken(
+                "invalid_user_string", null, java.util.Collections.emptyList()
+        );
+        SecurityContextHolder.getContext().setAuthentication(invalidAuth);
+
+        mockMvc.perform(get("/api/v1/scans/{id}", scanId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.message", is("Invalid user details in security context")));
+
+        verify(scanService, never()).getScanById(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("ScanController helper - userDetails null nhưng context có CustomUserDetails -> trích xuất thành công")
+    void testGetScanByIdFallbackToSecurityContext() {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.getScanById(scanId, testUserId, Role.ROLE_USER))
+                .thenReturn(ScanResponse.builder().id(scanId).build());
+
+        var response = scanController.getScanById(scanId, null);
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCode().value());
+        verify(scanService, times(1)).getScanById(scanId, testUserId, Role.ROLE_USER);
+    }
+
+    @Test
+    @DisplayName("ScanController helper - userDetails có id null -> fallback vào SecurityContext")
+    void testGetScanByIdUserDetailsWithNullId() {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.getScanById(scanId, testUserId, Role.ROLE_USER))
+                .thenReturn(ScanResponse.builder().id(scanId).build());
+
+        User userWithoutId = User.builder().email("null_id@example.com").role(Role.ROLE_USER).build();
+        CustomUserDetails detailsWithNullId = new CustomUserDetails(userWithoutId);
+
+        var response = scanController.getScanById(scanId, detailsWithNullId);
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCode().value());
+        verify(scanService, times(1)).getScanById(scanId, testUserId, Role.ROLE_USER);
+    }
+
+    @Test
+    @DisplayName("ScanController helper - authentication không authenticated -> ném InvalidTokenException")
+    void testGetScanByIdUnauthenticatedFlag() {
+        UUID scanId = UUID.randomUUID();
+        UsernamePasswordAuthenticationToken unauth = new UsernamePasswordAuthenticationToken(
+                mockUserDetails, null, mockUserDetails.getAuthorities()
+        );
+        unauth.setAuthenticated(false);
+        SecurityContextHolder.getContext().setAuthentication(unauth);
+
+        assertThrows(com.memeto.team.memeto3d.exception.InvalidTokenException.class,
+                () -> scanController.getScanById(scanId, null));
+    }
+
+    @Test
+    @DisplayName("ScanController helper - principal là anonymousUser -> ném InvalidTokenException")
+    void testGetScanByIdAnonymousUserPrincipal() {
+        UUID scanId = UUID.randomUUID();
+        UsernamePasswordAuthenticationToken anon = new UsernamePasswordAuthenticationToken(
+                "anonymousUser", null, java.util.Collections.emptyList()
+        );
+        SecurityContextHolder.getContext().setAuthentication(anon);
+
+        assertThrows(com.memeto.team.memeto3d.exception.InvalidTokenException.class,
+                () -> scanController.getScanById(scanId, null));
         ScanListResponse mockListResponse = ScanListResponse.builder()
                 .scans(List.of(scan1))
                 .totalCount(1L)
