@@ -1,6 +1,7 @@
 package com.memeto.team.memeto3d.service;
 
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
+import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.entity.Role;
 
@@ -11,4 +12,5 @@ public interface ScanService {
     ScanResponse createScan(CreateScanRequest request, UUID userId);
 
     ScanResponse getScanById(UUID id, UUID currentUserId, Role currentUserRole);
+    ScanListResponse getScans(UUID userId, String status, int page, int limit, String sort);
 }

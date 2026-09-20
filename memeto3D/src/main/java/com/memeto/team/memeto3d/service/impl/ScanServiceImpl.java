@@ -1,6 +1,7 @@
 package com.memeto.team.memeto3d.service.impl;
 
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
+import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.entity.InputMode;
 import com.memeto.team.memeto3d.entity.Role;
@@ -14,9 +15,14 @@ import com.memeto.team.memeto3d.repository.UserRepository;
 import com.memeto.team.memeto3d.service.ScanService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -79,5 +85,107 @@ public class ScanServiceImpl implements ScanService {
         }
 
         return ScanResponse.fromEntity(scan);
+    public ScanListResponse getScans(UUID userId, String status, int page, int limit, String sort) {
+        log.info("Retrieving scans for user ID: {}, status: {}, page: {}, limit: {}, sort: {}",
+                userId, status, page, limit, sort);
+
+        if (userId == null) {
+            throw new IllegalArgumentException("User ID must not be null");
+        }
+        if (page < 1) {
+            throw new IllegalArgumentException("Page must be at least 1");
+        }
+        if (limit < 1 || limit > 100) {
+            throw new IllegalArgumentException("Limit must be between 1 and 100");
+        }
+
+        ScanStatus filterStatus = null;
+        if (status != null && !status.isBlank()) {
+            filterStatus = ScanStatus.fromString(status);
+        }
+
+        Sort sortOrder = parseSort(sort);
+        Pageable pageable = PageRequest.of(page - 1, limit, sortOrder);
+
+        Page<Scan> scanPage;
+        if (filterStatus != null) {
+            scanPage = scanRepository.findByUserIdAndStatusAndDeletedAtIsNull(userId, filterStatus, pageable);
+        } else {
+            scanPage = scanRepository.findByUserIdAndDeletedAtIsNull(userId, pageable);
+        }
+
+        List<ScanResponse> scanResponses = scanPage.getContent().stream()
+                .map(ScanResponse::fromEntity)
+                .toList();
+
+        return ScanListResponse.builder()
+                .scans(scanResponses)
+                .totalCount(scanPage.getTotalElements())
+                .page(page)
+                .limit(limit)
+                .totalPages(scanPage.getTotalPages())
+                .build();
+    }
+
+    private Sort parseSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+
+        String trimmed = sort.trim();
+        String[] parts;
+        if (trimmed.contains(",")) {
+            parts = trimmed.split(",", 2);
+        } else if (trimmed.contains(":")) {
+            parts = trimmed.split(":", 2);
+        } else if (trimmed.contains(" ")) {
+            parts = trimmed.split("\\s+", 2);
+        } else {
+            parts = new String[]{trimmed};
+        }
+
+        String field = parts[0].trim().toLowerCase();
+        String targetProperty;
+        switch (field) {
+            case "created_at":
+            case "createdat":
+                targetProperty = "createdAt";
+                break;
+            case "updated_at":
+            case "updatedat":
+                targetProperty = "updatedAt";
+                break;
+            case "name":
+                targetProperty = "name";
+                break;
+            case "status":
+                targetProperty = "status";
+                break;
+            case "file_count":
+            case "filecount":
+                targetProperty = "fileCount";
+                break;
+            case "total_size_bytes":
+            case "totalsizebytes":
+                targetProperty = "totalSizeBytes";
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid sort field: " + parts[0].trim()
+                        + ". Allowed fields are: created_at, updated_at, name, status, file_count, total_size_bytes");
+        }
+
+        Sort.Direction direction = Sort.Direction.DESC;
+        if (parts.length > 1) {
+            String dirStr = parts[1].trim();
+            if ("asc".equalsIgnoreCase(dirStr)) {
+                direction = Sort.Direction.ASC;
+            } else if ("desc".equalsIgnoreCase(dirStr)) {
+                direction = Sort.Direction.DESC;
+            } else {
+                throw new IllegalArgumentException("Invalid sort direction: " + dirStr + ". Must be 'asc' or 'desc'");
+            }
+        }
+
+        return Sort.by(direction, targetProperty);
     }
 }

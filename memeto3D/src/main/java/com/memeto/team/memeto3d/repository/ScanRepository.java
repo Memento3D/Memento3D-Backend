@@ -1,6 +1,10 @@
 package com.memeto.team.memeto3d.repository;
 
 import com.memeto.team.memeto3d.entity.Scan;
+import com.memeto.team.memeto3d.entity.ScanStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -14,4 +18,10 @@ public interface ScanRepository extends JpaRepository<Scan, UUID> {
     List<Scan> findByUserIdAndDeletedAtIsNull(UUID userId);
 
     Optional<Scan> findByIdAndDeletedAtIsNull(UUID id);
+
+    @EntityGraph(attributePaths = {"user"})
+    Page<Scan> findByUserIdAndDeletedAtIsNull(UUID userId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"user"})
+    Page<Scan> findByUserIdAndStatusAndDeletedAtIsNull(UUID userId, ScanStatus status, Pageable pageable);
 }

@@ -2,6 +2,7 @@ package com.memeto.team.memeto3d.controller;
 
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
 import com.memeto.team.memeto3d.dto.ErrorResponse;
+import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.exception.InvalidTokenException;
 import com.memeto.team.memeto3d.security.CustomUserDetails;
@@ -14,6 +15,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -27,6 +30,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
@@ -34,10 +39,40 @@ import java.util.UUID;
 @RequestMapping("/api/v1/scans")
 @RequiredArgsConstructor
 @Slf4j
+@Validated
 @Tag(name = "Scans", description = "Scan session management endpoints")
 public class ScanController {
 
     private final ScanService scanService;
+
+    @GetMapping
+    @Operation(
+            summary = "Get user scans with pagination, filtering, and sorting",
+            description = "Retrieves paginated scan sessions belonging to the authenticated user. Supports filtering by status, pagination (page, limit up to 100), and sorting (default created_at DESC).",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Scans retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ScanListResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid parameters (e.g. invalid status, invalid page/limit, disallowed sort property)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<ScanListResponse> getScans(
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "page", defaultValue = "1") @Min(value = 1, message = "Page must be at least 1") Integer page,
+            @RequestParam(name = "limit", defaultValue = "20") @Min(value = 1, message = "Limit must be at least 1") @Max(value = 100, message = "Limit cannot exceed 100") Integer limit,
+            @RequestParam(name = "sort", required = false) String sort,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        UUID userId = getAuthenticatedUserId(userDetails);
+        log.info("Received request to retrieve scans for user ID: {}, status: {}, page: {}, limit: {}, sort: {}",
+                userId, status, page, limit, sort);
+
+        ScanListResponse response = scanService.getScans(userId, status, page, limit, sort);
+        return ResponseEntity.ok(response);
+    }
 
     @PostMapping
     @Operation(

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -422,5 +423,81 @@ class DtoAndModelTest {
         assertNotNull(openAPI);
         assertEquals("Memento3D REST API", openAPI.getInfo().getTitle());
         assertNotNull(openAPI.getComponents().getSecuritySchemes().get("BearerAuth"));
+    }
+
+    @Test
+    @DisplayName("Test ScanListResponse builder, getters, setters, items alias, and JSON serialization")
+    void testScanListResponse() throws Exception {
+        ScanResponse item = ScanResponse.builder()
+                .id(UUID.randomUUID())
+                .name("Scan A")
+                .status("draft")
+                .build();
+
+        ScanListResponse res1 = ScanListResponse.builder()
+                .scans(List.of(item))
+                .totalCount(1L)
+                .page(1)
+                .limit(20)
+                .totalPages(1)
+                .build();
+
+        assertEquals(1, res1.getScans().size());
+        assertEquals(1, res1.getItems().size());
+        assertEquals(1L, res1.getTotalCount());
+        assertEquals(1, res1.getPage());
+        assertEquals(20, res1.getLimit());
+        assertEquals(1, res1.getTotalPages());
+
+        ScanListResponse res2 = new ScanListResponse();
+        res2.setScans(List.of(item));
+        res2.setTotalCount(5L);
+        res2.setPage(2);
+        res2.setLimit(10);
+        res2.setTotalPages(1);
+
+        assertEquals(5L, res2.getTotalCount());
+        assertEquals(2, res2.getPage());
+        assertEquals(10, res2.getLimit());
+        assertEquals(1, res2.getTotalPages());
+
+        ScanListResponse res3 = new ScanListResponse(List.of(item), 10L, 1, 10, 1);
+        assertEquals(10L, res3.getTotalCount());
+
+        // Test setItems when scans is null vs when scans is already set
+        ScanListResponse res4 = new ScanListResponse();
+        res4.setItems(List.of(item));
+        assertEquals(1, res4.getScans().size());
+        res4.setItems(List.of()); // shouldn't overwrite if scans is already non-null
+        assertEquals(1, res4.getScans().size());
+
+        // JSON serialization verification
+        ObjectMapper mapper = new ObjectMapper();
+        String json = mapper.writeValueAsString(res1);
+        assertTrue(json.contains("\"total_count\":1"));
+        assertTrue(json.contains("\"scans\":["));
+        assertTrue(json.contains("\"items\":["));
+    }
+
+    @Test
+    @DisplayName("Test ScanStatus helper methods isValid and fromString")
+    void testScanStatusMethods() {
+        assertTrue(ScanStatus.isValid("draft"));
+        assertTrue(ScanStatus.isValid("DRAFT"));
+        assertTrue(ScanStatus.isValid("  ready  "));
+        assertTrue(ScanStatus.isValid("done"));
+        assertFalse(ScanStatus.isValid(null));
+        assertFalse(ScanStatus.isValid(""));
+        assertFalse(ScanStatus.isValid("   "));
+        assertFalse(ScanStatus.isValid("unknown_status"));
+
+        assertEquals(ScanStatus.draft, ScanStatus.fromString("draft"));
+        assertEquals(ScanStatus.ready, ScanStatus.fromString("READY"));
+        assertEquals(ScanStatus.uploading, ScanStatus.fromString("  uploading  "));
+        assertNull(ScanStatus.fromString(null));
+        assertNull(ScanStatus.fromString(""));
+        assertNull(ScanStatus.fromString("   "));
+
+        assertThrows(IllegalArgumentException.class, () -> ScanStatus.fromString("invalid_status"));
     }
 }

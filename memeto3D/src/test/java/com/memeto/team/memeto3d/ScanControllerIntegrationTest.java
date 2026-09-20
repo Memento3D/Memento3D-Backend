@@ -5,6 +5,9 @@ import com.memeto.team.memeto3d.dto.AuthResponse;
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
 import com.memeto.team.memeto3d.dto.LoginRequest;
 import com.memeto.team.memeto3d.dto.RegisterRequest;
+import com.memeto.team.memeto3d.entity.InputMode;
+import com.memeto.team.memeto3d.entity.Scan;
+import com.memeto.team.memeto3d.entity.ScanStatus;
 import com.memeto.team.memeto3d.entity.User;
 import com.memeto.team.memeto3d.repository.BlacklistedTokenRepository;
 import com.memeto.team.memeto3d.repository.ScanRepository;
@@ -31,6 +34,13 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -400,5 +410,238 @@ class ScanControllerIntegrationTest {
                 .andExpect(jsonPath("$.id", is(savedScan.getId().toString())))
                 .andExpect(jsonPath("$.user_id", is(testUser.getId().toString())))
                 .andExpect(jsonPath("$.name", is("Scan for Operator check")));
+    @DisplayName("Integration AC1: GET /api/v1/scans - Không filter -> Trả tất cả scan chưa xoá của user, sort mới nhất")
+    void testGetScansWithoutFilterSortsNewest() throws Exception {
+        Scan scanOld = scanRepository.saveAndFlush(Scan.builder()
+                .user(testUser)
+                .name("Old Scan")
+                .status(ScanStatus.draft)
+                .inputMode(InputMode.image)
+                .build());
+        Thread.sleep(30);
+
+        Scan scanMid = scanRepository.saveAndFlush(Scan.builder()
+                .user(testUser)
+                .name("Mid Scan")
+                .status(ScanStatus.ready)
+                .inputMode(InputMode.image)
+                .build());
+        Thread.sleep(30);
+
+        Scan scanNew = scanRepository.saveAndFlush(Scan.builder()
+                .user(testUser)
+                .name("New Scan")
+                .status(ScanStatus.done)
+                .inputMode(InputMode.video)
+                .build());
+        Thread.sleep(30);
+
+        Scan scanDeleted = scanRepository.saveAndFlush(Scan.builder()
+                .user(testUser)
+                .name("Deleted Scan")
+                .status(ScanStatus.deleted)
+                .inputMode(InputMode.image)
+                .deletedAt(Instant.now())
+                .build());
+
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("Authorization", "Bearer " + jwtToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total_count", is(3)))
+                .andExpect(jsonPath("$.scans", hasSize(3)))
+                .andExpect(jsonPath("$.items", hasSize(3)))
+                .andExpect(jsonPath("$.scans[0].name", is("New Scan")))
+                .andExpect(jsonPath("$.scans[1].name", is("Mid Scan")))
+                .andExpect(jsonPath("$.scans[2].name", is("Old Scan")));
+
+        // Test custom sorting by name asc
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .param("sort", "name,asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scans[0].name", is("Mid Scan")))
+                .andExpect(jsonPath("$.scans[1].name", is("New Scan")))
+                .andExpect(jsonPath("$.scans[2].name", is("Old Scan")));
+    }
+
+    @Test
+    @DisplayName("Integration AC2: GET /api/v1/scans - Filter theo status hoạt động đúng")
+    void testGetScansFilterByStatus() throws Exception {
+        Scan scanDraft = Scan.builder()
+                .user(testUser)
+                .name("Draft Scan")
+                .status(ScanStatus.draft)
+                .inputMode(InputMode.image)
+                .build();
+        Scan scanReady = Scan.builder()
+                .user(testUser)
+                .name("Ready Scan")
+                .status(ScanStatus.ready)
+                .inputMode(InputMode.image)
+                .build();
+        Scan scanDone = Scan.builder()
+                .user(testUser)
+                .name("Done Scan")
+                .status(ScanStatus.done)
+                .inputMode(InputMode.image)
+                .build();
+
+        scanRepository.saveAll(List.of(scanDraft, scanReady, scanDone));
+
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .param("status", "ready"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total_count", is(1)))
+                .andExpect(jsonPath("$.scans", hasSize(1)))
+                .andExpect(jsonPath("$.scans[0].name", is("Ready Scan")))
+                .andExpect(jsonPath("$.scans[0].status", is("ready")));
+    }
+
+    @Test
+    @DisplayName("Integration AC3: GET /api/v1/scans - Phân trang trả đúng total_count và không vượt limit")
+    void testGetScansPagination() throws Exception {
+        List<Scan> scans = new ArrayList<>();
+        for (int i = 1; i <= 25; i++) {
+            scans.add(Scan.builder()
+                    .user(testUser)
+                    .name("Scan #" + String.format("%02d", i))
+                    .status(ScanStatus.draft)
+                    .inputMode(InputMode.image)
+                    .build());
+        }
+        scanRepository.saveAll(scans);
+
+        // Page 1, limit 10
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .param("page", "1")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total_count", is(25)))
+                .andExpect(jsonPath("$.page", is(1)))
+                .andExpect(jsonPath("$.limit", is(10)))
+                .andExpect(jsonPath("$.total_pages", is(3)))
+                .andExpect(jsonPath("$.scans", hasSize(10)));
+
+        // Page 3, limit 10 -> remaining 5 scans
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .param("page", "3")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total_count", is(25)))
+                .andExpect(jsonPath("$.page", is(3)))
+                .andExpect(jsonPath("$.scans", hasSize(5)));
+    }
+
+    @Test
+    @DisplayName("Integration AC4: GET /api/v1/scans - Không trả scan của user khác (test với 2 user)")
+    void testGetScansMultiUserIsolation() throws Exception {
+        // Create user 2
+        RegisterRequest registerUser2 = RegisterRequest.builder()
+                .email("other_user@example.com")
+                .password("Password123!")
+                .fullName("Other User")
+                .build();
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerUser2)))
+                .andExpect(status().isCreated());
+
+        User otherUser = userRepository.findByEmail("other_user@example.com").orElseThrow();
+
+        // Seed scans: 2 for testUser, 3 for otherUser
+        Scan u1Scan1 = Scan.builder().user(testUser).name("User1 Scan A").status(ScanStatus.draft).inputMode(InputMode.image).build();
+        Scan u1Scan2 = Scan.builder().user(testUser).name("User1 Scan B").status(ScanStatus.draft).inputMode(InputMode.image).build();
+        Scan u2Scan1 = Scan.builder().user(otherUser).name("User2 Scan X").status(ScanStatus.draft).inputMode(InputMode.image).build();
+        Scan u2Scan2 = Scan.builder().user(otherUser).name("User2 Scan Y").status(ScanStatus.draft).inputMode(InputMode.image).build();
+        Scan u2Scan3 = Scan.builder().user(otherUser).name("User2 Scan Z").status(ScanStatus.draft).inputMode(InputMode.image).build();
+
+        scanRepository.saveAll(List.of(u1Scan1, u1Scan2, u2Scan1, u2Scan2, u2Scan3));
+
+        // Test User 1 requests scans
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("Authorization", "Bearer " + jwtToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total_count", is(2)))
+                .andExpect(jsonPath("$.scans", hasSize(2)))
+                .andExpect(jsonPath("$.scans[*].name", containsInAnyOrder("User1 Scan A", "User1 Scan B")))
+                .andExpect(jsonPath("$.scans[*].name", not(hasItem("User2 Scan X"))));
+    }
+
+    @Test
+    @DisplayName("Integration AC5: GET /api/v1/scans - Response time < 200ms với 1000 scans (seed data)")
+    void testPerformanceWith1000Scans() throws Exception {
+        List<Scan> bulkScans = new ArrayList<>(1000);
+        Instant baseTime = Instant.now().minus(1000, ChronoUnit.MINUTES);
+        for (int i = 0; i < 1000; i++) {
+            bulkScans.add(Scan.builder()
+                    .user(testUser)
+                    .name("Bulk Scan #" + i)
+                    .status(i % 2 == 0 ? ScanStatus.draft : ScanStatus.ready)
+                    .inputMode(InputMode.image)
+                    .createdAt(baseTime.plus(i, ChronoUnit.MINUTES))
+                    .updatedAt(baseTime.plus(i, ChronoUnit.MINUTES))
+                    .build());
+        }
+        scanRepository.saveAll(bulkScans);
+
+        // Warmup call
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .param("page", "1")
+                        .param("limit", "20"))
+                .andExpect(status().isOk());
+
+        // Measure execution time
+        long start = System.currentTimeMillis();
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .param("page", "1")
+                        .param("limit", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total_count", is(1000)))
+                .andExpect(jsonPath("$.scans", hasSize(20)));
+        long elapsed = System.currentTimeMillis() - start;
+
+        assertTrue(elapsed < 200, "Response time should be < 200ms with 1000 scans, was: " + elapsed + "ms");
+    }
+
+    @Test
+    @DisplayName("Integration: GET /api/v1/scans - Không gửi JWT token -> 401 Unauthorized")
+    void testGetScansUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/v1/scans"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Integration: GET /api/v1/scans - Validation page < 1 -> 400 Bad Request")
+    void testGetScansInvalidPageParam() throws Exception {
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .param("page", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)));
+    }
+
+    @Test
+    @DisplayName("Integration: GET /api/v1/scans - Validation limit > 100 -> 400 Bad Request")
+    void testGetScansInvalidLimitParam() throws Exception {
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .param("limit", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)));
+    }
+
+    @Test
+    @DisplayName("Integration: GET /api/v1/scans - Status param không hợp lệ -> 400 Bad Request")
+    void testGetScansInvalidStatusParam() throws Exception {
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .param("status", "bad_status"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)));
     }
 }
