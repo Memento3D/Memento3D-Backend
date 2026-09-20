@@ -208,6 +208,34 @@ class GlobalExceptionHandlerTest {
         assertEquals("An unexpected error occurred", response.getBody().getMessage());
     }
 
+    @Test
+    @DisplayName("Test handleStorageQuotaExceeded -> 403 Forbidden")
+    void testHandleStorageQuotaExceeded() {
+        StorageQuotaExceededException ex = new StorageQuotaExceededException("Xoá scan cũ để tiếp tục");
+        ResponseEntity<ErrorResponse> response = exceptionHandler.handleStorageQuotaExceeded(ex, request);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(403, response.getBody().getStatus());
+        assertEquals("Xoá scan cũ để tiếp tục", response.getBody().getMessage());
+        assertEquals("/api/test", response.getBody().getPath());
+        assertNotNull(response.getBody().getTimestamp());
+    }
+
+    @Test
+    @DisplayName("Test handleHttpMessageNotReadable -> 400 Bad Request")
+    void testHandleHttpMessageNotReadable() {
+        org.springframework.http.converter.HttpMessageNotReadableException ex =
+                new org.springframework.http.converter.HttpMessageNotReadableException("Malformed JSON", (org.springframework.http.HttpInputMessage) null);
+        ResponseEntity<ErrorResponse> response = exceptionHandler.handleHttpMessageNotReadable(ex, request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(400, response.getBody().getStatus());
+        assertEquals("Malformed JSON request or invalid field format", response.getBody().getMessage());
+        assertEquals("/api/test", response.getBody().getPath());
+    }
+
     private void dummyMethod(String param) {
     }
 }
