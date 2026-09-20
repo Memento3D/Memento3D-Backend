@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 @Getter
@@ -51,6 +52,10 @@ public class ScanResponse {
     @Schema(description = "Relative path or URL to preview thumbnail", example = "/storage/thumbnails/scan_1.jpg")
     private String thumbnailPath;
 
+    @JsonProperty("device_info")
+    @Schema(description = "Capture device metadata", example = "{\"model\": \"iPhone 15 Pro\", \"os\": \"iOS 17.2\"}")
+    private Map<String, Object> deviceInfo;
+
     @JsonProperty("duplicated_from")
     @Schema(description = "Source scan ID if cloned", example = "null")
     private UUID duplicatedFrom;
@@ -82,6 +87,7 @@ public class ScanResponse {
                 .fileCount(scan.getFileCount())
                 .totalSizeBytes(scan.getTotalSizeBytes())
                 .thumbnailPath(scan.getThumbnailPath())
+                .deviceInfo(scan.getDeviceInfo())
                 .duplicatedFrom(scan.getDuplicatedFrom())
                 .createdAt(scan.getCreatedAt())
                 .updatedAt(scan.getUpdatedAt())

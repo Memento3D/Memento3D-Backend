@@ -21,6 +21,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -64,17 +66,46 @@ public class ScanController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    private UUID getAuthenticatedUserId(CustomUserDetails userDetails) {
+    @GetMapping("/{id}")
+    @Operation(
+            summary = "Get scan session details by ID",
+            description = "Retrieves full details of a 3D scan session for the authenticated owner or admin/operator",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Scan session details successfully retrieved",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ScanResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan session not found or access denied (IDOR protection)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<ScanResponse> getScanById(
+            @PathVariable("id") UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Received request to get scan ID: {} for user ID: {} with role: {}", id, currentUser.getId(), currentUser.getRole());
+
+        ScanResponse response = scanService.getScanById(id, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.ok(response);
+    }
+
+    private CustomUserDetails getAuthenticatedUserDetails(CustomUserDetails userDetails) {
         if (userDetails != null && userDetails.getId() != null) {
-            return userDetails.getId();
+            return userDetails;
         }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
             throw new InvalidTokenException("No authenticated user in security context");
         }
         if (authentication.getPrincipal() instanceof CustomUserDetails cud) {
-            return cud.getId();
+            return cud;
         }
         throw new InvalidTokenException("Invalid user details in security context");
+    }
+
+    private UUID getAuthenticatedUserId(CustomUserDetails userDetails) {
+        return getAuthenticatedUserDetails(userDetails).getId();
     }
 }
