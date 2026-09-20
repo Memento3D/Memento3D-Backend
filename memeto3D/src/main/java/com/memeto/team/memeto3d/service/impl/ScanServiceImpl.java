@@ -4,6 +4,7 @@ import com.memeto.team.memeto3d.dto.CreateScanRequest;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.entity.InputMode;
+import com.memeto.team.memeto3d.entity.Role;
 import com.memeto.team.memeto3d.entity.Scan;
 import com.memeto.team.memeto3d.entity.ScanStatus;
 import com.memeto.team.memeto3d.entity.User;
@@ -172,5 +173,23 @@ public class ScanServiceImpl implements ScanService {
         }
 
         return Sort.by(direction, targetProperty);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ScanResponse getScanById(UUID id, UUID currentUserId, Role currentUserRole) {
+        log.info("Fetching scan session details for ID: {}, requested by user ID: {} with role: {}", id, currentUserId, currentUserRole);
+
+        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + id));
+
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
+            log.warn("Access denied for user {} to scan {} owned by {}",
+                    currentUserId, id, scan.getUser() != null ? scan.getUser().getId() : null);
+            throw new ResourceNotFoundException("Scan not found with ID: " + id);
+        }
+
+        return ScanResponse.fromEntity(scan);
     }
 }
