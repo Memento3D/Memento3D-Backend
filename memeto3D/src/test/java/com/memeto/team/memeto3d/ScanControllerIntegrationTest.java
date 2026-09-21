@@ -35,15 +35,18 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+import com.memeto.team.memeto3d.dto.UpdateScanRequest;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -649,4 +652,205 @@ class ScanControllerIntegrationTest {
                 .andExpect(jsonPath("$.user_id", is(testUser.getId().toString())))
                 .andExpect(jsonPath("$.name", is("Scan for Operator check")));
     }
+
+    @Test
+    @DisplayName("Integration: PATCH /api/v1/scans/{id} - Cập nhật name/description/notes thành công")
+    void testUpdateScanSuccessIntegration() throws Exception {
+        Scan scan = Scan.builder()
+                .user(testUser)
+                .name("Old Scan Name")
+                .description("Old Description")
+                .notes("Old Notes")
+                .inputMode(InputMode.image)
+                .status(ScanStatus.draft)
+                .fileCount(0)
+                .totalSizeBytes(0L)
+                .build();
+        Scan savedScan = scanRepository.saveAndFlush(scan);
+
+        UpdateScanRequest updateRequest = UpdateScanRequest.builder()
+                .name("New Scan Name")
+                .description("New Description")
+                .notes("New Notes")
+                .build();
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", savedScan.getId())
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(savedScan.getId().toString())))
+                .andExpect(jsonPath("$.user_id", is(testUser.getId().toString())))
+                .andExpect(jsonPath("$.name", is("New Scan Name")))
+                .andExpect(jsonPath("$.description", is("New Description")))
+                .andExpect(jsonPath("$.notes", is("New Notes")))
+                .andExpect(jsonPath("$.status", is("draft")))
+                .andExpect(jsonPath("$.updated_at", notNullValue()));
+
+        Scan dbScan = scanRepository.findById(savedScan.getId()).orElseThrow();
+        assertEquals("New Scan Name", dbScan.getName());
+        assertEquals("New Description", dbScan.getDescription());
+        assertEquals("New Notes", dbScan.getNotes());
+    }
+
+    @Test
+    @DisplayName("Integration: PATCH /api/v1/scans/{id} - Gửi field không được phép sửa (status, file_count...) -> bị bỏ qua, không được silent-apply")
+    void testUpdateScanDisallowedFieldsIgnoredIntegration() throws Exception {
+        Scan scan = Scan.builder()
+                .user(testUser)
+                .name("Original Scan Name")
+                .description("Original Desc")
+                .notes("Original Notes")
+                .status(ScanStatus.draft)
+                .fileCount(5)
+                .totalSizeBytes(5000L)
+                .build();
+        Scan savedScan = scanRepository.saveAndFlush(scan);
+
+        String maliciousBody = """
+                {
+                    "name": "Updated Allowed Name",
+                    "status": "done",
+                    "file_count": 99999,
+                    "total_size_bytes": 88888888
+                }
+                """;
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", savedScan.getId())
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(maliciousBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name", is("Updated Allowed Name")))
+                .andExpect(jsonPath("$.status", is("draft")))
+                .andExpect(jsonPath("$.file_count", is(5)))
+                .andExpect(jsonPath("$.total_size_bytes", is(5000)));
+
+        Scan dbScan = scanRepository.findById(savedScan.getId()).orElseThrow();
+        assertEquals("Updated Allowed Name", dbScan.getName());
+        assertEquals(ScanStatus.draft, dbScan.getStatus());
+        assertEquals(5, dbScan.getFileCount());
+        assertEquals(5000L, dbScan.getTotalSizeBytes());
+    }
+
+    @Test
+    @DisplayName("Integration: PATCH /api/v1/scans/{id} - Update khi status = 'uploading' -> 409 Conflict")
+    void testUpdateScanStatusUploadingConflictIntegration() throws Exception {
+        Scan scan = Scan.builder()
+                .user(testUser)
+                .name("Uploading Scan")
+                .status(ScanStatus.uploading)
+                .build();
+        Scan savedScan = scanRepository.saveAndFlush(scan);
+
+        UpdateScanRequest req = UpdateScanRequest.builder().name("Try Update").build();
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", savedScan.getId())
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status", is(409)))
+                .andExpect(jsonPath("$.message", containsString("uploading")));
+    }
+
+    @Test
+    @DisplayName("Integration: PATCH /api/v1/scans/{id} - Update khi status = 'processing' -> 409 Conflict")
+    void testUpdateScanStatusProcessingConflictIntegration() throws Exception {
+        Scan scan = Scan.builder()
+                .user(testUser)
+                .name("Processing Scan")
+                .status(ScanStatus.processing)
+                .build();
+        Scan savedScan = scanRepository.saveAndFlush(scan);
+
+        UpdateScanRequest req = UpdateScanRequest.builder().name("Try Update").build();
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", savedScan.getId())
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status", is(409)))
+                .andExpect(jsonPath("$.message", containsString("processing")));
+    }
+
+    @Test
+    @DisplayName("Integration: PATCH /api/v1/scans/{id} - User A update scan của User B -> 404 Not Found (IDOR)")
+    void testUpdateScanOtherUserScanReturns404Integration() throws Exception {
+        User userB = User.builder()
+                .email("user_b@example.com")
+                .password("Password123!")
+                .fullName("User B")
+                .role(Role.ROLE_USER)
+                .build();
+        userRepository.save(userB);
+
+        Scan scanB = Scan.builder()
+                .user(userB)
+                .name("User B Private Scan")
+                .status(ScanStatus.draft)
+                .build();
+        Scan savedScanB = scanRepository.saveAndFlush(scanB);
+
+        UpdateScanRequest req = UpdateScanRequest.builder().name("Hacked Name").build();
+
+        // testUser attempts to update user B's scan
+        mockMvc.perform(patch("/api/v1/scans/{id}", savedScanB.getId())
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)))
+                .andExpect(jsonPath("$.message", containsString("Scan not found")));
+    }
+
+    @Test
+    @DisplayName("Integration: PATCH /api/v1/scans/{id} - Scan ID không tồn tại -> 404 Not Found")
+    void testUpdateScanNonExistentReturns404Integration() throws Exception {
+        UUID nonExistentId = UUID.randomUUID();
+        UpdateScanRequest req = UpdateScanRequest.builder().name("Non-existent").build();
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", nonExistentId)
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)));
+    }
+
+    @Test
+    @DisplayName("Integration: PATCH /api/v1/scans/{id} - Không có Token -> 401 Unauthorized")
+    void testUpdateScanUnauthenticatedIntegration() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UpdateScanRequest req = UpdateScanRequest.builder().name("No Auth").build();
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", scanId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)));
+    }
+
+    @Test
+    @DisplayName("Integration: PATCH /api/v1/scans/{id} - Name khoảng trắng rỗng -> 400 Bad Request")
+    void testUpdateScanBlankNameBadRequestIntegration() throws Exception {
+        Scan scan = Scan.builder()
+                .user(testUser)
+                .name("Scan Name")
+                .status(ScanStatus.draft)
+                .build();
+        Scan savedScan = scanRepository.saveAndFlush(scan);
+
+        UpdateScanRequest req = UpdateScanRequest.builder().name("   ").build();
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", savedScan.getId())
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.message", is("Scan name cannot be empty")));
+    }
 }
+

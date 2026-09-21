@@ -3,12 +3,14 @@ package com.memeto.team.memeto3d.service.impl;
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
+import com.memeto.team.memeto3d.dto.UpdateScanRequest;
 import com.memeto.team.memeto3d.entity.InputMode;
 import com.memeto.team.memeto3d.entity.Role;
 import com.memeto.team.memeto3d.entity.Scan;
 import com.memeto.team.memeto3d.entity.ScanStatus;
 import com.memeto.team.memeto3d.entity.User;
 import com.memeto.team.memeto3d.exception.ResourceNotFoundException;
+import com.memeto.team.memeto3d.exception.ScanConflictException;
 import com.memeto.team.memeto3d.exception.StorageQuotaExceededException;
 import com.memeto.team.memeto3d.repository.ScanRepository;
 import com.memeto.team.memeto3d.repository.UserRepository;
@@ -21,6 +23,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
 
 import java.util.List;
 import java.util.UUID;
@@ -192,4 +196,51 @@ public class ScanServiceImpl implements ScanService {
 
         return ScanResponse.fromEntity(scan);
     }
+
+    @Override
+    @Transactional
+    public ScanResponse updateScan(UUID id, UpdateScanRequest request, UUID currentUserId, Role currentUserRole) {
+        log.info("Updating scan session for ID: {}, requested by user ID: {} with role: {}", id, currentUserId, currentUserRole);
+
+        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + id));
+
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
+            log.warn("Access denied for user {} to update scan {} owned by {}",
+                    currentUserId, id, scan.getUser() != null ? scan.getUser().getId() : null);
+            throw new ResourceNotFoundException("Scan not found with ID: " + id);
+        }
+
+        if (scan.getStatus() == ScanStatus.uploading || scan.getStatus() == ScanStatus.processing) {
+            log.warn("Cannot update scan {} with status {}", id, scan.getStatus());
+            throw new ScanConflictException("Cannot update scan while it is in " + scan.getStatus() + " status");
+        }
+
+        if (request != null) {
+            if (request.getName() != null) {
+                String trimmedName = request.getName().trim();
+                if (trimmedName.isEmpty()) {
+                    throw new IllegalArgumentException("Scan name cannot be empty");
+                }
+                if (trimmedName.length() > 255) {
+                    throw new IllegalArgumentException("Name must not exceed 255 characters");
+                }
+                scan.setName(trimmedName);
+            }
+            if (request.getDescription() != null) {
+                scan.setDescription(request.getDescription().trim());
+            }
+            if (request.getNotes() != null) {
+                scan.setNotes(request.getNotes().trim());
+            }
+        }
+
+        scan.setUpdatedAt(Instant.now());
+        Scan updatedScan = scanRepository.saveAndFlush(scan);
+        log.info("Successfully updated scan session with ID: {}", id);
+
+        return ScanResponse.fromEntity(updatedScan);
+    }
 }
+

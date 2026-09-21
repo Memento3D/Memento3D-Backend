@@ -9,6 +9,7 @@ import com.memeto.team.memeto3d.entity.Role;
 import com.memeto.team.memeto3d.entity.Scan;
 import com.memeto.team.memeto3d.entity.ScanStatus;
 import com.memeto.team.memeto3d.entity.User;
+import com.memeto.team.memeto3d.exception.ScanConflictException;
 import io.swagger.v3.oas.models.OpenAPI;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -500,4 +501,36 @@ class DtoAndModelTest {
 
         assertThrows(IllegalArgumentException.class, () -> ScanStatus.fromString("invalid_status"));
     }
+
+    @Test
+    @DisplayName("Test UpdateScanRequest builder, getters, setters, and constructors")
+    void testUpdateScanRequest() {
+        UpdateScanRequest req1 = UpdateScanRequest.builder()
+                .name("Updated Scan")
+                .description("Updated Description")
+                .notes("Updated Notes")
+                .build();
+
+        UpdateScanRequest req2 = new UpdateScanRequest();
+        req2.setName("Updated Scan");
+        req2.setDescription("Updated Description");
+        req2.setNotes("Updated Notes");
+
+        assertEquals(req1.getName(), req2.getName());
+        assertEquals(req1.getDescription(), req2.getDescription());
+        assertEquals(req1.getNotes(), req2.getNotes());
+
+        UpdateScanRequest req3 = new UpdateScanRequest("Updated Scan", "Updated Description", "Updated Notes");
+        assertEquals("Updated Scan", req3.getName());
+        assertEquals("Updated Description", req3.getDescription());
+        assertEquals("Updated Notes", req3.getNotes());
+    }
+
+    @Test
+    @DisplayName("Test ScanConflictException message")
+    void testScanConflictException() {
+        ScanConflictException ex = new ScanConflictException("Conflict occurred");
+        assertEquals("Conflict occurred", ex.getMessage());
+    }
 }
+

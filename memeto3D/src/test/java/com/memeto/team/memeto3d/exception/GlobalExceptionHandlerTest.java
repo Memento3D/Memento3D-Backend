@@ -274,6 +274,20 @@ class GlobalExceptionHandlerTest {
         assertEquals("Validation constraint violation", response2.getBody().getMessage());
     }
 
+    @Test
+    @DisplayName("Test handleScanConflict -> 409 Conflict")
+    void testHandleScanConflict() {
+        ScanConflictException ex = new ScanConflictException("Cannot update scan while it is in processing status");
+        ResponseEntity<ErrorResponse> response = exceptionHandler.handleScanConflict(ex, request);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(409, response.getBody().getStatus());
+        assertEquals("Cannot update scan while it is in processing status", response.getBody().getMessage());
+        assertEquals("/api/test", response.getBody().getPath());
+        assertNotNull(response.getBody().getTimestamp());
+    }
+
     private void dummyMethod(String param) {
     }
 }

@@ -3,12 +3,14 @@ package com.memeto.team.memeto3d.service;
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
+import com.memeto.team.memeto3d.dto.UpdateScanRequest;
 import com.memeto.team.memeto3d.entity.InputMode;
 import com.memeto.team.memeto3d.entity.Role;
 import com.memeto.team.memeto3d.entity.Scan;
 import com.memeto.team.memeto3d.entity.ScanStatus;
 import com.memeto.team.memeto3d.entity.User;
 import com.memeto.team.memeto3d.exception.ResourceNotFoundException;
+import com.memeto.team.memeto3d.exception.ScanConflictException;
 import com.memeto.team.memeto3d.exception.StorageQuotaExceededException;
 import com.memeto.team.memeto3d.repository.ScanRepository;
 import com.memeto.team.memeto3d.repository.UserRepository;
@@ -492,4 +494,270 @@ class ScanServiceTest {
                 () -> scanService.getScanById(scanId, userId, Role.ROLE_USER)
         );
     }
+
+    @Test
+    @DisplayName("Update scan: Successfully updates name, description, and notes")
+    void testUpdateScanSuccessAllFields() {
+        UUID scanId = UUID.randomUUID();
+        Instant originalUpdatedAt = Instant.now().minusSeconds(60);
+        Scan existingScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser)
+                .name("Old Name")
+                .description("Old Description")
+                .notes("Old Notes")
+                .inputMode(InputMode.image)
+                .status(ScanStatus.draft)
+                .createdAt(Instant.now().minusSeconds(120))
+                .updatedAt(originalUpdatedAt)
+                .build();
+
+        UpdateScanRequest request = UpdateScanRequest.builder()
+                .name("New Name")
+                .description("New Description")
+                .notes("New Notes")
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(existingScan));
+        when(scanRepository.saveAndFlush(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ScanResponse response = scanService.updateScan(scanId, request, userId, Role.ROLE_USER);
+
+        assertNotNull(response);
+        assertEquals("New Name", response.getName());
+        assertEquals("New Description", response.getDescription());
+        assertEquals("New Notes", response.getNotes());
+        assertEquals("draft", response.getStatus());
+
+        ArgumentCaptor<Scan> captor = ArgumentCaptor.forClass(Scan.class);
+        verify(scanRepository, times(1)).saveAndFlush(captor.capture());
+        Scan saved = captor.getValue();
+        assertEquals("New Name", saved.getName());
+        assertEquals("New Description", saved.getDescription());
+        assertEquals("New Notes", saved.getNotes());
+        assertNotEquals(originalUpdatedAt, saved.getUpdatedAt());
+    }
+
+    @Test
+    @DisplayName("Update scan: Partial update only changes non-null fields")
+    void testUpdateScanPartialFields() {
+        UUID scanId = UUID.randomUUID();
+        Scan existingScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser)
+                .name("Original Name")
+                .description("Original Description")
+                .notes("Original Notes")
+                .status(ScanStatus.uploaded)
+                .build();
+
+        UpdateScanRequest onlyName = UpdateScanRequest.builder().name("Updated Only Name").build();
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(existingScan));
+        when(scanRepository.saveAndFlush(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ScanResponse res1 = scanService.updateScan(scanId, onlyName, userId, Role.ROLE_USER);
+        assertEquals("Updated Only Name", res1.getName());
+        assertEquals("Original Description", res1.getDescription());
+        assertEquals("Original Notes", res1.getNotes());
+
+        UpdateScanRequest onlyDesc = UpdateScanRequest.builder().description("Updated Only Desc").build();
+        ScanResponse res2 = scanService.updateScan(scanId, onlyDesc, userId, Role.ROLE_USER);
+        assertEquals("Updated Only Name", res2.getName());
+        assertEquals("Updated Only Desc", res2.getDescription());
+        assertEquals("Original Notes", res2.getNotes());
+
+        UpdateScanRequest onlyNotes = UpdateScanRequest.builder().notes("Updated Only Notes").build();
+        ScanResponse res3 = scanService.updateScan(scanId, onlyNotes, userId, Role.ROLE_USER);
+        assertEquals("Updated Only Name", res3.getName());
+        assertEquals("Updated Only Desc", res3.getDescription());
+        assertEquals("Updated Only Notes", res3.getNotes());
+    }
+
+    @Test
+    @DisplayName("Update scan: Null request body leaves fields unchanged and updates updatedAt")
+    void testUpdateScanNullRequest() {
+        UUID scanId = UUID.randomUUID();
+        Scan existingScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser)
+                .name("Keep Name")
+                .status(ScanStatus.draft)
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(existingScan));
+        when(scanRepository.saveAndFlush(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ScanResponse response = scanService.updateScan(scanId, null, userId, Role.ROLE_USER);
+        assertEquals("Keep Name", response.getName());
+        verify(scanRepository, times(1)).saveAndFlush(any(Scan.class));
+    }
+
+    @Test
+    @DisplayName("Update scan: Empty or blank name throws IllegalArgumentException")
+    void testUpdateScanEmptyNameThrowsException() {
+        UUID scanId = UUID.randomUUID();
+        Scan existingScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser)
+                .name("Current Name")
+                .status(ScanStatus.draft)
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(existingScan));
+
+        UpdateScanRequest blankReq = UpdateScanRequest.builder().name("   ").build();
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> scanService.updateScan(scanId, blankReq, userId, Role.ROLE_USER)
+        );
+        assertEquals("Scan name cannot be empty", ex.getMessage());
+        verify(scanRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("Update scan: Name exceeding 255 characters throws IllegalArgumentException")
+    void testUpdateScanNameTooLongThrowsException() {
+        UUID scanId = UUID.randomUUID();
+        Scan existingScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser)
+                .name("Current Name")
+                .status(ScanStatus.draft)
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(existingScan));
+
+        UpdateScanRequest longReq = UpdateScanRequest.builder().name("a".repeat(256)).build();
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> scanService.updateScan(scanId, longReq, userId, Role.ROLE_USER)
+        );
+        assertEquals("Name must not exceed 255 characters", ex.getMessage());
+        verify(scanRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("Update scan: Non-existent scan throws ResourceNotFoundException")
+    void testUpdateScanNotFoundThrowsException() {
+        UUID scanId = UUID.randomUUID();
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.empty());
+
+        UpdateScanRequest req = UpdateScanRequest.builder().name("Valid Name").build();
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> scanService.updateScan(scanId, req, userId, Role.ROLE_USER)
+        );
+        verify(scanRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("Update scan: User A attempting to update User B's scan throws ResourceNotFoundException (IDOR)")
+    void testUpdateScanAccessDeniedIDOR() {
+        UUID scanId = UUID.randomUUID();
+        UUID userBId = UUID.randomUUID();
+        Scan existingScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser) // owned by mockUser (userId != userBId)
+                .name("Scan B")
+                .status(ScanStatus.draft)
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(existingScan));
+
+        UpdateScanRequest req = UpdateScanRequest.builder().name("Hacked Name").build();
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> scanService.updateScan(scanId, req, userBId, Role.ROLE_USER)
+        );
+        verify(scanRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("Update scan: Scan with null user throws ResourceNotFoundException for regular user")
+    void testUpdateScanScanWithNullUserThrowsNotFound() {
+        UUID scanId = UUID.randomUUID();
+        Scan existingScan = Scan.builder()
+                .id(scanId)
+                .user(null)
+                .name("Orphan Scan")
+                .status(ScanStatus.draft)
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(existingScan));
+
+        UpdateScanRequest req = UpdateScanRequest.builder().name("New Name").build();
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> scanService.updateScan(scanId, req, userId, Role.ROLE_USER)
+        );
+    }
+
+    @Test
+    @DisplayName("Update scan: Admin or Operator can update another user's scan")
+    void testUpdateScanPrivilegedRoles() {
+        UUID scanId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        Scan existingScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser)
+                .name("Original Name")
+                .status(ScanStatus.draft)
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(existingScan));
+        when(scanRepository.saveAndFlush(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateScanRequest adminReq = UpdateScanRequest.builder().name("Admin Updated Name").build();
+        ScanResponse adminRes = scanService.updateScan(scanId, adminReq, otherUserId, Role.ROLE_ADMIN);
+        assertEquals("Admin Updated Name", adminRes.getName());
+
+        UpdateScanRequest operatorReq = UpdateScanRequest.builder().name("Operator Updated Name").build();
+        ScanResponse operatorRes = scanService.updateScan(scanId, operatorReq, otherUserId, Role.ROLE_OPERATOR);
+        assertEquals("Operator Updated Name", operatorRes.getName());
+    }
+
+    @Test
+    @DisplayName("Update scan: Status is 'uploading' throws ScanConflictException (409)")
+    void testUpdateScanConflictStatusUploading() {
+        UUID scanId = UUID.randomUUID();
+        Scan existingScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser)
+                .name("Uploading Scan")
+                .status(ScanStatus.uploading)
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(existingScan));
+
+        UpdateScanRequest req = UpdateScanRequest.builder().name("New Name").build();
+        ScanConflictException ex = assertThrows(
+                ScanConflictException.class,
+                () -> scanService.updateScan(scanId, req, userId, Role.ROLE_USER)
+        );
+        assertTrue(ex.getMessage().contains("uploading"));
+        verify(scanRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("Update scan: Status is 'processing' throws ScanConflictException (409)")
+    void testUpdateScanConflictStatusProcessing() {
+        UUID scanId = UUID.randomUUID();
+        Scan existingScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser)
+                .name("Processing Scan")
+                .status(ScanStatus.processing)
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(existingScan));
+
+        UpdateScanRequest req = UpdateScanRequest.builder().name("New Name").build();
+        ScanConflictException ex = assertThrows(
+                ScanConflictException.class,
+                () -> scanService.updateScan(scanId, req, userId, Role.ROLE_USER)
+        );
+        assertTrue(ex.getMessage().contains("processing"));
+        verify(scanRepository, never()).saveAndFlush(any());
+    }
 }
+
