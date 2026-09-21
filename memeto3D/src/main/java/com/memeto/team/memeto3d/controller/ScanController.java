@@ -4,6 +4,7 @@ import com.memeto.team.memeto3d.dto.CreateScanRequest;
 import com.memeto.team.memeto3d.dto.ErrorResponse;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
+import com.memeto.team.memeto3d.dto.UpdateScanRequest;
 import com.memeto.team.memeto3d.exception.InvalidTokenException;
 import com.memeto.team.memeto3d.security.CustomUserDetails;
 import com.memeto.team.memeto3d.service.ScanService;
@@ -125,6 +126,37 @@ public class ScanController {
         ScanResponse response = scanService.getScanById(id, currentUser.getId(), currentUser.getRole());
         return ResponseEntity.ok(response);
     }
+
+    @PatchMapping("/{id}")
+    @Operation(
+            summary = "Update scan session details",
+            description = "Updates editable metadata (name, description, notes) of a scan session. Blocked if status is uploading or processing.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Scan session successfully updated",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ScanResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation error (e.g. empty name)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan session not found or access denied (IDOR protection)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Conflict: scan is in uploading or processing status",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<ScanResponse> updateScan(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody UpdateScanRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Received request to update scan ID: {} for user ID: {} with role: {}", id, currentUser.getId(), currentUser.getRole());
+
+        ScanResponse response = scanService.updateScan(id, request, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.ok(response);
+    }
+
 
     private CustomUserDetails getAuthenticatedUserDetails(CustomUserDetails userDetails) {
         if (userDetails != null && userDetails.getId() != null) {

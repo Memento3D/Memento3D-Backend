@@ -5,9 +5,11 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
+import com.memeto.team.memeto3d.dto.UpdateScanRequest;
 import com.memeto.team.memeto3d.entity.Role;
 import com.memeto.team.memeto3d.entity.User;
 import com.memeto.team.memeto3d.exception.GlobalExceptionHandler;
+import com.memeto.team.memeto3d.exception.ScanConflictException;
 import com.memeto.team.memeto3d.exception.StorageQuotaExceededException;
 import com.memeto.team.memeto3d.security.CustomUserDetails;
 import com.memeto.team.memeto3d.service.ScanService;
@@ -41,7 +43,7 @@ import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -617,4 +619,136 @@ class ScanControllerTest {
         assertThrows(com.memeto.team.memeto3d.exception.InvalidTokenException.class,
                 () -> scanController.getScanById(scanId, null));
     }
+
+    @Test
+    @DisplayName("PATCH /api/v1/scans/{id} - Cập nhật scan thành công trả về 200 + object đã cập nhật")
+    void testUpdateScanSuccess() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UpdateScanRequest request = UpdateScanRequest.builder()
+                .name("Updated Scan Name")
+                .description("Updated Description")
+                .notes("Updated Notes")
+                .build();
+
+        ScanResponse responseDto = ScanResponse.builder()
+                .id(scanId)
+                .userId(testUserId)
+                .name("Updated Scan Name")
+                .description("Updated Description")
+                .notes("Updated Notes")
+                .inputMode("image")
+                .status("draft")
+                .fileCount(0)
+                .totalSizeBytes(0L)
+                .createdAt(Instant.now().minusSeconds(60))
+                .updatedAt(Instant.now())
+                .build();
+
+        when(scanService.updateScan(eq(scanId), any(UpdateScanRequest.class), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenReturn(responseDto);
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", scanId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(scanId.toString())))
+                .andExpect(jsonPath("$.user_id", is(testUserId.toString())))
+                .andExpect(jsonPath("$.name", is("Updated Scan Name")))
+                .andExpect(jsonPath("$.description", is("Updated Description")))
+                .andExpect(jsonPath("$.notes", is("Updated Notes")))
+                .andExpect(jsonPath("$.status", is("draft")))
+                .andExpect(jsonPath("$.created_at", notNullValue()))
+                .andExpect(jsonPath("$.updated_at", notNullValue()));
+
+        verify(scanService, times(1)).updateScan(eq(scanId), any(UpdateScanRequest.class), eq(testUserId), eq(Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/scans/{id} - Scan không tồn tại hoặc IDOR -> 404 Not Found")
+    void testUpdateScanNotFound() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UpdateScanRequest request = UpdateScanRequest.builder().name("New Name").build();
+
+        when(scanService.updateScan(eq(scanId), any(UpdateScanRequest.class), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenThrow(new com.memeto.team.memeto3d.exception.ResourceNotFoundException("Scan not found with ID: " + scanId));
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", scanId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)))
+                .andExpect(jsonPath("$.message", is("Scan not found with ID: " + scanId)));
+
+        verify(scanService, times(1)).updateScan(eq(scanId), any(UpdateScanRequest.class), eq(testUserId), eq(Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/scans/{id} - Scan đang uploading hoặc processing -> 409 Conflict")
+    void testUpdateScanConflict() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UpdateScanRequest request = UpdateScanRequest.builder().name("New Name").build();
+
+        when(scanService.updateScan(eq(scanId), any(UpdateScanRequest.class), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenThrow(new ScanConflictException("Cannot update scan while it is in processing status"));
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", scanId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status", is(409)))
+                .andExpect(jsonPath("$.message", is("Cannot update scan while it is in processing status")));
+
+        verify(scanService, times(1)).updateScan(eq(scanId), any(UpdateScanRequest.class), eq(testUserId), eq(Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/scans/{id} - Tên trống hoặc không hợp lệ -> 400 Bad Request")
+    void testUpdateScanBadRequest() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UpdateScanRequest request = UpdateScanRequest.builder().name("   ").build();
+
+        when(scanService.updateScan(eq(scanId), any(UpdateScanRequest.class), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenThrow(new IllegalArgumentException("Scan name cannot be empty"));
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", scanId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.message", is("Scan name cannot be empty")));
+
+        verify(scanService, times(1)).updateScan(eq(scanId), any(UpdateScanRequest.class), eq(testUserId), eq(Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/v1/scans/{id} - Chưa xác thực -> 401 Unauthorized")
+    void testUpdateScanUnauthenticated() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UpdateScanRequest request = UpdateScanRequest.builder().name("New Name").build();
+        SecurityContextHolder.clearContext();
+
+        mockMvc.perform(patch("/api/v1/scans/{id}", scanId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.message", is("No authenticated user in security context")));
+
+        verify(scanService, never()).updateScan(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("ScanController helper - updateScan userDetails null fallback to SecurityContext")
+    void testUpdateScanFallbackToSecurityContext() {
+        UUID scanId = UUID.randomUUID();
+        UpdateScanRequest request = UpdateScanRequest.builder().name("Valid").build();
+        when(scanService.updateScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenReturn(ScanResponse.builder().id(scanId).name("Valid").build());
+
+        var response = scanController.updateScan(scanId, request, null);
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCode().value());
+        verify(scanService, times(1)).updateScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER));
+    }
 }
+
