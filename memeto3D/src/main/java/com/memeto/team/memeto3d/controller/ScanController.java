@@ -157,6 +157,34 @@ public class ScanController {
         return ResponseEntity.ok(response);
     }
 
+    @DeleteMapping("/{id}")
+    @Operation(
+            summary = "Soft-delete a scan session",
+            description = "Marks a scan session as deleted (soft-delete) by setting status='deleted' and deleted_at=NOW(). " +
+                    "The scan and its associated files are NOT immediately removed; hard deletion happens after 90 days per the retention policy (FR-177). " +
+                    "Storage quota is NOT released immediately to prevent quota-gaming.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Scan session successfully deleted"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan session not found or access denied (IDOR protection)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Conflict: scan is currently in 'processing' status and cannot be deleted",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<Void> deleteScan(
+            @PathVariable("id") UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Received request to delete scan ID: {} for user ID: {} with role: {}", id, currentUser.getId(), currentUser.getRole());
+
+        scanService.deleteScan(id, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.noContent().build();
+    }
+
 
     private CustomUserDetails getAuthenticatedUserDetails(CustomUserDetails userDetails) {
         if (userDetails != null && userDetails.getId() != null) {

@@ -242,5 +242,37 @@ public class ScanServiceImpl implements ScanService {
 
         return ScanResponse.fromEntity(updatedScan);
     }
-}
 
+    @Override
+    @Transactional
+    public void deleteScan(UUID id, UUID currentUserId, Role currentUserRole) {
+        log.info("Soft-deleting scan session for ID: {}, requested by user ID: {} with role: {}", id, currentUserId, currentUserRole);
+
+        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + id));
+
+        // IDOR protection: non-privileged users can only delete their own scans
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
+            log.warn("Access denied for user {} to delete scan {} owned by {}",
+                    currentUserId, id, scan.getUser() != null ? scan.getUser().getId() : null);
+            throw new ResourceNotFoundException("Scan not found with ID: " + id);
+        }
+
+        // Block deletion while a processing job is running
+        if (scan.getStatus() == ScanStatus.processing) {
+            log.warn("Cannot delete scan {} because it is currently in 'processing' status", id);
+            throw new ScanConflictException("Cannot delete scan while it is in 'processing' status. Wait for processing to complete or fail.");
+        }
+
+        // Soft-delete: set status and deleted_at timestamp
+        // NOTE: storage_used_bytes is intentionally NOT decremented here.
+        // Per FR-177, quota will only be freed by the maintenance job after the 90-day hard delete.
+        // This prevents users from gaming the quota by cycling delete/create operations.
+        scan.setStatus(ScanStatus.deleted);
+        scan.setDeletedAt(Instant.now());
+        scanRepository.saveAndFlush(scan);
+
+        log.info("Successfully soft-deleted scan session with ID: {} by user: {}", id, currentUserId);
+    }
+}
