@@ -1,6 +1,8 @@
 package com.memeto.team.memeto3d.service.impl;
 
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
+import com.memeto.team.memeto3d.dto.ScanImageListResponse;
+import com.memeto.team.memeto3d.dto.ScanImageResponse;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.dto.UpdateScanRequest;
@@ -12,6 +14,7 @@ import com.memeto.team.memeto3d.entity.User;
 import com.memeto.team.memeto3d.exception.ResourceNotFoundException;
 import com.memeto.team.memeto3d.exception.ScanConflictException;
 import com.memeto.team.memeto3d.exception.StorageQuotaExceededException;
+import com.memeto.team.memeto3d.repository.ScanImageRepository;
 import com.memeto.team.memeto3d.repository.ScanRepository;
 import com.memeto.team.memeto3d.repository.UserRepository;
 import com.memeto.team.memeto3d.service.ScanService;
@@ -36,6 +39,8 @@ public class ScanServiceImpl implements ScanService {
 
     private final ScanRepository scanRepository;
     private final UserRepository userRepository;
+    private final ScanImageRepository scanImageRepository;
+
 
     @Override
     @Transactional
@@ -274,5 +279,53 @@ public class ScanServiceImpl implements ScanService {
         scanRepository.saveAndFlush(scan);
 
         log.info("Successfully soft-deleted scan session with ID: {} by user: {}", id, currentUserId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ScanImageListResponse getScanImages(UUID scanId, UUID currentUserId, Role currentUserRole,
+                                               int page, int limit) {
+        log.info("Fetching images for scan ID: {}, requested by user ID: {} with role: {}, page: {}, limit: {}",
+                scanId, currentUserId, currentUserRole, page, limit);
+
+        if (page < 1) {
+            throw new IllegalArgumentException("Page must be at least 1");
+        }
+        if (limit < 1 || limit > 100) {
+            throw new IllegalArgumentException("Limit must be between 1 and 100");
+        }
+
+        // 1. Verify the scan exists and is not soft-deleted
+        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + scanId));
+
+        // 2. IDOR protection: non-privileged users can only view their own scan's images (returns 404)
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
+            log.warn("Access denied for user {} to images of scan {} owned by {}",
+                    currentUserId, scanId, scan.getUser() != null ? scan.getUser().getId() : null);
+            throw new ResourceNotFoundException("Scan not found with ID: " + scanId);
+        }
+
+        // 3. Query images — sort_order ASC, created_at ASC is enforced in the JPQL query;
+        //    Pageable uses UNSORTED because the repository query owns the ORDER BY clause.
+        Pageable pageable = PageRequest.of(page - 1, limit, Sort.unsorted());
+        Page<com.memeto.team.memeto3d.entity.ScanImage> imagePage =
+                scanImageRepository.findByScanIdAndDeletedAtIsNull(scanId, pageable);
+
+        List<ScanImageResponse> imageResponses = imagePage.getContent().stream()
+                .map(ScanImageResponse::fromEntity)
+                .toList();
+
+        log.info("Returning {} images (page {}/{}) for scan ID: {}",
+                imageResponses.size(), page, imagePage.getTotalPages(), scanId);
+
+        return ScanImageListResponse.builder()
+                .images(imageResponses)
+                .totalCount(imagePage.getTotalElements())
+                .page(page)
+                .limit(limit)
+                .totalPages(imagePage.getTotalPages())
+                .build();
     }
 }

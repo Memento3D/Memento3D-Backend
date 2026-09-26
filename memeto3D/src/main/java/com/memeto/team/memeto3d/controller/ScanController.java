@@ -2,6 +2,7 @@ package com.memeto.team.memeto3d.controller;
 
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
 import com.memeto.team.memeto3d.dto.ErrorResponse;
+import com.memeto.team.memeto3d.dto.ScanImageListResponse;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.dto.UpdateScanRequest;
@@ -183,6 +184,47 @@ public class ScanController {
 
         scanService.deleteScan(id, currentUser.getId(), currentUser.getRole());
         return ResponseEntity.noContent().build();
+    }
+
+
+    @GetMapping("/{id}/images")
+    @Operation(
+            summary = "List images in a scan session (Review Gallery)",
+            description = "Returns all images uploaded to the scan, sorted by sort_order ASC then created_at ASC. " +
+                    "Images with upload_status = 'failed' are included so the FE can display them in the grid. " +
+                    "Only the scan owner (or admin/operator) may access this endpoint — other users receive 404.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Image list retrieved successfully",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ScanImageListResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid pagination parameters",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan not found or access denied (IDOR protection)",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<ScanImageListResponse> getScanImages(
+            @PathVariable("id") UUID id,
+            @RequestParam(name = "page", defaultValue = "1")
+            @Min(value = 1, message = "Page must be at least 1") Integer page,
+            @RequestParam(name = "limit", defaultValue = "20")
+            @Min(value = 1, message = "Limit must be at least 1")
+            @Max(value = 100, message = "Limit cannot exceed 100") Integer limit,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Received request to list images for scan ID: {} by user ID: {} with role: {}",
+                id, currentUser.getId(), currentUser.getRole());
+
+        ScanImageListResponse response =
+                scanService.getScanImages(id, currentUser.getId(), currentUser.getRole(), page, limit);
+        return ResponseEntity.ok(response);
     }
 
 
