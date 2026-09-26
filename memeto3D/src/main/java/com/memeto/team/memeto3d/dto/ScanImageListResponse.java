@@ -6,33 +6,26 @@ import lombok.*;
 
 import java.util.List;
 
-/**
- * Paginated response for GET /api/v1/scans/{id}/images.
- * Powers the Review Gallery (UC-03) by returning all images in capture order.
- */
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-@Schema(description = "Paginated list of images belonging to a scan session")
+/** Paginated image list — returned by GET /api/v1/scans/{id}/images (UC-03). */
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Schema(description = "Paginated list of images in a scan session")
 public class ScanImageListResponse {
 
     @JsonProperty("images")
-    @Schema(description = "Images in the current page, sorted by sort_order ASC then created_at ASC")
+    @Schema(description = "Images sorted by sort_order ASC, created_at ASC")
     private List<ScanImageResponse> images;
 
     @JsonProperty("total_count")
-    @Schema(description = "Total number of images in the scan (all upload_status included)", example = "100")
+    @Schema(example = "100")
     private Long totalCount;
 
-    @Schema(description = "Current page number (1-based)", example = "1")
+    @Schema(example = "1")
     private Integer page;
 
-    @Schema(description = "Number of items per page", example = "20")
+    @Schema(example = "20")
     private Integer limit;
 
     @JsonProperty("total_pages")
-    @Schema(description = "Total number of pages", example = "5")
+    @Schema(example = "5")
     private Integer totalPages;
 }

@@ -11,26 +11,22 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Represents a single image uploaded within a scan session.
- * Maps to the scan_images table.
+ * Single image within a scan session. Maps to the scan_images table.
  *
- * Note: upload_status is an application-level column added to support
- * the Review Gallery (UC-03) requirement that failed images are visible to FE.
- * It must be added to the DB schema via migration:
+ * DB migration required:
  *   ALTER TABLE scan_images
  *     ADD COLUMN upload_status VARCHAR(20) NOT NULL DEFAULT 'uploaded'
- *     CHECK (upload_status IN ('pending', 'uploaded', 'failed'));
+ *       CHECK (upload_status IN ('pending','uploaded','failed')),
+ *     ADD COLUMN thumbnail_path VARCHAR(500),
+ *     ADD COLUMN needs_quality_check BOOLEAN NOT NULL DEFAULT FALSE;
  */
 @Entity
 @Table(name = "scan_images", indexes = {
-        @Index(name = "idx_scan_images_scan", columnList = "scan_id"),
-        @Index(name = "idx_scan_images_excluded", columnList = "scan_id, is_excluded")
+        @Index(name = "idx_scan_images_scan",     columnList = "scan_id"),
+        @Index(name = "idx_scan_images_excluded", columnList = "scan_id, is_excluded"),
+        @Index(name = "idx_scan_images_qc_flag",  columnList = "scan_id, needs_quality_check")
 })
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class ScanImage {
 
     @Id
@@ -45,17 +41,11 @@ public class ScanImage {
     @Column(name = "original_filename", nullable = false, length = 255)
     private String originalFilename;
 
-    /**
-     * Internal storage path (private, not served directly to FE).
-     * FR-166: private storage.
-     */
+    /** Internal private storage path (FR-166). Not exposed to FE. */
     @Column(name = "storage_path", nullable = false, length = 500)
     private String storagePath;
 
-    /**
-     * Public-facing thumbnail path served to FE for the gallery grid.
-     * May be null if thumbnail has not been generated yet.
-     */
+    /** Public-facing thumbnail for gallery grid display. */
     @Column(name = "thumbnail_path", length = 500)
     private String thumbnailPath;
 
@@ -74,10 +64,7 @@ public class ScanImage {
     @Column(name = "format", nullable = false, length = 10)
     private String format;
 
-    /**
-     * Explicit ordering within the scan (FR-017).
-     * Fallback sort is created_at ASC when sort_order values are equal.
-     */
+    /** Explicit capture-order sequence (FR-017). */
     @Column(name = "sort_order", nullable = false)
     @Builder.Default
     private Integer sortOrder = 0;
@@ -99,15 +86,20 @@ public class ScanImage {
     @Column(name = "exclude_reason", length = 100)
     private String excludeReason;
 
-    /**
-     * Upload status of this image record.
-     * Supports Review Gallery requirement: failed images are returned with
-     * their status so FE can display them in the grid (not hidden).
-     */
+    /** Upload status. Failed images are still returned to FE (UC-03). */
     @Enumerated(EnumType.STRING)
     @Column(name = "upload_status", nullable = false, length = 20)
     @Builder.Default
     private ScanImageUploadStatus uploadStatus = ScanImageUploadStatus.uploaded;
+
+    /**
+     * Flag set to TRUE when this image was added after a quality_check_run exists.
+     * Lets the QC engine process only new images without re-checking the entire set.
+     * Reset to FALSE after the incremental QC run picks it up.
+     */
+    @Column(name = "needs_quality_check", nullable = false)
+    @Builder.Default
+    private Boolean needsQualityCheck = false;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -15,17 +15,16 @@ import java.util.UUID;
 public interface ScanImageRepository extends JpaRepository<ScanImage, UUID> {
 
     /**
-     * Returns all non-deleted images belonging to a scan, ordered by sort_order ASC then created_at ASC.
-     * Includes failed images (upload_status = 'failed') per UC-03 spec.
+     * Returns all non-deleted images for a scan sorted by sort_order ASC, created_at ASC.
+     * Includes images with any upload_status (uploaded, pending, failed) — UC-03.
      */
     @EntityGraph(attributePaths = {"scan"})
     @Query("SELECT si FROM ScanImage si WHERE si.scan.id = :scanId AND si.deletedAt IS NULL " +
            "ORDER BY si.sortOrder ASC, si.createdAt ASC")
     Page<ScanImage> findByScanIdAndDeletedAtIsNull(@Param("scanId") UUID scanId, Pageable pageable);
 
-    /**
-     * Counts non-deleted images for a scan (all upload_status values included).
-     */
-    @Query("SELECT COUNT(si) FROM ScanImage si WHERE si.scan.id = :scanId AND si.deletedAt IS NULL")
-    long countByScanIdAndDeletedAtIsNull(@Param("scanId") UUID scanId);
+    /** Counts the current max sort_order so new images get appended. */
+    @Query("SELECT COALESCE(MAX(si.sortOrder), -1) FROM ScanImage si " +
+           "WHERE si.scan.id = :scanId AND si.deletedAt IS NULL")
+    int findMaxSortOrderByScanId(@Param("scanId") UUID scanId);
 }

@@ -3,17 +3,23 @@ package com.memeto.team.memeto3d.service.impl;
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
 import com.memeto.team.memeto3d.dto.ScanImageListResponse;
 import com.memeto.team.memeto3d.dto.ScanImageResponse;
+import com.memeto.team.memeto3d.dto.ScanImageUploadResponse;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.dto.UpdateScanRequest;
 import com.memeto.team.memeto3d.entity.InputMode;
 import com.memeto.team.memeto3d.entity.Role;
 import com.memeto.team.memeto3d.entity.Scan;
+import com.memeto.team.memeto3d.entity.ScanImage;
+import com.memeto.team.memeto3d.entity.ScanImageUploadStatus;
 import com.memeto.team.memeto3d.entity.ScanStatus;
 import com.memeto.team.memeto3d.entity.User;
+import com.memeto.team.memeto3d.exception.FileSizeExceededException;
+import com.memeto.team.memeto3d.exception.InvalidFileFormatException;
 import com.memeto.team.memeto3d.exception.ResourceNotFoundException;
 import com.memeto.team.memeto3d.exception.ScanConflictException;
 import com.memeto.team.memeto3d.exception.StorageQuotaExceededException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.memeto.team.memeto3d.repository.ScanImageRepository;
 import com.memeto.team.memeto3d.repository.ScanRepository;
 import com.memeto.team.memeto3d.repository.UserRepository;
@@ -26,10 +32,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.Instant;
-
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -37,10 +45,23 @@ import java.util.UUID;
 @Slf4j
 public class ScanServiceImpl implements ScanService {
 
+    // ---- constants ----
+    /** Maximum allowed image size per FR-030 (20 MB). */
+    private static final long MAX_IMAGE_BYTES = 20L * 1024 * 1024;
+
+    /** Accepted MIME types — mirrors FR-028 (jpg/jpeg/png). */
+    private static final Set<String> ALLOWED_MIME_TYPES = Set.of(
+            "image/jpeg", "image/jpg", "image/png");
+
+    /** Accepted file extensions (lowercased). */
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png");
+
+    // ---- repositories ----
     private final ScanRepository scanRepository;
     private final UserRepository userRepository;
     private final ScanImageRepository scanImageRepository;
-
+    /** Used to check whether a quality_check_run exists for a scan without requiring a full JPA entity. */
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     @Transactional
@@ -281,44 +302,31 @@ public class ScanServiceImpl implements ScanService {
         log.info("Successfully soft-deleted scan session with ID: {} by user: {}", id, currentUserId);
     }
 
+    // =========================================================================
+    // BE1 — GET /api/v1/scans/{id}/images
+    // =========================================================================
+
     @Override
     @Transactional(readOnly = true)
     public ScanImageListResponse getScanImages(UUID scanId, UUID currentUserId, Role currentUserRole,
                                                int page, int limit) {
-        log.info("Fetching images for scan ID: {}, requested by user ID: {} with role: {}, page: {}, limit: {}",
+        log.info("Fetching images for scan ID: {}, user: {}, role: {}, page: {}, limit: {}",
                 scanId, currentUserId, currentUserRole, page, limit);
 
-        if (page < 1) {
-            throw new IllegalArgumentException("Page must be at least 1");
-        }
-        if (limit < 1 || limit > 100) {
-            throw new IllegalArgumentException("Limit must be between 1 and 100");
-        }
+        if (page < 1) throw new IllegalArgumentException("Page must be at least 1");
+        if (limit < 1 || limit > 100) throw new IllegalArgumentException("Limit must be between 1 and 100");
 
-        // 1. Verify the scan exists and is not soft-deleted
         Scan scan = scanRepository.findByIdAndDeletedAtIsNull(scanId)
                 .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + scanId));
 
-        // 2. IDOR protection: non-privileged users can only view their own scan's images (returns 404)
-        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
-        if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
-            log.warn("Access denied for user {} to images of scan {} owned by {}",
-                    currentUserId, scanId, scan.getUser() != null ? scan.getUser().getId() : null);
-            throw new ResourceNotFoundException("Scan not found with ID: " + scanId);
-        }
+        enforceOwnership(scan, currentUserId, currentUserRole, scanId);
 
-        // 3. Query images — sort_order ASC, created_at ASC is enforced in the JPQL query;
-        //    Pageable uses UNSORTED because the repository query owns the ORDER BY clause.
         Pageable pageable = PageRequest.of(page - 1, limit, Sort.unsorted());
-        Page<com.memeto.team.memeto3d.entity.ScanImage> imagePage =
-                scanImageRepository.findByScanIdAndDeletedAtIsNull(scanId, pageable);
+        Page<ScanImage> imagePage = scanImageRepository.findByScanIdAndDeletedAtIsNull(scanId, pageable);
 
         List<ScanImageResponse> imageResponses = imagePage.getContent().stream()
                 .map(ScanImageResponse::fromEntity)
                 .toList();
-
-        log.info("Returning {} images (page {}/{}) for scan ID: {}",
-                imageResponses.size(), page, imagePage.getTotalPages(), scanId);
 
         return ScanImageListResponse.builder()
                 .images(imageResponses)
@@ -327,5 +335,168 @@ public class ScanServiceImpl implements ScanService {
                 .limit(limit)
                 .totalPages(imagePage.getTotalPages())
                 .build();
+    }
+
+    // =========================================================================
+    // BE2 — POST /api/v1/scans/{id}/images
+    // =========================================================================
+
+    @Override
+    @Transactional
+    public ScanImageUploadResponse addImageToScan(UUID scanId, MultipartFile file,
+                                                  UUID currentUserId, Role currentUserRole) {
+        log.info("Adding image '{}' to scan ID: {}, requested by user: {}",
+                file != null ? file.getOriginalFilename() : "null", scanId, currentUserId);
+
+        // 1. Null-guard on file
+        if (file == null || file.isEmpty()) {
+            throw new InvalidFileFormatException("No file provided or file is empty");
+        }
+
+        // 2. Verify scan exists and is not deleted
+        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + scanId));
+
+        // 3. IDOR check — only owner (or admin/operator) may add images
+        enforceOwnership(scan, currentUserId, currentUserRole, scanId);
+
+        // 4. Status guard — cannot add images while processing or done
+        ScanStatus status = scan.getStatus();
+        if (status == ScanStatus.processing || status == ScanStatus.done) {
+            throw new ScanConflictException(
+                    "Cannot add images to a scan with status '" + status.name() + "'");
+        }
+        if (status == ScanStatus.deleted) {
+            throw new ResourceNotFoundException("Scan not found with ID: " + scanId);
+        }
+
+        // 5. File format validation (MIME + extension)
+        validateFileFormat(file);
+
+        // 6. File size validation (≤ 20 MB)
+        if (file.getSize() > MAX_IMAGE_BYTES) {
+            throw new FileSizeExceededException(
+                    "File '" + file.getOriginalFilename() + "' exceeds the 20 MB limit");
+        }
+
+        // 7. Quota check — must have room before accepting the bytes
+        User user = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + currentUserId));
+        long storageUsed  = user.getStorageUsedBytes()  != null ? user.getStorageUsedBytes()  : 0L;
+        long storageQuota = user.getStorageQuotaBytes() != null ? user.getStorageQuotaBytes() : 10737418240L;
+        if (storageUsed + file.getSize() > storageQuota) {
+            log.warn("Quota exceeded for user {}: used={}, quota={}, incoming={}",
+                    currentUserId, storageUsed, storageQuota, file.getSize());
+            throw new StorageQuotaExceededException("Xoá scan cũ để tiếp tục");
+        }
+
+        // 8. Determine needs_quality_check flag:
+        //    TRUE  → a QC run already exists for this scan, so the QC engine should
+        //            re-check only this new image and merge results (UC-04 step 4).
+        //    FALSE → no QC run yet, this is a regular first-pass upload.
+        boolean priorQcExists = Boolean.TRUE.equals(
+                jdbcTemplate.queryForObject(
+                        "SELECT EXISTS(SELECT 1 FROM quality_check_runs WHERE scan_id = ?)",
+                        Boolean.class, scanId));
+
+        // 9. Compute next sort_order (append after existing images)
+        int nextSortOrder = scanImageRepository.findMaxSortOrderByScanId(scanId) + 1;
+
+        // 10. Determine format from original filename
+        String originalFilename = file.getOriginalFilename() != null
+                ? file.getOriginalFilename() : "unknown";
+        String ext = extractExtension(originalFilename);
+
+        // 11. Simulate storage persistence.
+        //     In production this would delegate to a StorageService (S3 / MinIO).
+        //     The storage_path convention follows /{user_id}/{scan_id}/{uuid}.{ext}
+        UUID imageId = UUID.randomUUID();
+        String storagePath = "/" + currentUserId + "/" + scanId + "/" + imageId + "." + ext;
+
+        // 12. Read file bytes (needed for hash/metadata in production; kept simple here)
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            log.error("Failed to read uploaded file bytes for scan {}: {}", scanId, e.getMessage());
+            throw new InvalidFileFormatException("Failed to read file: " + e.getMessage());
+        }
+
+        // 13. Persist ScanImage record
+        ScanImage image = ScanImage.builder()
+                .id(imageId)
+                .scan(scan)
+                .originalFilename(originalFilename)
+                .storagePath(storagePath)
+                .thumbnailPath(null)          // generated asynchronously by a background job
+                .fileSizeBytes(file.getSize())
+                .mimeType(file.getContentType())
+                .format(ext)
+                .sortOrder(nextSortOrder)
+                .uploadStatus(ScanImageUploadStatus.uploaded)
+                .isExcluded(false)
+                .needsQualityCheck(priorQcExists)
+                .build();
+        scanImageRepository.saveAndFlush(image);
+
+        // 14. Update scan counters and promote status to 'uploading' if still draft
+        scan.setFileCount(scan.getFileCount() + 1);
+        scan.setTotalSizeBytes(scan.getTotalSizeBytes() + file.getSize());
+        if (scan.getStatus() == ScanStatus.draft) {
+            scan.setStatus(ScanStatus.uploading);
+        }
+        scan.setUpdatedAt(Instant.now());
+        scanRepository.saveAndFlush(scan);
+
+        // 15. Update user quota
+        user.setStorageUsedBytes(storageUsed + file.getSize());
+        userRepository.saveAndFlush(user);
+
+        log.info("Image {} added to scan {} (sort_order={}, needsQC={})",
+                imageId, scanId, nextSortOrder, priorQcExists);
+
+        return ScanImageUploadResponse.builder()
+                .image(ScanImageResponse.fromEntity(image))
+                .scanFileCount(scan.getFileCount())
+                .scanTotalSizeBytes(scan.getTotalSizeBytes())
+                .build();
+    }
+
+    // =========================================================================
+    // Private helpers
+    // =========================================================================
+
+    /**
+     * IDOR check: throws ResourceNotFoundException (mapped to 404) if the
+     * current user does not own the scan and is not admin/operator.
+     */
+    private void enforceOwnership(Scan scan, UUID currentUserId, Role currentUserRole, UUID scanId) {
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
+            log.warn("Access denied for user {} to scan {} owned by {}",
+                    currentUserId, scanId, scan.getUser() != null ? scan.getUser().getId() : null);
+            throw new ResourceNotFoundException("Scan not found with ID: " + scanId);
+        }
+    }
+
+    /** Validates MIME type and file extension against allowed image formats. */
+    private void validateFileFormat(MultipartFile file) {
+        String mime = file.getContentType();
+        if (mime == null || !ALLOWED_MIME_TYPES.contains(mime.toLowerCase())) {
+            throw new InvalidFileFormatException(
+                    "Unsupported file type '" + mime + "'. Allowed: image/jpeg, image/png");
+        }
+        String ext = extractExtension(
+                file.getOriginalFilename() != null ? file.getOriginalFilename() : "");
+        if (!ALLOWED_EXTENSIONS.contains(ext)) {
+            throw new InvalidFileFormatException(
+                    "Unsupported file extension '." + ext + "'. Allowed: jpg, jpeg, png");
+        }
+    }
+
+    /** Extracts lowercased file extension from filename, returns empty string if none. */
+    private String extractExtension(String filename) {
+        if (filename == null || !filename.contains(".")) return "";
+        return filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
     }
 }
