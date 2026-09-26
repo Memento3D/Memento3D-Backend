@@ -40,6 +40,30 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
     }
 
+    @ExceptionHandler(FileSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleFileSizeExceeded(FileSizeExceededException ex, HttpServletRequest request) {
+        log.warn("File size exceeded on path {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler(InvalidFileFormatException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidFileFormat(InvalidFileFormatException ex, HttpServletRequest request) {
+        log.warn("Invalid file format on path {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
     @ExceptionHandler(ScanConflictException.class)
     public ResponseEntity<ErrorResponse> handleScanConflict(ScanConflictException ex, HttpServletRequest request) {
         log.warn("Scan conflict on path {}: {}", request.getRequestURI(), ex.getMessage());

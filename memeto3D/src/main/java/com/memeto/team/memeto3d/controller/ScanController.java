@@ -2,6 +2,8 @@ package com.memeto.team.memeto3d.controller;
 
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
 import com.memeto.team.memeto3d.dto.ErrorResponse;
+import com.memeto.team.memeto3d.dto.ScanImageListResponse;
+import com.memeto.team.memeto3d.dto.ScanImageUploadResponse;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.dto.UpdateScanRequest;
@@ -35,6 +37,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/scans")
@@ -183,6 +187,96 @@ public class ScanController {
 
         scanService.deleteScan(id, currentUser.getId(), currentUser.getRole());
         return ResponseEntity.noContent().build();
+    }
+
+    // -------------------------------------------------------------------------
+    // BE1 — GET /api/v1/scans/{id}/images
+    // -------------------------------------------------------------------------
+
+    @GetMapping("/{id}/images")
+    @Operation(
+            summary = "List images in a scan session (Review Gallery)",
+            description = "Returns all images (incl. upload_status=failed) sorted by sort_order ASC " +
+                    "then created_at ASC. Only the scan owner or admin/operator can access (IDOR → 404).",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Image list retrieved successfully",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ScanImageListResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid pagination parameters",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan not found or IDOR denied",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<ScanImageListResponse> getScanImages(
+            @PathVariable("id") UUID id,
+            @RequestParam(name = "page", defaultValue = "1")
+            @Min(value = 1, message = "Page must be at least 1") Integer page,
+            @RequestParam(name = "limit", defaultValue = "20")
+            @Min(value = 1, message = "Limit must be at least 1")
+            @Max(value = 100, message = "Limit cannot exceed 100") Integer limit,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("List images for scan ID: {} by user: {} role: {}",
+                id, currentUser.getId(), currentUser.getRole());
+        ScanImageListResponse response =
+                scanService.getScanImages(id, currentUser.getId(), currentUser.getRole(), page, limit);
+        return ResponseEntity.ok(response);
+    }
+
+    // -------------------------------------------------------------------------
+    // BE2 — POST /api/v1/scans/{id}/images
+    // -------------------------------------------------------------------------
+
+    @PostMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Upload a supplemental image to an existing scan (UC-04 chụp bù)",
+            description = "Appends a new image to an existing scan session. Validates ownership, " +
+                    "scan status (blocked when processing/done), file format (jpg/jpeg/png), " +
+                    "file size (≤ 20 MB), and storage quota. " +
+                    "Sets needs_quality_check=true when a prior QC run exists so the QC engine " +
+                    "re-checks only the new image on the next run.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Image uploaded successfully",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ScanImageUploadResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid file format or size > 20 MB",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Storage quota exceeded",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan not found or IDOR denied",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Scan is processing or done — cannot add images",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<ScanImageUploadResponse> addImageToScan(
+            @PathVariable("id") UUID id,
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Upload image '{}' to scan ID: {} by user: {} role: {}",
+                file != null ? file.getOriginalFilename() : "null",
+                id, currentUser.getId(), currentUser.getRole());
+        ScanImageUploadResponse response =
+                scanService.addImageToScan(id, file, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
 

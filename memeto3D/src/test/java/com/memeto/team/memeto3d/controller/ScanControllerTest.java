@@ -3,12 +3,17 @@ package com.memeto.team.memeto3d.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
+import com.memeto.team.memeto3d.dto.ScanImageListResponse;
+import com.memeto.team.memeto3d.dto.ScanImageResponse;
+import com.memeto.team.memeto3d.dto.ScanImageUploadResponse;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.dto.UpdateScanRequest;
 import com.memeto.team.memeto3d.entity.Role;
 import com.memeto.team.memeto3d.entity.User;
+import com.memeto.team.memeto3d.exception.FileSizeExceededException;
 import com.memeto.team.memeto3d.exception.GlobalExceptionHandler;
+import com.memeto.team.memeto3d.exception.InvalidFileFormatException;
 import com.memeto.team.memeto3d.exception.ScanConflictException;
 import com.memeto.team.memeto3d.exception.StorageQuotaExceededException;
 import com.memeto.team.memeto3d.security.CustomUserDetails;
@@ -22,6 +27,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
@@ -42,9 +48,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -749,6 +753,277 @@ class ScanControllerTest {
         assertNotNull(response);
         assertEquals(200, response.getStatusCode().value());
         verify(scanService, times(1)).updateScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER));
+    }
+
+    // =========================================================================
+    // BE1 — GET /api/v1/scans/{id}/images
+    // =========================================================================
+
+    @Test
+    @DisplayName("BE1-1: GET /{id}/images → 200 + đầy đủ fields (sort_order, upload_status, thumbnail_path)")
+    void testGetScanImagesSuccess() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UUID img1Id = UUID.randomUUID();
+        UUID img2Id = UUID.randomUUID();
+
+        ScanImageResponse img1 = ScanImageResponse.builder()
+                .id(img1Id).scanId(scanId).originalFilename("IMG_0001.jpg")
+                .thumbnailPath("/thumbs/img_0001.jpg").fileSizeBytes(1048576L)
+                .mimeType("image/jpeg").width(4032).height(3024).format("jpg")
+                .sortOrder(0).uploadStatus("uploaded").isExcluded(false)
+                .needsQualityCheck(false).createdAt(Instant.now()).build();
+
+        ScanImageResponse img2 = ScanImageResponse.builder()
+                .id(img2Id).scanId(scanId).originalFilename("IMG_0002.jpg")
+                .thumbnailPath("/thumbs/img_0002.jpg").fileSizeBytes(1100000L)
+                .mimeType("image/jpeg").width(4032).height(3024).format("jpg")
+                .sortOrder(1).uploadStatus("uploaded").isExcluded(false)
+                .needsQualityCheck(false).createdAt(Instant.now()).build();
+
+        ScanImageListResponse mockResponse = ScanImageListResponse.builder()
+                .images(List.of(img1, img2)).totalCount(2L)
+                .page(1).limit(20).totalPages(1).build();
+
+        when(scanService.getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20)))
+                .thenReturn(mockResponse);
+
+        mockMvc.perform(get("/api/v1/scans/{id}/images", scanId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.images", hasSize(2)))
+                .andExpect(jsonPath("$.total_count", is(2)))
+                .andExpect(jsonPath("$.page", is(1)))
+                .andExpect(jsonPath("$.limit", is(20)))
+                .andExpect(jsonPath("$.total_pages", is(1)))
+                .andExpect(jsonPath("$.images[0].id", is(img1Id.toString())))
+                .andExpect(jsonPath("$.images[0].thumbnail_path", is("/thumbs/img_0001.jpg")))
+                .andExpect(jsonPath("$.images[0].sort_order", is(0)))
+                .andExpect(jsonPath("$.images[0].upload_status", is("uploaded")))
+                .andExpect(jsonPath("$.images[0].needs_quality_check", is(false)))
+                .andExpect(jsonPath("$.images[1].sort_order", is(1)));
+
+        verify(scanService).getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20));
+    }
+
+    @Test
+    @DisplayName("BE1-2: GET /{id}/images IDOR → 404")
+    void testGetScanImagesNotOwner() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20)))
+                .thenThrow(new com.memeto.team.memeto3d.exception.ResourceNotFoundException(
+                        "Scan not found with ID: " + scanId));
+
+        mockMvc.perform(get("/api/v1/scans/{id}/images", scanId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)));
+
+        verify(scanService).getScanImages(any(), any(), any(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("BE1-3: GET /{id}/images — chưa xác thực → 401")
+    void testGetScanImagesUnauthenticated() throws Exception {
+        SecurityContextHolder.clearContext();
+        mockMvc.perform(get("/api/v1/scans/{id}/images", UUID.randomUUID()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)));
+        verify(scanService, never()).getScanImages(any(), any(), any(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("BE1-4: GET /{id}/images — ảnh upload_status=failed vẫn trả về")
+    void testGetScanImagesIncludesFailed() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UUID failId = UUID.randomUUID();
+        ScanImageResponse failed = ScanImageResponse.builder()
+                .id(failId).scanId(scanId).originalFilename("IMG_fail.jpg")
+                .fileSizeBytes(0L).mimeType("image/jpeg").format("jpg")
+                .sortOrder(4).uploadStatus("failed").isExcluded(false)
+                .needsQualityCheck(false).createdAt(Instant.now()).build();
+
+        when(scanService.getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20)))
+                .thenReturn(ScanImageListResponse.builder().images(List.of(failed))
+                        .totalCount(1L).page(1).limit(20).totalPages(1).build());
+
+        mockMvc.perform(get("/api/v1/scans/{id}/images", scanId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.images[0].upload_status", is("failed")));
+    }
+
+    @Test
+    @DisplayName("BE1-5: GET /{id}/images — limit > 100 service ném IllegalArgument → 400")
+    void testGetScanImagesLimitExceeded() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(101)))
+                .thenThrow(new IllegalArgumentException("Limit must be between 1 and 100"));
+
+        mockMvc.perform(get("/api/v1/scans/{id}/images", scanId).param("limit", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("Limit must be between 1 and 100")));
+    }
+
+    // =========================================================================
+    // BE2 — POST /api/v1/scans/{id}/images
+    // =========================================================================
+
+    private MockMultipartFile validJpeg(String name) {
+        return new MockMultipartFile(
+                "file", name, "image/jpeg", new byte[]{(byte)0xFF, (byte)0xD8, 0x00});
+    }
+
+    @Test
+    @DisplayName("BE2-1: POST /{id}/images — upload ảnh bù thành công → 201 + record mới + counters cập nhật")
+    void testAddImageToScanSuccess() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UUID imageId = UUID.randomUUID();
+
+        ScanImageResponse imageResp = ScanImageResponse.builder()
+                .id(imageId).scanId(scanId).originalFilename("extra.jpg")
+                .fileSizeBytes(204800L).mimeType("image/jpeg").format("jpg")
+                .sortOrder(45).uploadStatus("uploaded").isExcluded(false)
+                .needsQualityCheck(true).createdAt(Instant.now()).build();
+
+        ScanImageUploadResponse mockResponse = ScanImageUploadResponse.builder()
+                .image(imageResp).scanFileCount(46).scanTotalSizeBytes(94371840L).build();
+
+        when(scanService.addImageToScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenReturn(mockResponse);
+
+        mockMvc.perform(multipart("/api/v1/scans/{id}/images", scanId)
+                        .file(validJpeg("extra.jpg")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.image.id", is(imageId.toString())))
+                .andExpect(jsonPath("$.image.original_filename", is("extra.jpg")))
+                .andExpect(jsonPath("$.image.upload_status", is("uploaded")))
+                .andExpect(jsonPath("$.image.needs_quality_check", is(true)))
+                .andExpect(jsonPath("$.scan_file_count", is(46)))
+                .andExpect(jsonPath("$.scan_total_size_bytes", is(94371840)));
+
+        verify(scanService).addImageToScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("BE2-2: POST /{id}/images — vượt quota → 403")
+    void testAddImageQuotaExceeded() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.addImageToScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenThrow(new StorageQuotaExceededException("Xoá scan cũ để tiếp tục"));
+
+        mockMvc.perform(multipart("/api/v1/scans/{id}/images", scanId)
+                        .file(validJpeg("big.jpg")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status", is(403)))
+                .andExpect(jsonPath("$.message", is("Xoá scan cũ để tiếp tục")));
+    }
+
+    @Test
+    @DisplayName("BE2-3: POST /{id}/images — sai định dạng (gif) → 400, không insert record rác")
+    void testAddImageInvalidFormat() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.addImageToScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenThrow(new InvalidFileFormatException(
+                        "Unsupported file type 'image/gif'. Allowed: image/jpeg, image/png"));
+
+        MockMultipartFile gif = new MockMultipartFile(
+                "file", "anim.gif", "image/gif", new byte[]{0x47, 0x49, 0x46});
+
+        mockMvc.perform(multipart("/api/v1/scans/{id}/images", scanId).file(gif))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.message", is(
+                        "Unsupported file type 'image/gif'. Allowed: image/jpeg, image/png")));
+    }
+
+    @Test
+    @DisplayName("BE2-4: POST /{id}/images — file > 20 MB → 400")
+    void testAddImageFileTooLarge() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.addImageToScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenThrow(new FileSizeExceededException(
+                        "File 'huge.jpg' exceeds the 20 MB limit"));
+
+        mockMvc.perform(multipart("/api/v1/scans/{id}/images", scanId)
+                        .file(validJpeg("huge.jpg")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.message", is("File 'huge.jpg' exceeds the 20 MB limit")));
+    }
+
+    @Test
+    @DisplayName("BE2-5: POST /{id}/images — status=processing → 409")
+    void testAddImageScanProcessing() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.addImageToScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenThrow(new ScanConflictException(
+                        "Cannot add images to a scan with status 'processing'"));
+
+        mockMvc.perform(multipart("/api/v1/scans/{id}/images", scanId)
+                        .file(validJpeg("new.jpg")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status", is(409)))
+                .andExpect(jsonPath("$.message", is(
+                        "Cannot add images to a scan with status 'processing'")));
+    }
+
+    @Test
+    @DisplayName("BE2-6: POST /{id}/images — status=done → 409")
+    void testAddImageScanDone() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.addImageToScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenThrow(new ScanConflictException(
+                        "Cannot add images to a scan with status 'done'"));
+
+        mockMvc.perform(multipart("/api/v1/scans/{id}/images", scanId)
+                        .file(validJpeg("new.jpg")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status", is(409)));
+    }
+
+    @Test
+    @DisplayName("BE2-7: POST /{id}/images IDOR (không sở hữu scan) → 404")
+    void testAddImageNotOwner() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.addImageToScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenThrow(new com.memeto.team.memeto3d.exception.ResourceNotFoundException(
+                        "Scan not found with ID: " + scanId));
+
+        mockMvc.perform(multipart("/api/v1/scans/{id}/images", scanId)
+                        .file(validJpeg("new.jpg")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)));
+    }
+
+    @Test
+    @DisplayName("BE2-8: POST /{id}/images — chưa xác thực → 401")
+    void testAddImageUnauthenticated() throws Exception {
+        SecurityContextHolder.clearContext();
+        mockMvc.perform(multipart("/api/v1/scans/{id}/images", UUID.randomUUID())
+                        .file(validJpeg("new.jpg")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)));
+        verify(scanService, never()).addImageToScan(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE2-9: POST /{id}/images — ảnh mới có needs_quality_check=true khi QC đã chạy trước")
+    void testAddImageNeedsQualityCheckFlagSet() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UUID imageId = UUID.randomUUID();
+
+        // Simulate: prior QC run exists → needs_quality_check = true
+        ScanImageResponse imageResp = ScanImageResponse.builder()
+                .id(imageId).scanId(scanId).originalFilename("补拍01.jpg")
+                .fileSizeBytes(512000L).mimeType("image/jpeg").format("jpg")
+                .sortOrder(100).uploadStatus("uploaded").isExcluded(false)
+                .needsQualityCheck(true).createdAt(Instant.now()).build();
+
+        when(scanService.addImageToScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenReturn(ScanImageUploadResponse.builder()
+                        .image(imageResp).scanFileCount(101).scanTotalSizeBytes(200L).build());
+
+        mockMvc.perform(multipart("/api/v1/scans/{id}/images", scanId)
+                        .file(validJpeg("extra.jpg")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.image.needs_quality_check", is(true)));
     }
 }
 
