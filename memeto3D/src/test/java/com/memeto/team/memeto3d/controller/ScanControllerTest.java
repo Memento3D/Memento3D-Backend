@@ -3,6 +3,8 @@ package com.memeto.team.memeto3d.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
+import com.memeto.team.memeto3d.dto.ScanImageListResponse;
+import com.memeto.team.memeto3d.dto.ScanImageResponse;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.dto.UpdateScanRequest;
@@ -749,6 +751,231 @@ class ScanControllerTest {
         assertNotNull(response);
         assertEquals(200, response.getStatusCode().value());
         verify(scanService, times(1)).updateScan(eq(scanId), any(), eq(testUserId), eq(Role.ROLE_USER));
+    }
+    // =========================================================================
+    // GET /api/v1/scans/{id}/images — BE1 test cases
+    // =========================================================================
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id}/images - Trả 200 + danh sách ảnh với đủ fields (sort_order, upload_status, thumbnail_path)")
+    void testGetScanImagesSuccess() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UUID imageId1 = UUID.randomUUID();
+        UUID imageId2 = UUID.randomUUID();
+
+        ScanImageResponse img1 = ScanImageResponse.builder()
+                .id(imageId1)
+                .scanId(scanId)
+                .originalFilename("IMG_0001.jpg")
+                .thumbnailPath("/thumbs/img_0001.jpg")
+                .fileSizeBytes(1048576L)
+                .mimeType("image/jpeg")
+                .width(4032)
+                .height(3024)
+                .format("jpg")
+                .sortOrder(0)
+                .uploadStatus("uploaded")
+                .isExcluded(false)
+                .createdAt(Instant.now())
+                .build();
+
+        ScanImageResponse img2 = ScanImageResponse.builder()
+                .id(imageId2)
+                .scanId(scanId)
+                .originalFilename("IMG_0002.jpg")
+                .thumbnailPath("/thumbs/img_0002.jpg")
+                .fileSizeBytes(1100000L)
+                .mimeType("image/jpeg")
+                .width(4032)
+                .height(3024)
+                .format("jpg")
+                .sortOrder(1)
+                .uploadStatus("uploaded")
+                .isExcluded(false)
+                .createdAt(Instant.now())
+                .build();
+
+        ScanImageListResponse mockResponse = ScanImageListResponse.builder()
+                .images(List.of(img1, img2))
+                .totalCount(2L)
+                .page(1)
+                .limit(20)
+                .totalPages(1)
+                .build();
+
+        when(scanService.getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20)))
+                .thenReturn(mockResponse);
+
+        mockMvc.perform(get("/api/v1/scans/{id}/images", scanId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.images", hasSize(2)))
+                .andExpect(jsonPath("$.total_count", is(2)))
+                .andExpect(jsonPath("$.page", is(1)))
+                .andExpect(jsonPath("$.limit", is(20)))
+                .andExpect(jsonPath("$.total_pages", is(1)))
+                .andExpect(jsonPath("$.images[0].id", is(imageId1.toString())))
+                .andExpect(jsonPath("$.images[0].scan_id", is(scanId.toString())))
+                .andExpect(jsonPath("$.images[0].original_filename", is("IMG_0001.jpg")))
+                .andExpect(jsonPath("$.images[0].thumbnail_path", is("/thumbs/img_0001.jpg")))
+                .andExpect(jsonPath("$.images[0].sort_order", is(0)))
+                .andExpect(jsonPath("$.images[0].upload_status", is("uploaded")))
+                .andExpect(jsonPath("$.images[0].is_excluded", is(false)))
+                .andExpect(jsonPath("$.images[1].sort_order", is(1)));
+
+        verify(scanService, times(1)).getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id}/images - Scan không thuộc quyền sở hữu (IDOR) → 404")
+    void testGetScanImagesNotOwner() throws Exception {
+        UUID scanId = UUID.randomUUID();
+
+        when(scanService.getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20)))
+                .thenThrow(new com.memeto.team.memeto3d.exception.ResourceNotFoundException(
+                        "Scan not found with ID: " + scanId));
+
+        mockMvc.perform(get("/api/v1/scans/{id}/images", scanId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)))
+                .andExpect(jsonPath("$.message", is("Scan not found with ID: " + scanId)));
+
+        verify(scanService, times(1)).getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id}/images - Chưa xác thực → 401 Unauthorized")
+    void testGetScanImagesUnauthenticated() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        SecurityContextHolder.clearContext();
+
+        mockMvc.perform(get("/api/v1/scans/{id}/images", scanId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.message", is("No authenticated user in security context")));
+
+        verify(scanService, never()).getScanImages(any(), any(), any(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id}/images - Ảnh có upload_status = 'failed' vẫn trả về (không bị lọc)")
+    void testGetScanImagesIncludesFailedImages() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UUID failedImageId = UUID.randomUUID();
+
+        ScanImageResponse failedImg = ScanImageResponse.builder()
+                .id(failedImageId)
+                .scanId(scanId)
+                .originalFilename("IMG_0005.jpg")
+                .thumbnailPath(null)
+                .fileSizeBytes(0L)
+                .mimeType("image/jpeg")
+                .format("jpg")
+                .sortOrder(4)
+                .uploadStatus("failed")
+                .isExcluded(false)
+                .createdAt(Instant.now())
+                .build();
+
+        ScanImageListResponse mockResponse = ScanImageListResponse.builder()
+                .images(List.of(failedImg))
+                .totalCount(1L)
+                .page(1)
+                .limit(20)
+                .totalPages(1)
+                .build();
+
+        when(scanService.getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20)))
+                .thenReturn(mockResponse);
+
+        mockMvc.perform(get("/api/v1/scans/{id}/images", scanId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.images", hasSize(1)))
+                .andExpect(jsonPath("$.images[0].upload_status", is("failed")))
+                .andExpect(jsonPath("$.images[0].id", is(failedImageId.toString())));
+
+        verify(scanService, times(1)).getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id}/images - Custom page + limit params được truyền đúng vào service")
+    void testGetScanImagesCustomPagination() throws Exception {
+        UUID scanId = UUID.randomUUID();
+
+        ScanImageListResponse mockResponse = ScanImageListResponse.builder()
+                .images(Collections.emptyList())
+                .totalCount(0L)
+                .page(2)
+                .limit(10)
+                .totalPages(0)
+                .build();
+
+        when(scanService.getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(2), eq(10)))
+                .thenReturn(mockResponse);
+
+        mockMvc.perform(get("/api/v1/scans/{id}/images", scanId)
+                        .param("page", "2")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page", is(2)))
+                .andExpect(jsonPath("$.limit", is(10)))
+                .andExpect(jsonPath("$.total_count", is(0)));
+
+        verify(scanService, times(1)).getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(2), eq(10));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id}/images - limit > 100 → service ném IllegalArgumentException → 400 Bad Request")
+    void testGetScanImagesLimitExceeded() throws Exception {
+        UUID scanId = UUID.randomUUID();
+
+        when(scanService.getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(101)))
+                .thenThrow(new IllegalArgumentException("Limit must be between 1 and 100"));
+
+        mockMvc.perform(get("/api/v1/scans/{id}/images", scanId)
+                        .param("limit", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.message", is("Limit must be between 1 and 100")));
+
+        verify(scanService, times(1)).getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(101));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id}/images - scan có 100 ảnh, trả đúng total_count (performance sanity)")
+    void testGetScanImages100Images() throws Exception {
+        UUID scanId = UUID.randomUUID();
+
+        List<ScanImageResponse> images = new java.util.ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            images.add(ScanImageResponse.builder()
+                    .id(UUID.randomUUID())
+                    .scanId(scanId)
+                    .originalFilename("IMG_00" + String.format("%02d", i) + ".jpg")
+                    .sortOrder(i)
+                    .uploadStatus("uploaded")
+                    .isExcluded(false)
+                    .createdAt(Instant.now())
+                    .build());
+        }
+
+        ScanImageListResponse mockResponse = ScanImageListResponse.builder()
+                .images(images)
+                .totalCount(100L)
+                .page(1)
+                .limit(20)
+                .totalPages(5)
+                .build();
+
+        when(scanService.getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20)))
+                .thenReturn(mockResponse);
+
+        mockMvc.perform(get("/api/v1/scans/{id}/images", scanId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total_count", is(100)))
+                .andExpect(jsonPath("$.total_pages", is(5)))
+                .andExpect(jsonPath("$.images", hasSize(20)));
+
+        verify(scanService, times(1)).getScanImages(eq(scanId), eq(testUserId), eq(Role.ROLE_USER), eq(1), eq(20));
     }
 }
 
