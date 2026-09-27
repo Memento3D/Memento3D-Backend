@@ -60,6 +60,7 @@ public class ScanServiceImpl implements ScanService {
     private final ScanRepository scanRepository;
     private final UserRepository userRepository;
     private final ScanImageRepository scanImageRepository;
+    private final com.memeto.team.memeto3d.repository.ScanVideoRepository scanVideoRepository;
     /** Used to check whether a quality_check_run exists for a scan without requiring a full JPA entity. */
     private final JdbcTemplate jdbcTemplate;
 
@@ -459,6 +460,95 @@ public class ScanServiceImpl implements ScanService {
                 .image(ScanImageResponse.fromEntity(image))
                 .scanFileCount(scan.getFileCount())
                 .scanTotalSizeBytes(scan.getTotalSizeBytes())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public com.memeto.team.memeto3d.dto.ScanVideoUploadResponse addVideoToScan(UUID scanId, MultipartFile file, UUID currentUserId, Role currentUserRole) {
+        log.info("Uploading video to scan ID: {} by user: {}", scanId, currentUserId);
+
+        if (file == null || file.isEmpty()) {
+            throw new InvalidFileFormatException("No file provided or file is empty");
+        }
+
+        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + scanId));
+
+        enforceOwnership(scan, currentUserId, currentUserRole, scanId);
+
+        // Check if scan is in image mode
+        if (scan.getInputMode() == InputMode.image) {
+            throw new ScanConflictException("Cannot upload video to a scan with input_mode 'image'");
+        }
+
+        ScanStatus status = scan.getStatus();
+        if (status == ScanStatus.processing || status == ScanStatus.done) {
+            throw new ScanConflictException("Cannot add video to a scan with status '" + status.name() + "'");
+        }
+        if (status == ScanStatus.deleted) {
+            throw new ResourceNotFoundException("Scan not found with ID: " + scanId);
+        }
+
+        // File format validation (mp4, mov, avi)
+        String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "unknown";
+        String ext = extractExtension(originalFilename).toLowerCase();
+        if (!Set.of("mp4", "mov", "avi").contains(ext)) {
+            throw new InvalidFileFormatException("File format not supported. Must be mp4, mov, or avi.");
+        }
+
+        // File size validation (<= 2GB)
+        long MAX_VIDEO_BYTES = 2L * 1024 * 1024 * 1024;
+        if (file.getSize() > MAX_VIDEO_BYTES) {
+            throw new FileSizeExceededException("File exceeds the 2GB limit. Please use chunked upload.");
+        }
+
+        // Quota check
+        User user = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + currentUserId));
+        long storageUsed  = user.getStorageUsedBytes()  != null ? user.getStorageUsedBytes()  : 0L;
+        long storageQuota = user.getStorageQuotaBytes() != null ? user.getStorageQuotaBytes() : 10737418240L;
+        if (storageUsed + file.getSize() > storageQuota) {
+            throw new StorageQuotaExceededException("Xoá scan cũ để tiếp tục");
+        }
+
+        // Simulate storage persistence
+        UUID videoId = UUID.randomUUID();
+        String storagePath = "/" + currentUserId + "/" + scanId + "/" + videoId + "." + ext;
+
+        // Persist ScanVideo record
+        com.memeto.team.memeto3d.entity.ScanVideo video = com.memeto.team.memeto3d.entity.ScanVideo.builder()
+                .id(videoId)
+                .scan(scan)
+                .originalFilename(originalFilename)
+                .storagePath(storagePath)
+                .fileSizeBytes(file.getSize())
+                .mimeType(file.getContentType())
+                .format(ext)
+                .build();
+        
+        scanVideoRepository.saveAndFlush(video);
+
+        // Update scan counters and status
+        scan.setFileCount(scan.getFileCount() + 1);
+        scan.setTotalSizeBytes(scan.getTotalSizeBytes() + file.getSize());
+        scan.setStatus(ScanStatus.uploaded);
+        scan.setUpdatedAt(Instant.now());
+        scanRepository.saveAndFlush(scan);
+
+        // Update user quota
+        user.setStorageUsedBytes(storageUsed + file.getSize());
+        userRepository.saveAndFlush(user);
+
+        return com.memeto.team.memeto3d.dto.ScanVideoUploadResponse.builder()
+                .id(video.getId())
+                .scanId(scan.getId())
+                .originalFilename(video.getOriginalFilename())
+                .storagePath(video.getStoragePath())
+                .fileSizeBytes(video.getFileSizeBytes())
+                .mimeType(video.getMimeType())
+                .format(video.getFormat())
+                .createdAt(video.getCreatedAt())
                 .build();
     }
 

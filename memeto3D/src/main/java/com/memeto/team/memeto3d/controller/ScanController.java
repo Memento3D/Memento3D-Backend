@@ -280,6 +280,53 @@ public class ScanController {
     }
 
     // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // POST /api/v1/scans/{id}/video
+    // -------------------------------------------------------------------------
+
+    @PostMapping(value = "/{id}/video", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Upload a video to an existing scan",
+            description = "Uploads a video file (.mp4, .mov, .avi) to an existing scan session. Validates ownership, " +
+                    "scan status, input mode (must be video), file format, file size (≤ 2 GB), and storage quota.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Video uploaded successfully",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = com.memeto.team.memeto3d.dto.ScanVideoUploadResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid file format or size > 2 GB",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Storage quota exceeded",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan not found or IDOR denied",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Scan is not in video mode or status blocked",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<com.memeto.team.memeto3d.dto.ScanVideoUploadResponse> addVideoToScan(
+            @PathVariable("id") UUID id,
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Upload video '{}' to scan ID: {} by user: {} role: {}",
+                file != null ? file.getOriginalFilename() : "null",
+                id, currentUser.getId(), currentUser.getRole());
+        com.memeto.team.memeto3d.dto.ScanVideoUploadResponse response =
+                scanService.addVideoToScan(id, file, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+
+    // -------------------------------------------------------------------------
     // BE3 — DELETE /api/v1/scans/{id}/images/{image_id}
     // -------------------------------------------------------------------------
 
@@ -312,6 +359,7 @@ public class ScanController {
         scanService.deleteImageFromScan(id, imageId, currentUser.getId(), currentUser.getRole());
         return ResponseEntity.noContent().build();
     }
+
 
 
     private CustomUserDetails getAuthenticatedUserDetails(CustomUserDetails userDetails) {

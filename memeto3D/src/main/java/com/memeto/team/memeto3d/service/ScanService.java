@@ -45,6 +45,12 @@ public interface ScanService {
                                            UUID currentUserId, Role currentUserRole);
 
     /**
+     * BE - Upload video to a scan.
+     */
+    com.memeto.team.memeto3d.dto.ScanVideoUploadResponse addVideoToScan(UUID scanId, MultipartFile file,
+                                           UUID currentUserId, Role currentUserRole);
+
+    /**
      * BE3 — Deletes a specific image from a scan (UC-05 xoá ảnh).
      * Hard-deletes the image (not soft-delete) because images don't need long-term retention.
      * Blocks deletion when scan is in 'processing' status (image is being used for reconstruction).
