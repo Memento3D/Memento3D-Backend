@@ -279,6 +279,40 @@ public class ScanController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    // -------------------------------------------------------------------------
+    // BE3 — DELETE /api/v1/scans/{id}/images/{image_id}
+    // -------------------------------------------------------------------------
+
+    @DeleteMapping("/{id}/images/{image_id}")
+    @Operation(
+            summary = "Delete a specific image from a scan (UC-05 xoá ảnh)",
+            description = "Removes a single image from a scan before submitting quality check or after receiving quality report. " +
+                    "Hard-deletes the image (not soft-delete) since images don't require long-term retention. " +
+                    "Updates scan counters and user storage quota. Blocked if scan is in 'processing' status.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Image successfully deleted"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan or image not found, or access denied (IDOR protection)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Conflict: scan is in 'processing' status",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<Void> deleteImageFromScan(
+            @PathVariable("id") UUID id,
+            @PathVariable("image_id") UUID imageId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Delete image ID: {} from scan ID: {} by user: {} role: {}",
+                imageId, id, currentUser.getId(), currentUser.getRole());
+
+        scanService.deleteImageFromScan(id, imageId, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.noContent().build();
+    }
+
 
     private CustomUserDetails getAuthenticatedUserDetails(CustomUserDetails userDetails) {
         if (userDetails != null && userDetails.getId() != null) {

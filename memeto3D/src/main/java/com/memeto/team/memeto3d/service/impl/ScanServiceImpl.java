@@ -463,6 +463,73 @@ public class ScanServiceImpl implements ScanService {
     }
 
     // =========================================================================
+    // BE3 — DELETE /api/v1/scans/{id}/images/{image_id}
+    // =========================================================================
+
+    @Override
+    @Transactional
+    public void deleteImageFromScan(UUID scanId, UUID imageId, UUID currentUserId, Role currentUserRole) {
+        log.info("Deleting image ID: {} from scan ID: {}, requested by user: {}",
+                imageId, scanId, currentUserId);
+
+        // 1. Verify scan exists and is not deleted
+        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + scanId));
+
+        // 2. IDOR check — only owner (or admin/operator) may delete images
+        enforceOwnership(scan, currentUserId, currentUserRole, scanId);
+
+        // 3. Block deletion while reconstruction is processing
+        if (scan.getStatus() == ScanStatus.processing) {
+            log.warn("Cannot delete image {} from scan {} because it is currently in 'processing' status",
+                    imageId, scanId);
+            throw new ScanConflictException("Cannot delete images while the scan is in 'processing' status");
+        }
+
+        // 4. Fetch image and verify it belongs to this scan
+        ScanImage image = scanImageRepository.findById(imageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Image not found with ID: " + imageId));
+
+        if (!image.getScan().getId().equals(scanId)) {
+            log.warn("Image {} does not belong to scan {}", imageId, scanId);
+            throw new ResourceNotFoundException("Image not found with ID: " + imageId);
+        }
+
+        // 5. If image is already soft-deleted, treat as not found
+        if (image.getDeletedAt() != null) {
+            log.warn("Image {} is already deleted", imageId);
+            throw new ResourceNotFoundException("Image not found with ID: " + imageId);
+        }
+
+        // 6. Capture size before deletion for quota update
+        long imageSizeBytes = image.getFileSizeBytes();
+
+        // 7. Hard-delete the image (not soft-delete, as per spec)
+        // Cascade constraints will automatically delete related image_quality_results
+        scanImageRepository.delete(image);
+        scanImageRepository.flush();
+
+        // 8. Update scan counters
+        int newFileCount = scan.getFileCount() - 1;
+        long newTotalSizeBytes = scan.getTotalSizeBytes() - imageSizeBytes;
+
+        scan.setFileCount(Math.max(0, newFileCount));
+        scan.setTotalSizeBytes(Math.max(0L, newTotalSizeBytes));
+        scan.setUpdatedAt(Instant.now());
+        scanRepository.saveAndFlush(scan);
+
+        // 9. Update user quota (release storage)
+        User user = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + currentUserId));
+        long currentStorageUsed = user.getStorageUsedBytes() != null ? user.getStorageUsedBytes() : 0L;
+        user.setStorageUsedBytes(Math.max(0L, currentStorageUsed - imageSizeBytes));
+        userRepository.saveAndFlush(user);
+
+        log.info("Successfully deleted image {} from scan {}, freed {} bytes, new file_count: {}",
+                imageId, scanId, imageSizeBytes, newFileCount);
+    }
+
+    // =========================================================================
     // Private helpers
     // =========================================================================
 
