@@ -43,4 +43,10 @@ public interface ScanService {
      */
     ScanImageUploadResponse addImageToScan(UUID scanId, MultipartFile file,
                                            UUID currentUserId, Role currentUserRole);
+
+    /**
+     * BE - Upload video to a scan.
+     */
+    com.memeto.team.memeto3d.dto.ScanVideoUploadResponse addVideoToScan(UUID scanId, MultipartFile file,
+                                           UUID currentUserId, Role currentUserRole);
 }
