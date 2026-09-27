@@ -49,4 +49,20 @@ public interface ScanService {
      */
     com.memeto.team.memeto3d.dto.ScanVideoUploadResponse addVideoToScan(UUID scanId, MultipartFile file,
                                            UUID currentUserId, Role currentUserRole);
+
+    /**
+     * BE3 — Deletes a specific image from a scan (UC-05 xoá ảnh).
+     * Hard-deletes the image (not soft-delete) because images don't need long-term retention.
+     * Blocks deletion when scan is in 'processing' status (image is being used for reconstruction).
+     * Cascading FK constraints will auto-delete related image_quality_results.
+     * Updates scan counters and user storage quota.
+     *
+     * @param scanId          target scan
+     * @param imageId         image to delete
+     * @param currentUserId   authenticated user
+     * @param currentUserRole authenticated role (admin/operator bypass IDOR)
+     * @throws ResourceNotFoundException if scan/image not found or access denied (404)
+     * @throws ScanConflictException if scan status is 'processing' (409)
+     */
+    void deleteImageFromScan(UUID scanId, UUID imageId, UUID currentUserId, Role currentUserRole);
 }
