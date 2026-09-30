@@ -552,6 +552,36 @@ public class ScanServiceImpl implements ScanService {
                 .build();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public com.memeto.team.memeto3d.dto.ScanVideoMetadataResponse getScanVideoMetadata(UUID scanId, UUID currentUserId, Role currentUserRole) {
+        log.info("Fetching video metadata for scan ID: {}, requested by user: {}", scanId, currentUserId);
+
+        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + scanId));
+
+        enforceOwnership(scan, currentUserId, currentUserRole, scanId);
+
+        com.memeto.team.memeto3d.entity.ScanVideo video = scanVideoRepository.findFirstByScanIdAndDeletedAtIsNullOrderByCreatedAtDesc(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("Video not found for scan ID: " + scanId));
+
+        String resolution = null;
+        if (video.getWidth() != null && video.getHeight() != null) {
+            resolution = video.getWidth() + "x" + video.getHeight();
+        }
+
+        String previewUrl = video.getThumbnailPath() != null ? video.getThumbnailPath() : video.getStoragePath();
+
+        return com.memeto.team.memeto3d.dto.ScanVideoMetadataResponse.builder()
+                .durationSeconds(video.getDurationSeconds())
+                .resolution(resolution)
+                .fps(video.getFps())
+                .uploadStatus(scan.getStatus().name())
+                .storagePath(video.getStoragePath())
+                .previewUrl(previewUrl)
+                .build();
+    }
+
     // =========================================================================
     // BE3 — DELETE /api/v1/scans/{id}/images/{image_id}
     // =========================================================================

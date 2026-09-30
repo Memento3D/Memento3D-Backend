@@ -50,6 +50,8 @@ public interface ScanService {
     com.memeto.team.memeto3d.dto.ScanVideoUploadResponse addVideoToScan(UUID scanId, MultipartFile file,
                                            UUID currentUserId, Role currentUserRole);
 
+    com.memeto.team.memeto3d.dto.ScanVideoMetadataResponse getScanVideoMetadata(UUID scanId, UUID currentUserId, Role currentUserRole);
+
     /**
      * BE3 — Deletes a specific image from a scan (UC-05 xoá ảnh).
      * Hard-deletes the image (not soft-delete) because images don't need long-term retention.

@@ -325,6 +325,38 @@ public class ScanController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    // -------------------------------------------------------------------------
+    // GET /api/v1/scans/{id}/video
+    // -------------------------------------------------------------------------
+
+    @GetMapping("/{id}/video")
+    @Operation(
+            summary = "Get video metadata for a scan",
+            description = "Retrieves video metadata (duration, resolution, fps, upload status, storage path) for a scan session. Returns 404 if no video is found.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Video metadata retrieved successfully",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = com.memeto.team.memeto3d.dto.ScanVideoMetadataResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan or video not found, or IDOR denied",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<com.memeto.team.memeto3d.dto.ScanVideoMetadataResponse> getScanVideoMetadata(
+            @PathVariable("id") UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Get video metadata for scan ID: {} by user: {} role: {}",
+                id, currentUser.getId(), currentUser.getRole());
+        com.memeto.team.memeto3d.dto.ScanVideoMetadataResponse response =
+                scanService.getScanVideoMetadata(id, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.ok(response);
+    }
 
     // -------------------------------------------------------------------------
     // BE3 — DELETE /api/v1/scans/{id}/images/{image_id}
