@@ -4,6 +4,7 @@ import com.memeto.team.memeto3d.dto.ErrorResponse;
 import com.memeto.team.memeto3d.dto.UploadStatusResponse;
 import com.memeto.team.memeto3d.exception.InvalidTokenException;
 import com.memeto.team.memeto3d.security.CustomUserDetails;
+import com.memeto.team.memeto3d.service.UploadChunkService;
 import com.memeto.team.memeto3d.service.UploadService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -15,34 +16,60 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
 /**
  * REST controller for chunked-upload session management.
  *
- * <p>Endpoint: {@code GET /api/v1/uploads/{id}/status}</p>
- *
- * <p>Allows clients to resume interrupted uploads by discovering which chunk
- * indexes have already been received by the server.</p>
+ * <ul>
+ *   <li>{@code POST /api/v1/uploads/{id}/chunks/{index}} — receive one chunk</li>
+ *   <li>{@code GET  /api/v1/uploads/{id}/status}         — query session status for resume</li>
+ * </ul>
  */
 @RestController
 @RequestMapping("/api/v1/uploads")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Uploads", description = "Chunked upload session management endpoints")
+@Tag(name = "Chunked Uploads", description = "Endpoints for handling large file chunked uploads")
 public class UploadController {
 
+    /** Handles chunk file I/O and merge logic. */
+    private final UploadChunkService uploadChunkService;
+
+    /** Handles upload session status queries (resume support). */
     private final UploadService uploadService;
 
-    // ──────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
+    // POST /api/v1/uploads/{id}/chunks/{index}
+    // -------------------------------------------------------------------------
+
+    @PostMapping(value = "/{id}/chunks/{index}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+        summary = "Upload a file chunk",
+        description = "Uploads a specific chunk of a file. Supports retry on duplicate chunks. " +
+                      "Merges chunks when the last one is received."
+    )
+    public ResponseEntity<?> uploadChunk(
+            @PathVariable("id") UUID id,
+            @PathVariable("index") int index,
+            @RequestParam("file") MultipartFile file
+    ) {
+        log.info("Received chunk {} for upload session {}", index, id);
+        uploadChunkService.uploadChunk(id, index, file);
+        return ResponseEntity.ok().build();
+    }
+
+    // -------------------------------------------------------------------------
     // GET /api/v1/uploads/{id}/status
-    // ──────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
 
     @GetMapping("/{id}/status")
     @Operation(
@@ -57,9 +84,9 @@ public class UploadController {
             resume the upload from the correct position instead of restarting
             from the beginning.
 
-            - **Session not found** → 404
-            - **Session completed** → `upload_status: "completed"`, no `missing_indexes`
-            - **Session in progress** → `missing_indexes` contains the chunks to re-upload
+            - **Session not found** -> 404
+            - **Session completed** -> `upload_status: "completed"`, no `missing_indexes`
+            - **Session in progress** -> `missing_indexes` contains the chunks to re-upload
             """,
         security = @SecurityRequirement(name = "BearerAuth")
     )
@@ -90,9 +117,9 @@ public class UploadController {
 
             @RequestParam(name = "file_reference", required = false)
             @Parameter(
-                description = "Optional filename or session key to disambiguate when "
-                            + "the same scan has multiple upload sessions. "
-                            + "When omitted the most-recent session is returned."
+                description = "Optional filename or session key to disambiguate when " +
+                              "the same scan has multiple upload sessions. " +
+                              "When omitted the most-recent session is returned."
             )
             String fileReference,
 
@@ -108,9 +135,9 @@ public class UploadController {
         return ResponseEntity.ok(response);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Auth helpers (same pattern as ScanController)
-    // ──────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
+    // Auth helpers
+    // -------------------------------------------------------------------------
 
     private CustomUserDetails getAuthenticatedUserDetails(CustomUserDetails userDetails) {
         if (userDetails != null && userDetails.getId() != null) {

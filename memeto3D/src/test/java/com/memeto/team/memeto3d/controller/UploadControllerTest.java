@@ -5,6 +5,7 @@ import com.memeto.team.memeto3d.entity.Role;
 import com.memeto.team.memeto3d.entity.User;
 import com.memeto.team.memeto3d.exception.InvalidTokenException;
 import com.memeto.team.memeto3d.security.CustomUserDetails;
+import com.memeto.team.memeto3d.service.UploadChunkService;
 import com.memeto.team.memeto3d.service.UploadService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +40,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class UploadControllerTest {
 
+    @Mock private UploadChunkService uploadChunkService;
     @Mock private UploadService uploadService;
     @InjectMocks private UploadController controller;
 
