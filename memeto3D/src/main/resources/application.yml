@@ -5,9 +5,9 @@ spring:
   application:
     name: memeto3D
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5431}/${DB_NAME:memeto3d_dev}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:2404}
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}?sslmode=require
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     open-in-view: false
@@ -17,6 +17,15 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME}
+    api-key: ${CLOUDINARY_API_KEY}
+    api-secret: ${CLOUDINARY_API_SECRET}
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 20MB
+      max-request-size: 25MB
 
 app:
   jwt:

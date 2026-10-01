@@ -30,7 +30,6 @@ import java.util.UUID;
 public class ScanImage {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
@@ -85,6 +84,12 @@ public class ScanImage {
 
     @Column(name = "exclude_reason", length = 100)
     private String excludeReason;
+
+    @Column(name = "cloudinary_asset_id", length = 255)
+    private String cloudinaryAssetId;
+
+    @Column(name = "cloudinary_public_id", length = 500)
+    private String cloudinaryPublicId;
 
     /** Upload status. Failed images are still returned to FE (UC-03). */
     @Enumerated(EnumType.STRING)
