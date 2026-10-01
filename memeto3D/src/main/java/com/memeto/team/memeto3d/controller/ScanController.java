@@ -391,7 +391,38 @@ public class ScanController {
         scanService.deleteImageFromScan(id, imageId, currentUser.getId(), currentUser.getRole());
         return ResponseEntity.noContent().build();
     }
+    // -------------------------------------------------------------------------
+    // GET /api/v1/scans/{id}/quality-runs
+    // -------------------------------------------------------------------------
 
+    @GetMapping("/{id}/quality-runs")
+    @Operation(
+            summary = "Get quality check runs history for a scan",
+            description = "Returns the history of quality check runs for a scan, sorted by run_number DESC (newest first). " +
+                    "If the scan has never run a quality check, an empty array is returned. Only the scan owner or admin/operator can access.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Quality check runs retrieved successfully",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse.class, type = "array"))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan not found or access denied (IDOR protection)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<java.util.List<com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse>> getQualityCheckRuns(
+            @PathVariable("id") UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Get quality check runs for scan ID: {} by user: {} role: {}",
+                id, currentUser.getId(), currentUser.getRole());
+
+        java.util.List<com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse> response =
+                scanService.getQualityCheckRuns(id, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.ok(response);
+    }
 
 
     private CustomUserDetails getAuthenticatedUserDetails(CustomUserDetails userDetails) {

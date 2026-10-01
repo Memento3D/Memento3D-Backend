@@ -61,6 +61,7 @@ public class ScanServiceImpl implements ScanService {
     private final UserRepository userRepository;
     private final ScanImageRepository scanImageRepository;
     private final com.memeto.team.memeto3d.repository.ScanVideoRepository scanVideoRepository;
+    private final com.memeto.team.memeto3d.repository.QualityCheckRunRepository qualityCheckRunRepository;
     /** Used to check whether a quality_check_run exists for a scan without requiring a full JPA entity. */
     private final JdbcTemplate jdbcTemplate;
 
@@ -647,6 +648,26 @@ public class ScanServiceImpl implements ScanService {
 
         log.info("Successfully deleted image {} from scan {}, freed {} bytes, new file_count: {}",
                 imageId, scanId, imageSizeBytes, newFileCount);
+    }
+
+    // =========================================================================
+    // BE4 — GET /api/v1/scans/{id}/quality-runs
+    // =========================================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse> getQualityCheckRuns(UUID scanId, UUID currentUserId, Role currentUserRole) {
+        log.info("Fetching quality check runs for scan ID: {}, requested by user: {}", scanId, currentUserId);
+
+        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + scanId));
+
+        enforceOwnership(scan, currentUserId, currentUserRole, scanId);
+
+        return qualityCheckRunRepository.findByScanIdOrderByRunNumberDesc(scanId)
+                .stream()
+                .map(com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse::fromEntity)
+                .toList();
     }
 
     // =========================================================================

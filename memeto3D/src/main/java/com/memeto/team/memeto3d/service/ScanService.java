@@ -7,6 +7,8 @@ import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
 import com.memeto.team.memeto3d.dto.UpdateScanRequest;
 import com.memeto.team.memeto3d.entity.Role;
+import com.memeto.team.memeto3d.exception.ResourceNotFoundException;
+import com.memeto.team.memeto3d.exception.ScanConflictException;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
@@ -67,4 +69,8 @@ public interface ScanService {
      * @throws ScanConflictException if scan status is 'processing' (409)
      */
     void deleteImageFromScan(UUID scanId, UUID imageId, UUID currentUserId, Role currentUserRole);
+    /**
+     * Get quality check runs for a scan.
+     */
+    java.util.List<com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse> getQualityCheckRuns(UUID scanId, UUID currentUserId, Role currentUserRole);
 }

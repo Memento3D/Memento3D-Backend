@@ -1025,5 +1025,91 @@ class ScanControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.image.needs_quality_check", is(true)));
     }
+
+    // =========================================================================
+    // GET /api/v1/scans/{id}/quality-runs
+    // =========================================================================
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id}/quality-runs - Trả về lịch sử run thành công")
+    void testGetQualityCheckRunsSuccess() throws Exception {
+        UUID scanId = UUID.randomUUID();
+
+        com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse run1 = com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse.builder()
+                .runNumber(2)
+                .status("completed")
+                .overallScore(new java.math.BigDecimal("85.5"))
+                .scoreCategory("green")
+                .createdAt(Instant.now())
+                .build();
+
+        com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse run2 = com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse.builder()
+                .runNumber(1)
+                .status("completed")
+                .overallScore(new java.math.BigDecimal("60.0"))
+                .scoreCategory("yellow")
+                .createdAt(Instant.now())
+                .build();
+
+        when(scanService.getQualityCheckRuns(eq(scanId), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenReturn(List.of(run1, run2));
+
+        mockMvc.perform(get("/api/v1/scans/{id}/quality-runs", scanId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].run_number", is(2)))
+                .andExpect(jsonPath("$[0].status", is("completed")))
+                .andExpect(jsonPath("$[0].overall_score", is(85.5)))
+                .andExpect(jsonPath("$[0].score_category", is("green")))
+                .andExpect(jsonPath("$[0].created_at", notNullValue()))
+                .andExpect(jsonPath("$[1].run_number", is(1)));
+
+        verify(scanService, times(1)).getQualityCheckRuns(eq(scanId), eq(testUserId), eq(Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id}/quality-runs - Scan chưa từng chạy quality check -> trả mảng rỗng")
+    void testGetQualityCheckRunsEmpty() throws Exception {
+        UUID scanId = UUID.randomUUID();
+
+        when(scanService.getQualityCheckRuns(eq(scanId), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/api/v1/scans/{id}/quality-runs", scanId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        verify(scanService, times(1)).getQualityCheckRuns(eq(scanId), eq(testUserId), eq(Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id}/quality-runs - Scan không tồn tại hoặc IDOR -> 404 Not Found")
+    void testGetQualityCheckRunsNotFound() throws Exception {
+        UUID scanId = UUID.randomUUID();
+
+        when(scanService.getQualityCheckRuns(eq(scanId), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenThrow(new com.memeto.team.memeto3d.exception.ResourceNotFoundException("Scan not found with ID: " + scanId));
+
+        mockMvc.perform(get("/api/v1/scans/{id}/quality-runs", scanId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)))
+                .andExpect(jsonPath("$.message", is("Scan not found with ID: " + scanId)));
+
+        verify(scanService, times(1)).getQualityCheckRuns(eq(scanId), eq(testUserId), eq(Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/scans/{id}/quality-runs - Chưa xác thực -> 401 Unauthorized")
+    void testGetQualityCheckRunsUnauthenticated() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        SecurityContextHolder.clearContext();
+
+        mockMvc.perform(get("/api/v1/scans/{id}/quality-runs", scanId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.message", is("No authenticated user in security context")));
+
+        verify(scanService, never()).getQualityCheckRuns(any(), any(), any());
+    }
 }
 
