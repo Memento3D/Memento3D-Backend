@@ -47,6 +47,9 @@ class ScanServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private com.memeto.team.memeto3d.repository.QualityCheckRunRepository qualityCheckRunRepository;
+
     @InjectMocks
     private ScanServiceImpl scanService;
 
@@ -758,6 +761,102 @@ class ScanServiceTest {
         );
         assertTrue(ex.getMessage().contains("processing"));
         verify(scanRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("getQualityCheckRuns returns list of runs successfully")
+    void testGetQualityCheckRunsSuccess() {
+        UUID scanId = UUID.randomUUID();
+        Scan mockScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser)
+                .build();
+
+        com.memeto.team.memeto3d.entity.QualityCheckRun run1 = com.memeto.team.memeto3d.entity.QualityCheckRun.builder()
+                .id(UUID.randomUUID())
+                .scan(mockScan)
+                .runNumber(2)
+                .status("completed")
+                .overallScore(new java.math.BigDecimal("90.5"))
+                .scoreCategory("green")
+                .createdAt(Instant.now())
+                .build();
+
+        com.memeto.team.memeto3d.entity.QualityCheckRun run2 = com.memeto.team.memeto3d.entity.QualityCheckRun.builder()
+                .id(UUID.randomUUID())
+                .scan(mockScan)
+                .runNumber(1)
+                .status("completed")
+                .overallScore(new java.math.BigDecimal("70.0"))
+                .scoreCategory("yellow")
+                .createdAt(Instant.now())
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(mockScan));
+        when(qualityCheckRunRepository.findByScanIdOrderByRunNumberDesc(scanId))
+                .thenReturn(List.of(run1, run2));
+
+        List<com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse> result = scanService.getQualityCheckRuns(scanId, userId, Role.ROLE_USER);
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals(2, result.get(0).getRunNumber());
+        assertEquals("completed", result.get(0).getStatus());
+        assertEquals(new java.math.BigDecimal("90.5"), result.get(0).getOverallScore());
+        assertEquals("green", result.get(0).getScoreCategory());
+        
+        assertEquals(1, result.get(1).getRunNumber());
+    }
+
+    @Test
+    @DisplayName("getQualityCheckRuns returns empty list if no runs")
+    void testGetQualityCheckRunsEmpty() {
+        UUID scanId = UUID.randomUUID();
+        Scan mockScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser)
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(mockScan));
+        when(qualityCheckRunRepository.findByScanIdOrderByRunNumberDesc(scanId))
+                .thenReturn(Collections.emptyList());
+
+        List<com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse> result = scanService.getQualityCheckRuns(scanId, userId, Role.ROLE_USER);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("getQualityCheckRuns throws ResourceNotFoundException if scan not found")
+    void testGetQualityCheckRunsNotFound() {
+        UUID nonExistentId = UUID.randomUUID();
+        when(scanRepository.findByIdAndDeletedAtIsNull(nonExistentId)).thenReturn(Optional.empty());
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> scanService.getQualityCheckRuns(nonExistentId, userId, Role.ROLE_USER)
+        );
+        verify(qualityCheckRunRepository, never()).findByScanIdOrderByRunNumberDesc(any());
+    }
+
+    @Test
+    @DisplayName("getQualityCheckRuns throws ResourceNotFoundException for non-owner without privilege (IDOR)")
+    void testGetQualityCheckRunsAccessDeniedIDOR() {
+        UUID scanId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        Scan mockScan = Scan.builder()
+                .id(scanId)
+                .user(mockUser) // owned by mockUser (userId)
+                .build();
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(mockScan));
+
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> scanService.getQualityCheckRuns(scanId, otherUserId, Role.ROLE_USER)
+        );
+        verify(qualityCheckRunRepository, never()).findByScanIdOrderByRunNumberDesc(any());
     }
 }
 
