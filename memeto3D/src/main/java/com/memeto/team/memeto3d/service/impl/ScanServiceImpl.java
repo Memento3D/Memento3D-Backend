@@ -33,6 +33,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import com.memeto.team.memeto3d.service.CloudinaryStorageService;
+import java.util.Map;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -62,6 +66,10 @@ public class ScanServiceImpl implements ScanService {
     private final ScanImageRepository scanImageRepository;
     private final com.memeto.team.memeto3d.repository.ScanVideoRepository scanVideoRepository;
     private final com.memeto.team.memeto3d.repository.QualityCheckRunRepository qualityCheckRunRepository;
+    private final CloudinaryStorageService cloudinaryStorageService;
+
+    @PersistenceContext
+    private EntityManager entityManager;
     /** Used to check whether a quality_check_run exists for a scan without requiring a full JPA entity. */
     private final JdbcTemplate jdbcTemplate;
 
@@ -409,19 +417,53 @@ public class ScanServiceImpl implements ScanService {
                 ? file.getOriginalFilename() : "unknown";
         String ext = extractExtension(originalFilename);
 
-        // 11. Simulate storage persistence.
-        //     In production this would delegate to a StorageService (S3 / MinIO).
-        //     The storage_path convention follows /{user_id}/{scan_id}/{uuid}.{ext}
+//        // 11. Simulate storage persistence.
+//        //     In production this would delegate to a StorageService (S3 / MinIO).
+//        //     The storage_path convention follows /{user_id}/{scan_id}/{uuid}.{ext}
+//        UUID imageId = UUID.randomUUID();
+//        String storagePath = "/" + currentUserId + "/" + scanId + "/" + imageId + "." + ext;
+//
+//        // 12. Read file bytes (needed for hash/metadata in production; kept simple here)
+//        byte[] bytes;
+//        try {
+//            bytes = file.getBytes();
+//        } catch (IOException e) {
+//            log.error("Failed to read uploaded file bytes for scan {}: {}", scanId, e.getMessage());
+//            throw new InvalidFileFormatException("Failed to read file: " + e.getMessage());
+//        }
+        // 11. Generate image ID
         UUID imageId = UUID.randomUUID();
-        String storagePath = "/" + currentUserId + "/" + scanId + "/" + imageId + "." + ext;
+        UUID ownerId = scan.getUser().getId();
 
-        // 12. Read file bytes (needed for hash/metadata in production; kept simple here)
-        byte[] bytes;
+        // 12. Upload image to Cloudinary
+        Map<String, Object> uploadResult;
+
         try {
-            bytes = file.getBytes();
+            uploadResult = cloudinaryStorageService.uploadImage(
+                    file,
+                    ownerId,
+                    scanId,
+                    imageId
+            );
         } catch (IOException e) {
-            log.error("Failed to read uploaded file bytes for scan {}: {}", scanId, e.getMessage());
-            throw new InvalidFileFormatException("Failed to read file: " + e.getMessage());
+            log.error("Cloudinary upload failed for scan {}", scanId, e);
+
+            throw new IllegalStateException(
+                    "Failed to upload image to Cloudinary", e
+            );
+        }
+
+        // Extract Cloudinary metadata
+        String assetId = (String) uploadResult.get("asset_id");
+        String publicId = (String) uploadResult.get("public_id");
+
+        Number width = (Number) uploadResult.get("width");
+        Number height = (Number) uploadResult.get("height");
+
+        if (assetId == null || publicId == null) {
+            throw new IllegalStateException(
+                    "Cloudinary returned incomplete upload metadata"
+            );
         }
 
         // 13. Persist ScanImage record
@@ -429,17 +471,30 @@ public class ScanServiceImpl implements ScanService {
                 .id(imageId)
                 .scan(scan)
                 .originalFilename(originalFilename)
-                .storagePath(storagePath)
+
+                // Cloudinary storage
+                .storagePath(publicId)
+                .cloudinaryAssetId(assetId)
+                .cloudinaryPublicId(publicId)
+
+//                .storagePath(storagePath)
+                // Image metadata
                 .thumbnailPath(null)          // generated asynchronously by a background job
                 .fileSizeBytes(file.getSize())
                 .mimeType(file.getContentType())
+                .width(width != null ? width.intValue() : null)
+                .height(height != null ? height.intValue() : null)
                 .format(ext)
+
+                // Existing business logic
                 .sortOrder(nextSortOrder)
                 .uploadStatus(ScanImageUploadStatus.uploaded)
                 .isExcluded(false)
                 .needsQualityCheck(priorQcExists)
                 .build();
-        scanImageRepository.saveAndFlush(image);
+        entityManager.persist(image);
+        entityManager.flush();
+//        scanImageRepository.saveAndFlush(image);
 
         // 14. Update scan counters and promote status to 'uploading' if still draft
         scan.setFileCount(scan.getFileCount() + 1);
@@ -505,8 +560,9 @@ public class ScanServiceImpl implements ScanService {
         }
 
         // Quota check
-        User user = userRepository.findById(currentUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + currentUserId));
+//        User user = userRepository.findById(currentUserId)
+//                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + currentUserId));
+        User user = scan.getUser();
         long storageUsed  = user.getStorageUsedBytes()  != null ? user.getStorageUsedBytes()  : 0L;
         long storageQuota = user.getStorageQuotaBytes() != null ? user.getStorageQuotaBytes() : 10737418240L;
         if (storageUsed + file.getSize() > storageQuota) {
