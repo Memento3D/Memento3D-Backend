@@ -9,6 +9,13 @@ spring:
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:2404}
     driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:absolute-tomcat-224856.upstash.io}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:gQAAAAAAA25YAAIgcDI1MTM4ZWIyZDk2MTE0ODZjYTM4ZjJmYmZlYjM4Zjc2MA}
+      ssl:
+        enabled: true
   jpa:
     open-in-view: false
     hibernate:
