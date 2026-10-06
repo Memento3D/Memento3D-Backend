@@ -26,6 +26,20 @@ spring:
       enabled: true
       max-file-size: 20MB
       max-request-size: 25MB
+  data:
+    redis:
+      url: ${REDIS_URL:}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:false}
+      timeout: ${REDIS_TIMEOUT:2000ms}
+  cache:
+    type: redis
+    redis:
+      time-to-live: ${REDIS_TTL:3600000ms}
 
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME}
