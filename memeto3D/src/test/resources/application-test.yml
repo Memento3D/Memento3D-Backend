@@ -8,6 +8,11 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
 
 app:
   jwt:
