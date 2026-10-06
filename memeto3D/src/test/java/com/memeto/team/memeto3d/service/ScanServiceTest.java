@@ -3,6 +3,7 @@ package com.memeto.team.memeto3d.service;
 import com.memeto.team.memeto3d.dto.CreateScanRequest;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
+import com.memeto.team.memeto3d.dto.ScanStatusResponse;
 import com.memeto.team.memeto3d.dto.UpdateScanRequest;
 import com.memeto.team.memeto3d.entity.InputMode;
 import com.memeto.team.memeto3d.entity.Role;
@@ -52,6 +53,9 @@ class ScanServiceTest {
 
     @Mock
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
+    @Mock
+    private com.memeto.team.memeto3d.service.ScanStatusCacheService scanStatusCacheService;
 
     @InjectMocks
     private ScanServiceImpl scanService;
@@ -979,6 +983,48 @@ class ScanServiceTest {
 
         assertThrows(ScanConflictException.class,
                 () -> scanService.overrideQualityRun(scanId, runId, userId, Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("getScanStatus returns cached status details on hit")
+    void testGetScanStatusCacheHit() {
+        UUID scanId = UUID.randomUUID();
+        Scan scan = Scan.builder().id(scanId).user(mockUser).status(ScanStatus.processing).build();
+
+        ScanStatusResponse cachedResponse = ScanStatusResponse.builder()
+                .scanId(scanId.toString())
+                .status("PROCESSING")
+                .progress(65)
+                .message("Generating 3D model")
+                .build();
+
+        when(scanStatusCacheService.getScanStatusDetails(scanId)).thenReturn(Optional.of(cachedResponse));
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(scan));
+
+        ScanStatusResponse result = scanService.getScanStatus(scanId, userId, Role.ROLE_USER);
+
+        assertEquals("PROCESSING", result.getStatus());
+        assertEquals(65, result.getProgress());
+        assertEquals("Generating 3D model", result.getMessage());
+        verify(scanStatusCacheService, times(1)).getScanStatusDetails(scanId);
+    }
+
+    @Test
+    @DisplayName("getScanStatus queries DB and caches status on cache miss")
+    void testGetScanStatusCacheMiss() {
+        UUID scanId = UUID.randomUUID();
+        Scan scan = Scan.builder().id(scanId).user(mockUser).status(ScanStatus.draft).build();
+
+        when(scanStatusCacheService.getScanStatusDetails(scanId)).thenReturn(Optional.empty());
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(scan));
+
+        ScanStatusResponse result = scanService.getScanStatus(scanId, userId, Role.ROLE_USER);
+
+        assertEquals("CREATED", result.getStatus());
+        assertEquals(0, result.getProgress());
+        assertEquals("Draft scan session created", result.getMessage());
+        verify(scanStatusCacheService, times(1)).getScanStatusDetails(scanId);
+        verify(scanStatusCacheService, times(1)).cacheScanStatusDetails(scanId, "CREATED", 0, "Draft scan session created");
     }
 }
 

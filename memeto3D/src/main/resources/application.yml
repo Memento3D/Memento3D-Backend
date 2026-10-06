@@ -13,8 +13,13 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+  sql:
+    init:
+      mode: ${SQL_INIT_MODE:never}
+      data-locations: classpath:data.sql
   jpa:
     open-in-view: false
+    defer-datasource-initialization: true
     hibernate:
       ddl-auto: ${DDL_AUTO:update}
     show-sql: false
@@ -26,6 +31,12 @@ spring:
       enabled: true
       max-file-size: 20MB
       max-request-size: 25MB
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:2000ms}
 
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME}
@@ -33,6 +44,9 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET}
 
 app:
+  cache:
+    user-ttl-hours: ${USER_CACHE_TTL_HOURS:1}
+    scan-status-ttl-hours: ${SCAN_STATUS_CACHE_TTL_HOURS:6}
   jwt:
     secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
     # 3600000 ms = 1 hour

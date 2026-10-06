@@ -6,6 +6,7 @@ import com.memeto.team.memeto3d.dto.ScanImageListResponse;
 import com.memeto.team.memeto3d.dto.ScanImageUploadResponse;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
+import com.memeto.team.memeto3d.dto.ScanStatusResponse;
 import com.memeto.team.memeto3d.dto.UpdateScanRequest;
 import com.memeto.team.memeto3d.exception.InvalidTokenException;
 import com.memeto.team.memeto3d.security.CustomUserDetails;
@@ -41,7 +42,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
-@RequestMapping("/api/v1/scans")
+@RequestMapping({"/api/v1/scans", "/api/scans"})
 @RequiredArgsConstructor
 @Slf4j
 @Validated
@@ -128,6 +129,31 @@ public class ScanController {
         log.info("Received request to get scan ID: {} for user ID: {} with role: {}", id, currentUser.getId(), currentUser.getRole());
 
         ScanResponse response = scanService.getScanById(id, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/status")
+    @Operation(
+            summary = "Get scan session temporary status",
+            description = "Retrieves temporary scan status (key pattern scan:{scanId}:status, scan:{scanId}:progress) using Redis cache first, falling back to PostgreSQL.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Scan status successfully retrieved",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ScanStatusResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan session not found or access denied",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<ScanStatusResponse> getScanStatus(
+            @PathVariable("id") UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Received request to get scan status for ID: {} for user ID: {}", id, currentUser.getId());
+
+        ScanStatusResponse response = scanService.getScanStatus(id, currentUser.getId(), currentUser.getRole());
         return ResponseEntity.ok(response);
     }
 
