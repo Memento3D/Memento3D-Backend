@@ -569,7 +569,7 @@ CREATE INDEX idx_osh_date  ON order_status_history(created_at);
 -- ---------------------------------------------------------------------
 CREATE TABLE model_ratings (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id    UUID NOT NULL REFERENCES users(id),
+    user_id    UUID REFERENCES users(id),
     scan_id    UUID NOT NULL REFERENCES scans(id),
     rating     SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
     comment    TEXT,

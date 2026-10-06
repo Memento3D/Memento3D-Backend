@@ -190,7 +190,7 @@ public class ScanController {
     }
 
     // -------------------------------------------------------------------------
-    // BE1 — GET /api/v1/scans/{id}/images
+    //GET /api/v1/scans/{id}/images
     // -------------------------------------------------------------------------
 
     @GetMapping("/{id}/images")
@@ -232,7 +232,7 @@ public class ScanController {
     }
 
     // -------------------------------------------------------------------------
-    // BE2 — POST /api/v1/scans/{id}/images
+    //  POST /api/v1/scans/{id}/images
     // -------------------------------------------------------------------------
 
     @PostMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -359,7 +359,7 @@ public class ScanController {
     }
 
     // -------------------------------------------------------------------------
-    // BE3 — DELETE /api/v1/scans/{id}/images/{image_id}
+    //  DELETE /api/v1/scans/{id}/images/{image_id}
     // -------------------------------------------------------------------------
 
     @DeleteMapping("/{id}/images/{image_id}")
