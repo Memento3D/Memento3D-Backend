@@ -6,6 +6,7 @@ import com.memeto.team.memeto3d.dto.ScanImageResponse;
 import com.memeto.team.memeto3d.dto.ScanImageUploadResponse;
 import com.memeto.team.memeto3d.dto.ScanListResponse;
 import com.memeto.team.memeto3d.dto.ScanResponse;
+import com.memeto.team.memeto3d.dto.ScanStatusResponse;
 import com.memeto.team.memeto3d.dto.UpdateScanRequest;
 import com.memeto.team.memeto3d.entity.InputMode;
 import com.memeto.team.memeto3d.entity.Role;
@@ -41,6 +42,7 @@ import jakarta.persistence.PersistenceContext;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -60,18 +62,33 @@ public class ScanServiceImpl implements ScanService {
     /** Accepted file extensions (lowercased). */
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png");
 
-    // ---- repositories ----
+    // ---- repositories & services ----
     private final ScanRepository scanRepository;
     private final UserRepository userRepository;
     private final ScanImageRepository scanImageRepository;
     private final com.memeto.team.memeto3d.repository.ScanVideoRepository scanVideoRepository;
     private final com.memeto.team.memeto3d.repository.QualityCheckRunRepository qualityCheckRunRepository;
     private final CloudinaryStorageService cloudinaryStorageService;
+    private final com.memeto.team.memeto3d.service.ScanStatusCacheService scanStatusCacheService;
 
     @PersistenceContext
     private EntityManager entityManager;
     /** Used to check whether a quality_check_run exists for a scan without requiring a full JPA entity. */
     private final JdbcTemplate jdbcTemplate;
+
+    private String mapScanStatusForRedis(ScanStatus status) {
+        if (status == null) return "CREATED";
+        switch (status) {
+            case draft: return "CREATED";
+            case uploading: return "UPLOADING";
+            case processing: return "PROCESSING";
+            case quality_check:
+            case ready: return "RECONSTRUCTING";
+            case done: return "COMPLETED";
+            case failed: return "FAILED";
+            default: return status.name().toUpperCase();
+        }
+    }
 
     @Override
     @Transactional
@@ -105,6 +122,8 @@ public class ScanServiceImpl implements ScanService {
 
         Scan savedScan = scanRepository.saveAndFlush(scan);
         log.info("Successfully created scan session with ID: {} for user: {}", savedScan.getId(), userId);
+
+        scanStatusCacheService.cacheScanStatus(savedScan.getId(), mapScanStatusForRedis(savedScan.getStatus()));
 
         return ScanResponse.fromEntity(savedScan);
     }
@@ -230,7 +249,44 @@ public class ScanServiceImpl implements ScanService {
             throw new ResourceNotFoundException("Scan not found with ID: " + id);
         }
 
+        scanStatusCacheService.cacheScanStatus(id, mapScanStatusForRedis(scan.getStatus()));
+
         return ScanResponse.fromEntity(scan);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ScanStatusResponse getScanStatus(UUID id, UUID currentUserId, Role currentUserRole) {
+        log.info("Fetching scan status for ID: {}, requested by user ID: {} with role: {}", id, currentUserId, currentUserRole);
+
+        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + id));
+
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
+            log.warn("Access denied for user {} to scan status {} owned by {}",
+                    currentUserId, id, scan.getUser() != null ? scan.getUser().getId() : null);
+            throw new ResourceNotFoundException("Scan not found with ID: " + id);
+        }
+
+        Optional<ScanStatusResponse> cachedDetails = scanStatusCacheService.getScanStatusDetails(id);
+        if (cachedDetails.isPresent()) {
+            log.info("Returning cached Redis scan status details for scan ID: {}", id);
+            return cachedDetails.get();
+        }
+
+        String mappedStatus = mapScanStatusForRedis(scan.getStatus());
+        int defaultProgress = ScanStatusCacheServiceImpl.getDefaultProgressForStatus(mappedStatus);
+        String defaultMessage = ScanStatusCacheServiceImpl.getDefaultMessageForStatus(mappedStatus);
+
+        scanStatusCacheService.cacheScanStatusDetails(id, mappedStatus, defaultProgress, defaultMessage);
+
+        return ScanStatusResponse.builder()
+                .scanId(id.toString())
+                .status(mappedStatus)
+                .progress(defaultProgress)
+                .message(defaultMessage)
+                .build();
     }
 
     @Override
@@ -276,6 +332,8 @@ public class ScanServiceImpl implements ScanService {
         Scan updatedScan = scanRepository.saveAndFlush(scan);
         log.info("Successfully updated scan session with ID: {}", id);
 
+        scanStatusCacheService.cacheScanStatus(id, mapScanStatusForRedis(updatedScan.getStatus()));
+
         return ScanResponse.fromEntity(updatedScan);
     }
 
@@ -308,6 +366,8 @@ public class ScanServiceImpl implements ScanService {
         scan.setStatus(ScanStatus.deleted);
         scan.setDeletedAt(Instant.now());
         scanRepository.saveAndFlush(scan);
+
+        scanStatusCacheService.evictScanStatus(id);
 
         log.info("Successfully soft-deleted scan session with ID: {} by user: {}", id, currentUserId);
     }

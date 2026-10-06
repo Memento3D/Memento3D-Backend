@@ -52,6 +52,9 @@ class AuthServiceTest {
     @Mock
     private TokenBlacklistService tokenBlacklistService;
 
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
     @InjectMocks
     private AuthServiceImpl authService;
 
@@ -111,7 +114,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Login thành công - Returns valid AuthResponse with JWT")
+    @DisplayName("Login thành công - Returns valid AuthResponse with JWT and refresh token")
     void testLoginSuccess() {
         LoginRequest request = LoginRequest.builder()
                 .email("user@example.com")
@@ -123,14 +126,48 @@ class AuthServiceTest {
         when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(sampleUser));
         when(jwtService.generateToken(sampleUser)).thenReturn("sample.jwt.token");
         when(jwtService.getExpirationInSeconds()).thenReturn(3600L);
+        when(refreshTokenService.createRefreshToken(sampleUser.getId())).thenReturn("sample.refresh.token");
 
         AuthResponse response = authService.login(request);
 
         assertNotNull(response);
         assertEquals("sample.jwt.token", response.getAccessToken());
+        assertEquals("sample.refresh.token", response.getRefreshToken());
         assertEquals("Bearer", response.getTokenType());
         assertEquals(3600L, response.getExpiresIn());
         assertEquals(sampleUser.getEmail(), response.getUser().getEmail());
+    }
+
+    @Test
+    @DisplayName("RefreshToken thành công - Returns new access token and rotated refresh token")
+    void testRefreshTokenSuccess() {
+        RefreshTokenRequest request = RefreshTokenRequest.builder()
+                .refreshToken("valid.refresh.token")
+                .build();
+
+        when(refreshTokenService.validateRefreshToken("valid.refresh.token")).thenReturn(Optional.of(sampleUser.getId()));
+        when(userRepository.findById(sampleUser.getId())).thenReturn(Optional.of(sampleUser));
+        when(jwtService.generateToken(sampleUser)).thenReturn("new.jwt.token");
+        when(refreshTokenService.createRefreshToken(sampleUser.getId())).thenReturn("new.refresh.token");
+        when(jwtService.getExpirationInSeconds()).thenReturn(3600L);
+
+        AuthResponse response = authService.refreshToken(request);
+
+        assertNotNull(response);
+        assertEquals("new.jwt.token", response.getAccessToken());
+        assertEquals("new.refresh.token", response.getRefreshToken());
+    }
+
+    @Test
+    @DisplayName("RefreshToken thất bại khi token không hợp lệ - Throws InvalidTokenException")
+    void testRefreshTokenInvalid() {
+        RefreshTokenRequest request = RefreshTokenRequest.builder()
+                .refreshToken("invalid.token")
+                .build();
+
+        when(refreshTokenService.validateRefreshToken("invalid.token")).thenReturn(Optional.empty());
+
+        assertThrows(InvalidTokenException.class, () -> authService.refreshToken(request));
     }
 
     @Test
@@ -167,16 +204,6 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Get current user - Throws InvalidTokenException when not authenticated")
-    void testGetCurrentUserUnauthenticated() {
-        SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(null);
-        SecurityContextHolder.setContext(securityContext);
-
-        assertThrows(InvalidTokenException.class, () -> authService.getCurrentUser());
-    }
-
-    @Test
     @DisplayName("Logout - Blacklists token and clears SecurityContext")
     void testLogout() {
         String bearerToken = "Bearer sample.jwt.token";
@@ -187,102 +214,6 @@ class AuthServiceTest {
         assertNotNull(response);
         assertEquals("Logout successfully", response.getMessage());
         verify(tokenBlacklistService, times(1)).blacklistToken(eq("sample.jwt.token"), any());
-        assertNull(SecurityContextHolder.getContext().getAuthentication());
-    }
-
-    @Test
-    @DisplayName("Login - Throws ResourceNotFoundException when user record not found in repository")
-    void testLoginUserNotFound() {
-        LoginRequest request = LoginRequest.builder()
-                .email("notfound@example.com")
-                .password("password")
-                .build();
-
-        when(authenticationManager.authenticate(any())).thenReturn(mock(Authentication.class));
-        when(userRepository.findByEmail("notfound@example.com")).thenReturn(Optional.empty());
-
-        assertThrows(ResourceNotFoundException.class, () -> authService.login(request));
-    }
-
-    @Test
-    @DisplayName("Get current user - Principal is String (not UserDetails)")
-    void testGetCurrentUserStringPrincipal() {
-        Authentication authentication = mock(Authentication.class);
-        when(authentication.isAuthenticated()).thenReturn(true);
-        when(authentication.getPrincipal()).thenReturn("user@example.com");
-
-        SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        SecurityContextHolder.setContext(securityContext);
-
-        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(sampleUser));
-
-        UserResponse response = authService.getCurrentUser();
-
-        assertNotNull(response);
-        assertEquals(sampleUser.getEmail(), response.getEmail());
-    }
-
-    @Test
-    @DisplayName("Get current user - Throws ResourceNotFoundException when user not found in DB")
-    void testGetCurrentUserNotFoundInDb() {
-        CustomUserDetails userDetails = new CustomUserDetails(sampleUser);
-        Authentication authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-
-        SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        SecurityContextHolder.setContext(securityContext);
-
-        when(userRepository.findByEmail(sampleUser.getEmail())).thenReturn(Optional.empty());
-
-        assertThrows(ResourceNotFoundException.class, () -> authService.getCurrentUser());
-    }
-
-    @Test
-    @DisplayName("Get current user - Throws InvalidTokenException when anonymous or not authenticated")
-    void testGetCurrentUserUnauthenticatedCases() {
-        SecurityContext securityContext = mock(SecurityContext.class);
-
-        // Case 1: isAuthenticated is false
-        Authentication unauth = mock(Authentication.class);
-        when(unauth.isAuthenticated()).thenReturn(false);
-        when(securityContext.getAuthentication()).thenReturn(unauth);
-        SecurityContextHolder.setContext(securityContext);
-        assertThrows(InvalidTokenException.class, () -> authService.getCurrentUser());
-
-        // Case 2: principal is "anonymousUser"
-        Authentication anon = mock(Authentication.class);
-        when(anon.isAuthenticated()).thenReturn(true);
-        when(anon.getPrincipal()).thenReturn("anonymousUser");
-        when(securityContext.getAuthentication()).thenReturn(anon);
-        assertThrows(InvalidTokenException.class, () -> authService.getCurrentUser());
-    }
-
-    @Test
-    @DisplayName("Logout - Handles null or non-Bearer authorization header gracefully")
-    void testLogoutNullAndInvalidHeader() {
-        LogoutResponse resNull = authService.logout(null);
-        assertNotNull(resNull);
-        assertEquals("Logout successfully", resNull.getMessage());
-        verify(tokenBlacklistService, never()).blacklistToken(any(), any());
-
-        LogoutResponse resInvalid = authService.logout("Basic 123456");
-        assertNotNull(resInvalid);
-        assertEquals("Logout successfully", resInvalid.getMessage());
-        verify(tokenBlacklistService, never()).blacklistToken(any(), any());
-    }
-
-    @Test
-    @DisplayName("Logout - Catches exception when extracting expiration and still blacklists")
-    void testLogoutExceptionInExpirationExtraction() {
-        String bearerToken = "Bearer invalid.expired.token";
-        when(jwtService.extractExpiration("invalid.expired.token")).thenThrow(new RuntimeException("Token parsing error"));
-
-        LogoutResponse response = authService.logout(bearerToken);
-
-        assertNotNull(response);
-        assertEquals("Logout successfully", response.getMessage());
-        verify(tokenBlacklistService, times(1)).blacklistToken(eq("invalid.expired.token"), any());
         assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
 }

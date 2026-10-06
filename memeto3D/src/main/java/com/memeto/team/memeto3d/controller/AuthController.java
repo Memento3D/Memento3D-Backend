@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Authentication", description = "Authentication endpoints: Register, Login, Logout, and Current User profile")
+@Tag(name = "Authentication", description = "Authentication endpoints: Register, Login, Refresh Token, Logout, and Current User profile")
 public class AuthController {
 
     private final AuthService authService;
@@ -43,9 +43,9 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    @Operation(summary = "User login", description = "Authenticates user credentials and returns a JWT access token")
+    @Operation(summary = "User login", description = "Authenticates user credentials and returns JWT access token and Redis refresh token")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Authentication successful, returns JWT token",
+            @ApiResponse(responseCode = "200", description = "Authentication successful, returns tokens",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthResponse.class))),
             @ApiResponse(responseCode = "400", description = "Validation error or missing fields",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
@@ -55,6 +55,22 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         log.info("Received login request for email: {}", request.getEmail());
         AuthResponse response = authService.login(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/refresh")
+    @Operation(summary = "Refresh JWT token", description = "Uses a valid Redis refresh token to issue a new JWT access token and rotated refresh token")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Token refresh successful",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Missing or invalid payload",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Invalid or expired refresh token",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<AuthResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+        log.info("Received refresh token request");
+        AuthResponse response = authService.refreshToken(request);
         return ResponseEntity.ok(response);
     }
 
@@ -79,11 +95,11 @@ public class AuthController {
     @PostMapping("/logout")
     @Operation(
             summary = "User logout",
-            description = "Revokes and blacklists the current JWT until expiration",
+            description = "Revokes and blacklists current JWT access token and revokes Redis refresh tokens",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Logout successful, JWT revoked",
+            @ApiResponse(responseCode = "200", description = "Logout successful, JWT blacklisted and refresh token revoked",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = LogoutResponse.class))),
             @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))

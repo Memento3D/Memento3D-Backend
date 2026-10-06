@@ -21,6 +21,8 @@ public interface ScanService {
 
     ScanResponse getScanById(UUID id, UUID currentUserId, Role currentUserRole);
 
+    com.memeto.team.memeto3d.dto.ScanStatusResponse getScanStatus(UUID id, UUID currentUserId, Role currentUserRole);
+
     ScanResponse updateScan(UUID id, UpdateScanRequest request, UUID currentUserId, Role currentUserRole);
 
     void deleteScan(UUID id, UUID currentUserId, Role currentUserRole);

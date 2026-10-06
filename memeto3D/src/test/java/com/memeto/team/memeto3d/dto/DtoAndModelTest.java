@@ -133,16 +133,18 @@ class DtoAndModelTest {
 
         AuthResponse res2 = new AuthResponse();
         res2.setAccessToken("token");
+        res2.setRefreshToken("refresh_token");
         res2.setTokenType("Bearer");
         res2.setExpiresIn(3600L);
         res2.setUser(userResponse);
 
         assertEquals("token", res2.getAccessToken());
+        assertEquals("refresh_token", res2.getRefreshToken());
         assertEquals("Bearer", res2.getTokenType());
         assertEquals(3600L, res2.getExpiresIn());
         assertEquals(userResponse, res2.getUser());
 
-        AuthResponse res3 = new AuthResponse("token", "Bearer", 3600L, userResponse);
+        AuthResponse res3 = new AuthResponse("token", "refresh_token", "Bearer", 3600L, userResponse);
         assertEquals("token", res3.getAccessToken());
     }
 

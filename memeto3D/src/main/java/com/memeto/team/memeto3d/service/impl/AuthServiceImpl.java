@@ -9,6 +9,7 @@ import com.memeto.team.memeto3d.exception.ResourceNotFoundException;
 import com.memeto.team.memeto3d.repository.UserRepository;
 import com.memeto.team.memeto3d.security.JwtService;
 import com.memeto.team.memeto3d.service.AuthService;
+import com.memeto.team.memeto3d.service.RefreshTokenService;
 import com.memeto.team.memeto3d.service.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +36,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final TokenBlacklistService tokenBlacklistService;
+    private final RefreshTokenService refreshTokenService;
 
     @Override
     @Transactional
@@ -66,21 +69,47 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse login(LoginRequest request) {
         String normalizedEmail = request.getEmail().trim().toLowerCase();
 
-        // 1. Verify credentials via AuthenticationManager (triggers UserDetailsService and BCrypt)
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(normalizedEmail, request.getPassword())
         );
 
-        // 2. Fetch user record
         User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + normalizedEmail));
 
-        // 3. Generate JWT Token
         String token = jwtService.generateToken(user);
-        log.info("User {} successfully authenticated", normalizedEmail);
+        String refreshToken = refreshTokenService.createRefreshToken(user.getId());
+        log.info("User {} successfully authenticated with Redis refresh token", normalizedEmail);
 
         return AuthResponse.builder()
                 .accessToken(token)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(jwtService.getExpirationInSeconds())
+                .user(UserResponse.fromEntity(user))
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AuthResponse refreshToken(RefreshTokenRequest request) {
+        if (request == null || request.getRefreshToken() == null || request.getRefreshToken().isBlank()) {
+            throw new InvalidTokenException("Refresh token is required");
+        }
+
+        UUID userId = refreshTokenService.validateRefreshToken(request.getRefreshToken())
+                .orElseThrow(() -> new InvalidTokenException("Invalid, expired, or revoked refresh token"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+
+        String newAccessToken = jwtService.generateToken(user);
+        String newRefreshToken = refreshTokenService.createRefreshToken(user.getId());
+
+        log.info("Successfully refreshed access token for user ID: {}", userId);
+
+        return AuthResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(newRefreshToken)
                 .tokenType("Bearer")
                 .expiresIn(jwtService.getExpirationInSeconds())
                 .user(UserResponse.fromEntity(user))
@@ -118,11 +147,20 @@ public class AuthServiceImpl implements AuthService {
             try {
                 Date expiration = jwtService.extractExpiration(token);
                 tokenBlacklistService.blacklistToken(token, expiration.toInstant());
-                log.info("Token successfully blacklisted on logout");
+                log.info("Token successfully blacklisted in Redis on logout");
             } catch (Exception e) {
-                // If token parsing fails (already expired or corrupted), still blacklist until default 1 hour
                 log.warn("Could not extract expiration from token on logout: {}", e.getMessage());
                 tokenBlacklistService.blacklistToken(token, Instant.now().plusSeconds(3600));
+            }
+
+            try {
+                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.getPrincipal() instanceof UserDetails userDetails) {
+                    userRepository.findByEmail(userDetails.getUsername())
+                            .ifPresent(u -> refreshTokenService.revokeUserRefreshTokens(u.getId()));
+                }
+            } catch (Exception e) {
+                log.warn("Could not revoke refresh tokens on logout: {}", e.getMessage());
             }
         }
 
@@ -130,7 +168,7 @@ public class AuthServiceImpl implements AuthService {
 
         return LogoutResponse.builder()
                 .message("Logout successfully")
-                .details("JWT is stateless; the token has been added to server blacklist until expiration. Client must discard local token.")
+                .details("JWT is stateless; token blacklisted and refresh tokens revoked in Redis.")
                 .build();
     }
 }
