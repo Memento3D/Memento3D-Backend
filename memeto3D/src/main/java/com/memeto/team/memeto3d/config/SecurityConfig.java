@@ -51,6 +51,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
                         // Swagger & OpenAPI documentation
                         .requestMatchers(
                                 "/v3/api-docs",
