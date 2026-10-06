@@ -424,6 +424,42 @@ public class ScanController {
         return ResponseEntity.ok(response);
     }
 
+    // -------------------------------------------------------------------------
+    // POST /api/v1/scans/{id}/quality-runs/{run_id}/override
+    // -------------------------------------------------------------------------
+
+    @PostMapping("/{id}/quality-runs/{run_id}/override")
+    @Operation(
+            summary = "Override an amber quality run and proceed to reconstruction",
+            description = "Allows the user to accept the risk of an amber quality score. Green -> 400, red -> 403. " +
+                    "Idempotent: repeating the call for the same run returns the same result without a duplicate audit entry.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Override accepted; scan status is 'ready'",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = com.memeto.team.memeto3d.dto.QualityOverrideResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Override not applicable (green or not-yet-scored run)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Red score cannot be overridden",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan/run not found or access denied",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Scan state does not allow override",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<com.memeto.team.memeto3d.dto.QualityOverrideResponse> overrideQualityRun(
+            @PathVariable("id") UUID id,
+            @PathVariable("run_id") UUID runId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Override quality run {} for scan {} by user {}", runId, id, currentUser.getId());
+        return ResponseEntity.ok(
+                scanService.overrideQualityRun(id, runId, currentUser.getId(), currentUser.getRole()));
+    }
 
     private CustomUserDetails getAuthenticatedUserDetails(CustomUserDetails userDetails) {
         if (userDetails != null && userDetails.getId() != null) {

@@ -1111,5 +1111,52 @@ class ScanControllerTest {
 
         verify(scanService, never()).getQualityCheckRuns(any(), any(), any());
     }
+
+    @Test
+    @DisplayName("POST override amber -> 200 ready")
+    void testOverrideAmberOk() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        when(scanService.overrideQualityRun(eq(scanId), eq(runId), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenReturn(com.memeto.team.memeto3d.dto.QualityOverrideResponse.builder()
+                        .scanId(scanId).runId(runId).scoreCategory("amber").scanStatus("ready").build());
+
+        mockMvc.perform(post("/api/v1/scans/{id}/quality-runs/{run_id}/override", scanId, runId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scanStatus", is("ready")));
+    }
+
+    @Test
+    @DisplayName("POST override red -> 403")
+    void testOverrideRedForbidden() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        when(scanService.overrideQualityRun(any(), any(), any(), any()))
+                .thenThrow(new com.memeto.team.memeto3d.exception.QualityOverrideForbiddenException("red"));
+
+        mockMvc.perform(post("/api/v1/scans/{id}/quality-runs/{run_id}/override", scanId, runId))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status", is(403)));
+    }
+
+    @Test
+    @DisplayName("POST override green -> 400")
+    void testOverrideGreenBadRequest() throws Exception {
+        when(scanService.overrideQualityRun(any(), any(), any(), any()))
+                .thenThrow(new IllegalArgumentException("green"));
+
+        mockMvc.perform(post("/api/v1/scans/{id}/quality-runs/{run_id}/override", UUID.randomUUID(), UUID.randomUUID()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("POST override unauthenticated -> 401")
+    void testOverrideUnauthenticated() throws Exception {
+        SecurityContextHolder.clearContext();
+
+        mockMvc.perform(post("/api/v1/scans/{id}/quality-runs/{run_id}/override", UUID.randomUUID(), UUID.randomUUID()))
+                .andExpect(status().isUnauthorized());
+        verify(scanService, never()).overrideQualityRun(any(), any(), any(), any());
+    }
 }
 

@@ -2,6 +2,10 @@ server:
   port: ${PORT:8080}
 
 spring:
+  config:
+    import:
+      - optional:file:./memeto3D/.env[.properties]
+      - optional:file:./.env[.properties]
   application:
     name: memeto3D
   datasource:
@@ -17,15 +21,16 @@ spring:
     properties:
       hibernate:
         format_sql: true
-  cloudinary:
-    cloud-name: ${CLOUDINARY_CLOUD_NAME}
-    api-key: ${CLOUDINARY_API_KEY}
-    api-secret: ${CLOUDINARY_API_SECRET}
   servlet:
     multipart:
       enabled: true
       max-file-size: 20MB
       max-request-size: 25MB
+
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME}
+  api-key: ${CLOUDINARY_API_KEY}
+  api-secret: ${CLOUDINARY_API_SECRET}
 
 app:
   jwt:

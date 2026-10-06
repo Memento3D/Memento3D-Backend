@@ -727,6 +727,77 @@ public class ScanServiceImpl implements ScanService {
     }
 
     // =========================================================================
+    // POST /api/v1/scans/{id}/quality-runs/{run_id}/override
+    // =========================================================================
+
+    @Override
+    @Transactional
+    public com.memeto.team.memeto3d.dto.QualityOverrideResponse overrideQualityRun(
+            UUID scanId, UUID runId, UUID currentUserId, Role currentUserRole) {
+        log.info("Override quality run {} for scan {} requested by user {}", runId, scanId, currentUserId);
+
+        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + scanId));
+        enforceOwnership(scan, currentUserId, currentUserRole, scanId);
+
+        com.memeto.team.memeto3d.entity.QualityCheckRun run = qualityCheckRunRepository.findById(runId)
+                .filter(r -> r.getScan() != null && r.getScan().getId().equals(scanId))
+                .orElseThrow(() -> new ResourceNotFoundException("Quality run not found with ID: " + runId));
+
+        String category = run.getScoreCategory() == null ? "" : run.getScoreCategory().toLowerCase();
+        switch (category) {
+            case "red" -> throw new com.memeto.team.memeto3d.exception.QualityOverrideForbiddenException(
+                    "Quality score is red; override is not allowed");
+            case "green" -> throw new IllegalArgumentException(
+                    "Quality score is green; override is not necessary");
+            case "amber" -> { /* allowed */ }
+            default -> throw new IllegalArgumentException(
+                    "Quality run has no score yet; override is not applicable");
+        }
+
+        // Idempotent: already overridden -> return current state, no duplicate audit entry
+        if (run.getOverriddenAt() != null) {
+            return buildOverrideResponse(scan, run);
+        }
+
+        if (scan.getStatus() == ScanStatus.processing || scan.getStatus() == ScanStatus.done
+                || scan.getStatus() == ScanStatus.deleted) {
+            throw new ScanConflictException("Cannot override quality when scan is in '" + scan.getStatus() + "' status");
+        }
+
+        Instant now = Instant.now();
+        run.setOverriddenAt(now);
+        run.setOverriddenBy(currentUserId);
+        qualityCheckRunRepository.saveAndFlush(run);
+
+        scan.setStatus(ScanStatus.ready);
+        scan.setUpdatedAt(now);
+        scanRepository.saveAndFlush(scan);
+
+        String details = "{\"scan_id\":\"" + scanId + "\",\"run_id\":\"" + runId
+                + "\",\"score_category\":\"amber\",\"overridden_at\":\"" + now + "\"}";
+        jdbcTemplate.update(
+                "INSERT INTO audit_logs (user_id, action, resource_type, resource_id, details) "
+                        + "VALUES (?, ?, ?, ?, CAST(? AS jsonb))",
+                currentUserId, "QUALITY_OVERRIDE", "quality_check_run", runId, details);
+
+        log.info("Quality run {} overridden by user {}; scan {} -> ready", runId, currentUserId, scanId);
+        return buildOverrideResponse(scan, run);
+    }
+
+    private com.memeto.team.memeto3d.dto.QualityOverrideResponse buildOverrideResponse(
+            Scan scan, com.memeto.team.memeto3d.entity.QualityCheckRun run) {
+        return com.memeto.team.memeto3d.dto.QualityOverrideResponse.builder()
+                .scanId(scan.getId())
+                .runId(run.getId())
+                .scoreCategory(run.getScoreCategory())
+                .scanStatus(scan.getStatus().name())
+                .overriddenAt(run.getOverriddenAt())
+                .overriddenBy(run.getOverriddenBy())
+                .build();
+    }
+
+    // =========================================================================
     // Private helpers
     // =========================================================================
 

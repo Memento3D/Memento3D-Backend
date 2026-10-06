@@ -50,6 +50,9 @@ class ScanServiceTest {
     @Mock
     private com.memeto.team.memeto3d.repository.QualityCheckRunRepository qualityCheckRunRepository;
 
+    @Mock
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @InjectMocks
     private ScanServiceImpl scanService;
 
@@ -857,6 +860,125 @@ class ScanServiceTest {
                 () -> scanService.getQualityCheckRuns(scanId, otherUserId, Role.ROLE_USER)
         );
         verify(qualityCheckRunRepository, never()).findByScanIdOrderByRunNumberDesc(any());
+    }
+
+    // ---------- overrideQualityRun ----------
+
+    private Scan overrideScan(UUID scanId, ScanStatus status) {
+        return Scan.builder().id(scanId).user(mockUser).status(status).build();
+    }
+
+    private com.memeto.team.memeto3d.entity.QualityCheckRun overrideRun(Scan scan, UUID runId, String category) {
+        return com.memeto.team.memeto3d.entity.QualityCheckRun.builder()
+                .id(runId).scan(scan).status("completed").scoreCategory(category).build();
+    }
+
+    @Test
+    @DisplayName("override amber -> scan ready, run marked, audit written")
+    void testOverrideAmberSuccess() {
+        UUID scanId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        Scan scan = overrideScan(scanId, ScanStatus.quality_check);
+        com.memeto.team.memeto3d.entity.QualityCheckRun run = overrideRun(scan, runId, "amber");
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(scan));
+        when(qualityCheckRunRepository.findById(runId)).thenReturn(Optional.of(run));
+
+        com.memeto.team.memeto3d.dto.QualityOverrideResponse res =
+                scanService.overrideQualityRun(scanId, runId, userId, Role.ROLE_USER);
+
+        assertEquals(ScanStatus.ready, scan.getStatus());
+        assertEquals("ready", res.getScanStatus());
+        assertNotNull(run.getOverriddenAt());
+        assertEquals(userId, run.getOverriddenBy());
+        verify(jdbcTemplate, times(1)).update(contains("audit_logs"),
+                eq(userId), eq("QUALITY_OVERRIDE"), eq("quality_check_run"), eq(runId), anyString());
+    }
+
+    @Test
+    @DisplayName("override red -> 403 exception, nothing changes")
+    void testOverrideRedForbidden() {
+        UUID scanId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        Scan scan = overrideScan(scanId, ScanStatus.quality_check);
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(scan));
+        when(qualityCheckRunRepository.findById(runId)).thenReturn(Optional.of(overrideRun(scan, runId, "red")));
+
+        assertThrows(com.memeto.team.memeto3d.exception.QualityOverrideForbiddenException.class,
+                () -> scanService.overrideQualityRun(scanId, runId, userId, Role.ROLE_USER));
+        assertEquals(ScanStatus.quality_check, scan.getStatus());
+        verifyNoInteractions(jdbcTemplate);
+    }
+
+    @Test
+    @DisplayName("override green -> IllegalArgumentException (400)")
+    void testOverrideGreenBadRequest() {
+        UUID scanId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        Scan scan = overrideScan(scanId, ScanStatus.quality_check);
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(scan));
+        when(qualityCheckRunRepository.findById(runId)).thenReturn(Optional.of(overrideRun(scan, runId, "green")));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> scanService.overrideQualityRun(scanId, runId, userId, Role.ROLE_USER));
+        verifyNoInteractions(jdbcTemplate);
+    }
+
+    @Test
+    @DisplayName("override twice -> idempotent, single audit entry")
+    void testOverrideIdempotent() {
+        UUID scanId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        Scan scan = overrideScan(scanId, ScanStatus.quality_check);
+        com.memeto.team.memeto3d.entity.QualityCheckRun run = overrideRun(scan, runId, "amber");
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(scan));
+        when(qualityCheckRunRepository.findById(runId)).thenReturn(Optional.of(run));
+
+        scanService.overrideQualityRun(scanId, runId, userId, Role.ROLE_USER);
+        Instant first = run.getOverriddenAt();
+        com.memeto.team.memeto3d.dto.QualityOverrideResponse second =
+                scanService.overrideQualityRun(scanId, runId, userId, Role.ROLE_USER);
+
+        assertEquals(first, second.getOverriddenAt());
+        assertEquals("ready", second.getScanStatus());
+        verify(jdbcTemplate, times(1)).update(anyString(), any(Object[].class));
+    }
+
+    @Test
+    @DisplayName("override run of another scan -> 404")
+    void testOverrideRunWrongScan() {
+        UUID scanId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        Scan scan = overrideScan(scanId, ScanStatus.quality_check);
+        Scan other = overrideScan(UUID.randomUUID(), ScanStatus.quality_check);
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(scan));
+        when(qualityCheckRunRepository.findById(runId)).thenReturn(Optional.of(overrideRun(other, runId, "amber")));
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> scanService.overrideQualityRun(scanId, runId, userId, Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("override by non-owner -> 404 (IDOR)")
+    void testOverrideIdor() {
+        UUID scanId = UUID.randomUUID();
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId))
+                .thenReturn(Optional.of(overrideScan(scanId, ScanStatus.quality_check)));
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> scanService.overrideQualityRun(scanId, UUID.randomUUID(), UUID.randomUUID(), Role.ROLE_USER));
+    }
+
+    @Test
+    @DisplayName("override while scan processing -> ScanConflictException")
+    void testOverrideProcessingConflict() {
+        UUID scanId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        Scan scan = overrideScan(scanId, ScanStatus.processing);
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(scan));
+        when(qualityCheckRunRepository.findById(runId)).thenReturn(Optional.of(overrideRun(scan, runId, "amber")));
+
+        assertThrows(ScanConflictException.class,
+                () -> scanService.overrideQualityRun(scanId, runId, userId, Role.ROLE_USER));
     }
 }
 

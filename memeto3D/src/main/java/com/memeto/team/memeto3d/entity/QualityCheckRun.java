@@ -67,6 +67,12 @@ public class QualityCheckRun {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Column(name = "overridden_at")
+    private Instant overriddenAt;
+
+    @Column(name = "overridden_by")
+    private UUID overriddenBy;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
