@@ -73,4 +73,10 @@ public interface ScanService {
      * Get quality check runs for a scan.
      */
     java.util.List<com.memeto.team.memeto3d.dto.QualityCheckRunSummaryResponse> getQualityCheckRuns(UUID scanId, UUID currentUserId, Role currentUserRole);
+
+    /**
+     * Override an amber quality run so the scan may proceed to reconstruction (status -> ready).
+     * green -> 400, red -> 403, amber -> OK (idempotent).
+     */
+    com.memeto.team.memeto3d.dto.QualityOverrideResponse overrideQualityRun(UUID scanId, UUID runId, UUID currentUserId, Role currentUserRole);
 }
