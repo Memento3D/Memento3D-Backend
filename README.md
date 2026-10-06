@@ -1,126 +1,195 @@
-# 🧊 Memento3D - Backend Service
+# Memento3D - Backend Service
 
-![Java 17](https://img.shields.io/badge/Java-17-orange.svg)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4%2B%20%2F%204.1.1-brightgreen.svg)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%7C%2017-blue.svg)
-![JWT Auth](https://img.shields.io/badge/Security-JWT%20Blacklist-red.svg)
-![Swagger/OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-green.svg)
-![Docker](https://img.shields.io/badge/Docker-Supported-blue.svg)
+![Java](https://img.shields.io/badge/Java-17-orange.svg)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4%2F4.1-brightgreen.svg)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%2B-blue.svg)
+![Redis](https://img.shields.io/badge/Redis-7.0-red.svg)
+![Docker](https://img.shields.io/badge/Docker-Enabled-blue.svg)
 
----
+## 📌 Tổng Quan (Overview)
 
-## 📌 Giới Thiệu (Overview)
-
-**Memento3D Backend** là dịch vụ máy chủ trung tâm (Core Microservice/REST API) cho nền tảng tái tạo và dựng mô hình 3D từ ảnh/video (3D Photogrammetry / NeRF / Gaussian Splatting). 
-
-Hệ thống quản lý toàn bộ quy trình từ xác thực người dùng, lưu trữ dữ liệu dung lượng lớn (Resumable Chunked Upload), kiểm tra chất lượng dữ liệu đầu vào (Quality Inspection), theo dõi tiến trình dựng hình 3D cho đến hỗ trợ các dịch vụ thương mại 3D.
-
-👉 **Xem chi tiết tài liệu Cấu trúc & Kiến trúc hệ thống tại**: [STRUCTURE.md](STRUCTURE.md)
+**Memento3D Backend** (3DForge Backend) là dịch vụ máy chủ trung tâm xử lý dữ liệu cho hệ sinh thái **Memento3D** – nền tảng tạo mô hình 3D từ hình ảnh/video photogrammetry. Dịch vụ được xây dựng trên nền tảng **Java 17** và **Spring Boot**, kết hợp với **PostgreSQL**, **Redis**, và **Cloudinary** để cung cấp các API hiệu năng cao, bảo mật và mở rộng.
 
 ---
 
-## ⚡ Các Chức Năng Chính (Core Features)
+## 🚀 Các Tính Năng Chính (Key Features)
 
-1. **🔐 Xác thực & Phân quyền (Auth & Security)**: Đăng ký, Đăng nhập JWT, Phân quyền Role, Thu hồi JWT Token khi Đăng xuất (Database Token Blacklisting).
-2. **📷 Quản lý Phiên Quét 3D (3D Scan Management)**: Khởi tạo & quản lý phiên quét 3D hỗ trợ 3 chế độ (`IMAGES`, `VIDEO`, `DUAL`).
-3. **🚀 Resumable Chunked Upload**: Hỗ trợ cắt file video/ảnh dung lượng lớn thành từng chunk để tải lên, có cơ chế Resume khi đứt kết nối mạng và tự động Merge file.
-4. **🔍 Kiểm tra Chất lượng Ảnh Scan (Quality Inspection)**: Phân tích tự động độ mờ/sắc nét (sharpness), độ sáng (brightness), ảnh trùng lặp (duplicates), điểm đặc trưng (feature points), nhiễu (SNR noise) và cho phép người dùng ghi đè (override).
-5. **🛠️ 3D Reconstruction Pipeline Ready**: Tích hợp các bảng theo dõi Job dựng 3D, stage log, chỉ số chất lượng mô hình và quản lý file đầu ra (`.glb`, `.obj`, `.ply`, `.splat`).
-6. **🛒 Dịch vụ Thương mại & Vận hành**: Hỗ trợ Thanh toán, Đơn hàng in 3D, Đánh giá mô hình 3D, Thống kê và Outbox Event Driven Architecture.
+### 1. 🔐 Authenticate & Authorization
+- **JWT Security**: Xác thực token không lưu vết (stateless JWT access token) cùng với cơ chế xoay vòng và thu hồi refresh token.
+- **Token Blacklist**: Lưu danh sách đen JWT đã thu hồi/đăng xuất trong Redis và database.
+- **Phân quyền người dùng (RBAC)**: Hỗ trợ các vai trò `user`, `admin`, và `operator`.
+
+### 2. 📸 Scan Session & Upload Management
+- **Quản lý phiên Scan**: Tạo, cập nhật, phân trang và truy vấn danh sách scan của người dùng.
+- **Tải lên từng phần (Chunked Multipart Upload)**: Hỗ trợ Resume/Retry cho các file dung lượng lớn thông qua `/api/v1/uploads`.
+- **Cloud Storage Integration**: Tích hợp với Cloudinary API cho việc lưu trữ và quản lý tài nguyên phương tiện.
+
+### 3. 🔬 Engine Kiểm Tra Chất Lượng Ảnh (Quality Check Engine)
+- **Phân tích kỹ thuật chi tiết**: Đánh giá độ sắc nét (sharpness/blur), độ sáng/phơi sáng (brightness/exposure), số lượng đặc trưng (feature count), độ chồng lấp (overlap ratio).
+- **Phát hiện ảnh trùng lặp & nhiễu**: Nhận diện ảnh trùng lặp tuyệt đối/tương đối (hash MD5/perceptual) và phân tích nhiễu (SNR score).
+- **Quality Runs**: Lưu vết và cung cấp API truy vấn kết quả kiểm định kỹ thuật chi tiết theo từng ảnh.
+
+### 4. ⚙️ Tiến Trình Tái Tạo 3D (3D Reconstruction Pipeline)
+- **Hàng chờ và Trạng thái**: Theo dõi trạng thái từng giai đoạn (`queued`, `extracting`, `detecting`, `matching`, `sfm`, `mvs`, `meshing`, `texturing`, `repairing`, `exporting`, `done`).
+- **Đánh giá khả năng in 3D (Printability Check)**: Kiểm tra lưới 3D, watertight status, lỗ hổng và cạnh phi manifold.
+
+### 5. ⭐ Đánh Giá Mô Hình (Model Rating System)
+- **Model Quality Feedback**: Cho phép người dùng và khách xem trước gửi đánh giá (1 - 5 sao) và bình luận cho mô hình 3D đã khởi tạo.
+- **Upsert Rating Logic**: Tự động cập nhật đánh giá nếu người dùng đã đánh giá phiên scan đó trước đó.
+
+### 6. 🔄 Transactional Outbox & Kafka Event Streaming
+- **Outbox Pattern**: Ghi nhận các sự kiện hệ thống (`scan.events`, `qc.events`, `reconstruction.events`, `order.events`) đảm bảo tính toàn vẹn dữ liệu.
+- **Dead Letter Queue (DLQ)**: Quản lý và retry các sự kiện xử lý thất bại.
 
 ---
 
-## 🛠️ Công Nghệ Sử Dụng (Tech Stack)
+## 🏗️ Cấu Trúc Dự Án (Project Structure)
 
-| Thành phần | Công nghệ |
-| :--- | :--- |
-| **Language** | Java 17 |
-| **Framework** | Spring Boot 3.4+ / 4.1.1 (Spring Web MVC, Spring Data JPA, Spring Security) |
-| **Database** | PostgreSQL 16/17 (Docker/Production), H2 Database (Test) |
-| **Security** | JWT (`io.jsonwebtoken 0.12.6`), BCrypt Encoder, Database Token Blacklisting |
-| **Cloud Storage** | Cloudinary Java SDK 2.5.0 (CDN Storage) |
-| **API Doc** | SpringDoc OpenAPI 3.0 / Swagger UI |
-| **Build Tool** | Apache Maven 3.x (`mvnw`) |
-| **Container** | Docker & Docker Compose |
+```
+Memento3D-Backend/
+├── README.md                           # Documentation chính của Backend
+├── docker-compose.yml                  # File Docker Compose môi trường dev/staging
+└── memeto3D/                           # Source code chính ứng dụng Spring Boot
+    ├── db/
+    │   └── init_schema.sql             # SQL script khởi tạo PostgreSQL Database Schema
+    ├── doc/
+    │   └── BE_GUIDELINES.md            # Quy tắc lập trình & tiêu chuẩn Code / Test / DB
+    ├── src/
+    │   ├── main/
+    │   │   ├── java/com/memeto/team/memeto3d/
+    │   │   │   ├── config/             # Cấu hình Security, OpenAPI, Cloudinary, Redis
+    │   │   │   ├── controller/         # REST Controllers (Auth, Scan, QualityRun, ModelRating, Upload)
+    │   │   │   ├── dto/                # Data Transfer Objects (Requests & Responses)
+    │   │   │   ├── entity/             # JPA Entities
+    │   │   │   ├── exception/          # Custom Exception & Global Exception Handler
+    │   │   │   ├── repository/         # Spring Data JPA Repositories
+    │   │   │   ├── security/           # JWT Filter & UserDetails Implementation
+    │   │   │   └── service/            # Business Logic Services & Interfaces
+    │   │   └── resources/              # application.properties / application.yml
+    │   └── test/                       # Unit tests & Integration tests
+    ├── Dockerfile                      # Multi-stage build Dockerfile
+    ├── docker-compose.yml              # Docker Compose cho app + postgres + redis
+    ├── pom.xml                         # Maven dependencies & JaCoCo coverage plugin
+    └── .env.example                    # Mẫu khai báo biến môi trường
+```
 
 ---
 
-## 💻 Hướng Dẫn Cài Đặt & Chạy (Quick Start)
+## 🛠️ Biến Môi Trường (Environment Variables)
 
-### 1. Cấu hình môi trường (`.env`)
-Tạo file `.env` tại thư mục `Memento3D-Backend/memeto3D/.env`:
+Sao chép file `.env.example` thành `.env` trong thư mục `memeto3D/` và điền cấu hình phù hợp:
 
 ```env
+# Server
+PORT=8080
+
+# Database (PostgreSQL / NeonDB)
 DB_HOST=localhost
 DB_PORT=5431
-DB_NAME=memento3d
-DB_USERNAME=memento_user
-DB_PASSWORD=memento_pass
+DB_NAME=memeto3d
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
 
-JWT_SECRET=YourSuperSecretKeyWithAtLeast256BitsForSecurity123456
-JWT_EXPIRATION=86400000
+# Cloudinary Storage
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
 
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-minimum-256-bits
+JWT_EXPIRATION=3600000
+
+# JPA/Hibernate
+DDL_AUTO=update
+
+# CORS
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
+# Redis Cache & Token Blacklist
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_TIMEOUT=2000ms
 ```
 
 ---
 
-### 2. Khởi chạy Database bằng Docker Compose (Bắt buộc trước khi chạy Source Code)
+## 🚦 Hướng Dẫn Chạy Dự Án (Getting Started)
 
-> ⚠️ **LƯU Ý QUAN TRỌNG**: Bạn **phải khởi chạy PostgreSQL Database container** qua Docker Compose để CSDL sẵn sàng trước khi chạy source code Spring Boot.
+### Yêu cầu hệ thống:
+- **Java**: JDK 17 trở lên
+- **Maven**: 3.8+ (hoặc dùng `mvnw` / `mvnw.cmd` có sẵn)
+- **Docker & Docker Compose** (nếu chạy container)
+- **PostgreSQL**: Version 16+
+- **Redis**: Version 7+
 
-#### 🔹 Cách 1: Chỉ chạy Database PostgreSQL (Dùng khi chạy Dev Source Code qua Maven / IDE)
-Mở terminal tại thư mục gốc của Backend và khởi chạy riêng container PostgreSQL:
+### 1. Khởi chạy bằng Maven (Local Development)
+
+1. Khởi động cơ sở dữ liệu PostgreSQL và Redis (hoặc dùng docker-compose dịch vụ phụ trợ):
+   ```bash
+   docker compose up -d postgres redis
+   ```
+2. Thực thi script khởi tạo CSDL: `memeto3D/db/init_schema.sql`
+3. Chạy ứng dụng Spring Boot:
+   ```bash
+   cd memeto3D
+   ./mvnw spring-boot:run
+   ```
+   *(Hoặc trên Windows PowerShell: `.\mvnw.cmd spring-boot:run`)*
+
+### 2. Khởi chạy bằng Docker Compose (Full Container Stack)
 
 ```bash
-cd Memento3D-Backend
-docker-compose up -d
+cd memeto3D
+docker compose up -d --build
 ```
-*Hoặc khởi chạy từ thư mục `memeto3D`:*
-```bash
-cd Memento3D-Backend/memeto3D
-docker-compose up -d postgres
-```
-
-Kiểm tra trạng thái container PostgreSQL đảm bảo đã `healthy`:
-```bash
-docker ps
-```
+Dịch vụ backend sẽ lắng nghe tại cổng `http://localhost:8080`.
 
 ---
 
-### 3. Chạy Source Code Backend
+## 🧪 Kiểm Thử & Đo Độ Phủ Code (Testing & JaCoCo Coverage)
 
-Sau khi container PostgreSQL đã hoạt động thành công, tiến hành khởi chạy ứng dụng Spring Boot:
+Dự án áp dụng quy định kiểm thử nghiêm ngặt theo [BE_GUIDELINES.md](file:///c:/Users/KIETLT/Documents/GitHub/Memento3d/Memento3D-Backend/memeto3D/doc/BE_GUIDELINES.md):
+- **C0 Coverage (Line Coverage)**: Mục tiêu 100%
+- **C1 Coverage (Branch Coverage)**: Minimum ≥ 85%
 
-#### 🔹 Khởi chạy trực tiếp bằng Maven (Local Dev)
-```bash
-cd Memento3D-Backend/memeto3D
-./mvnw clean spring-boot:run
+### Chạy Unit Test và tạo báo cáo Coverage:
+```powershell
+# Trên Windows PowerShell
+cd memeto3D
+.\mvnw.cmd test
 ```
-*(Trên Windows PowerShell: `.\mvnw.cmd clean spring-boot:run`)*
 
-#### 🔹 Hoặc Khởi chạy Full-stack (Cả DB + Backend) bằng Docker Compose
-Nếu muốn đóng gói và chạy toàn bộ ứng dụng trong Docker Container:
-```bash
-cd Memento3D-Backend/memeto3D
-docker-compose up -d --build
-```
+### Xem Báo Cáo JaCoCo:
+Mở file `target/site/jacoco/index.html` trên trình duyệt để kiểm tra chi tiết độ phủ theo từng package/class.
 
 ---
 
-## 📖 Swagger UI Document
+## 📖 Tài Liệu API (API Documentation)
 
-Sau khi ứng dụng khởi chạy thành công:
-- **Swagger UI**: [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
-- **OpenAPI JSON**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
+Ứng dụng tích hợp **Springdoc OpenAPI (Swagger UI)**. Khi ứng dụng đang chạy, bạn có thể truy cập tài liệu tương tác tại:
+
+- **Swagger UI**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+- **OpenAPI Spec (JSON)**: `http://localhost:8080/v3/api-docs`
+
+### Một số Endpoint tiêu biểu:
+
+| Nhóm Endpoint | Đường dẫn (Path) | Phương thức | Mô tả |
+|---|---|---|---|
+| **Auth** | `/api/auth/register` | `POST` | Đăng ký tài khoản người dùng mới |
+| **Auth** | `/api/auth/login` | `POST` | Đăng nhập và nhận JWT Token |
+| **Scans** | `/api/v1/scans` | `GET` | Lấy danh sách phiên scan (có phân trang & lọc) |
+| **Scans** | `/api/v1/scans` | `POST` | Khởi tạo phiên scan 3D mới |
+| **Scans** | `/api/v1/scans/{id}/upload-images` | `POST` | Upload ảnh cho phiên scan |
+| **Quality Runs** | `/api/v1/quality-runs/{run_id}/images/{image_id}` | `GET` | Xem báo cáo kiểm định kỹ thuật của ảnh |
+| **Uploads** | `/api/v1/uploads/{id}/chunks/{index}` | `POST` | Tải lên từng chunk của file dung lượng lớn |
+| **Model Ratings** | `/api/v1/scans/{scan_id}/ratings` | `POST` | Gửi/Cập nhật đánh giá (1-5 sao) mô hình 3D |
 
 ---
 
-## 📖 Tài Liệu Tham Khảo
-- [Tài liệu Cấu trúc & Kiến trúc Chi tiết (STRUCTURE.md)](STRUCTURE.md)
-- [Quy chuẩn Phát triển Backend (BE_GUIDELINES.md)](memeto3D/doc/BE_GUIDELINES.md)
+## 📋 Tiêu Chuẩn Phát Triển (Development Standards)
+
+Tất cả thành viên trong nhóm phát triển Backend phải đọc và làm theo [BE_GUIDELINES.md](file:///c:/Users/KIETLT/Documents/GitHub/Memento3d/Memento3D-Backend/memeto3D/doc/BE_GUIDELINES.md) trước khi gửi PR:
+1. Tuân thủ mô hình kiến trúc layer: `Controller → Service → Repository`.
+2. Không viết SQL nối chuỗi (phải dùng Parameterized Query / ORM Binding).
+3. Tuyệt đối không để xảy ra lỗi N+1 Query (dùng `JOIN FETCH`, `@EntityGraph` hoặc Batching).
+4. Phân trang tất cả các API trả về danh sách, giới hạn `limit` tối đa.
