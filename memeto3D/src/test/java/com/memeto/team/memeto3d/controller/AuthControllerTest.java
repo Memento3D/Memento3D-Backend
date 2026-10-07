@@ -223,14 +223,14 @@ class AuthControllerTest {
                 .details("Token invalidated")
                 .build();
 
-        when(authService.logout("Bearer valid-token")).thenReturn(response);
+        when(authService.logout(eq("Bearer valid-token"), any())).thenReturn(response);
 
         mockMvc.perform(post("/api/auth/logout")
                         .header("Authorization", "Bearer valid-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message", is("Logout successfully")));
 
-        verify(authService, times(1)).logout("Bearer valid-token");
+        verify(authService, times(1)).logout(eq("Bearer valid-token"), any());
     }
 
     @Test
@@ -241,12 +241,12 @@ class AuthControllerTest {
                 .details("Token invalidated")
                 .build();
 
-        when(authService.logout(null)).thenReturn(response);
+        when(authService.logout(isNull(), any())).thenReturn(response);
 
         mockMvc.perform(post("/api/auth/logout"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message", is("Logout successfully")));
 
-        verify(authService, times(1)).logout(null);
+        verify(authService, times(1)).logout(isNull(), any());
     }
 }

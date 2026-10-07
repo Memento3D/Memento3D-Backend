@@ -50,6 +50,7 @@ class UploadStatusIntegrationTest {
     @Autowired private ScanRepository        scanRepository;
     @Autowired private UploadChunkRepository uploadChunkRepository;
     @Autowired private BlacklistedTokenRepository blacklistedTokenRepository;
+    @Autowired private com.memeto.team.memeto3d.repository.RefreshTokenRepository refreshTokenRepository;
 
     // ─── shared state (set up once per test class) ───────────────────────────
     private static String ownerToken;
@@ -62,6 +63,7 @@ class UploadStatusIntegrationTest {
         uploadChunkRepository.deleteAll();
         scanRepository.deleteAll();
         blacklistedTokenRepository.deleteAll();
+        refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
     }
 

@@ -126,7 +126,7 @@ class AuthServiceTest {
         when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(sampleUser));
         when(jwtService.generateToken(sampleUser)).thenReturn("sample.jwt.token");
         when(jwtService.getExpirationInSeconds()).thenReturn(3600L);
-        when(refreshTokenService.createRefreshToken(sampleUser.getId())).thenReturn("sample.refresh.token");
+        when(refreshTokenService.createRefreshToken(any(User.class))).thenReturn("sample.refresh.token");
 
         AuthResponse response = authService.login(request);
 
@@ -148,7 +148,7 @@ class AuthServiceTest {
         when(refreshTokenService.validateRefreshToken("valid.refresh.token")).thenReturn(Optional.of(sampleUser.getId()));
         when(userRepository.findById(sampleUser.getId())).thenReturn(Optional.of(sampleUser));
         when(jwtService.generateToken(sampleUser)).thenReturn("new.jwt.token");
-        when(refreshTokenService.createRefreshToken(sampleUser.getId())).thenReturn("new.refresh.token");
+        when(refreshTokenService.createRefreshToken(any(User.class))).thenReturn("new.refresh.token");
         when(jwtService.getExpirationInSeconds()).thenReturn(3600L);
 
         AuthResponse response = authService.refreshToken(request);

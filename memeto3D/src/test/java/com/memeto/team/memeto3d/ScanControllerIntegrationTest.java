@@ -72,6 +72,9 @@ class ScanControllerIntegrationTest {
     private BlacklistedTokenRepository blacklistedTokenRepository;
 
     @Autowired
+    private com.memeto.team.memeto3d.repository.RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
     private JwtService jwtService;
 
     private String jwtToken;
@@ -81,6 +84,7 @@ class ScanControllerIntegrationTest {
     void setUp() throws Exception {
         scanRepository.deleteAll();
         blacklistedTokenRepository.deleteAll();
+        refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
 
         // 1. Register a test user

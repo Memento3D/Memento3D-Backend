@@ -1,5 +1,7 @@
 package com.memeto.team.memeto3d.service.impl;
 
+import com.memeto.team.memeto3d.entity.RefreshToken;
+import com.memeto.team.memeto3d.entity.User;
 import com.memeto.team.memeto3d.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +56,14 @@ public class RedisRefreshTokenServiceImpl implements RefreshTokenService {
     }
 
     @Override
+    public String createRefreshToken(User user) {
+        if (user == null) {
+            throw new IllegalArgumentException("User cannot be null when generating refresh token");
+        }
+        return createRefreshToken(user.getId());
+    }
+
+    @Override
     public Optional<UUID> validateRefreshToken(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
             return Optional.empty();
@@ -70,6 +80,11 @@ public class RedisRefreshTokenServiceImpl implements RefreshTokenService {
             log.warn("Redis error validating refresh token {}: {}", refreshToken, e.getMessage());
         }
 
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<RefreshToken> findByToken(String refreshToken) {
         return Optional.empty();
     }
 
@@ -110,5 +125,10 @@ public class RedisRefreshTokenServiceImpl implements RefreshTokenService {
         } catch (Exception e) {
             log.warn("Redis error revoking refresh tokens for user {}: {}", userId, e.getMessage());
         }
+    }
+
+    @Override
+    public void deleteExpiredTokens() {
+        // Redis automatically manages expiration via TTL
     }
 }
