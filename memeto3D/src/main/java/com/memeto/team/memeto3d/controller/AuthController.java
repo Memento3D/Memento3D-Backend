@@ -18,7 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/auth", "/auth"})
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Authentication", description = "Authentication endpoints: Register, Login, Refresh Token, Logout, and Current User profile")
@@ -43,7 +43,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    @Operation(summary = "User login", description = "Authenticates user credentials and returns JWT access token and Redis refresh token")
+    @Operation(summary = "User login", description = "Authenticates user credentials and returns JWT access token and persistent refresh token")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Authentication successful, returns tokens",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthResponse.class))),
@@ -59,7 +59,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    @Operation(summary = "Refresh JWT token", description = "Uses a valid Redis refresh token to issue a new JWT access token and rotated refresh token")
+    @Operation(summary = "Refresh JWT token", description = "Uses a valid refresh token to issue a new JWT access token and rotated refresh token")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Token refresh successful",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthResponse.class))),
@@ -95,21 +95,23 @@ public class AuthController {
     @PostMapping("/logout")
     @Operation(
             summary = "User logout",
-            description = "Revokes and blacklists current JWT access token and revokes Redis refresh tokens",
+            description = "Revokes refresh token and blacklists current JWT access token",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Logout successful, JWT blacklisted and refresh token revoked",
+            @ApiResponse(responseCode = "200", description = "Logout successful, token blacklisted and refresh token revoked",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = LogoutResponse.class))),
             @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<LogoutResponse> logout(
             @Parameter(description = "Bearer authorization header", hidden = true)
-            @RequestHeader(value = "Authorization", required = false) String authHeader
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestBody(required = false) RefreshTokenRequest request
     ) {
         log.info("Received logout request");
-        LogoutResponse response = authService.logout(authHeader);
+        String refreshTokenStr = request != null ? request.getRefreshToken() : null;
+        LogoutResponse response = authService.logout(authHeader, refreshTokenStr);
         return ResponseEntity.ok(response);
     }
 }

@@ -50,7 +50,11 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/auth/register", "/auth/register",
+                                "/api/auth/login", "/auth/login",
+                                "/api/auth/refresh", "/auth/refresh"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
                         // Swagger & OpenAPI documentation
                         .requestMatchers(
@@ -63,8 +67,8 @@ public class SecurityConfig {
                                 "/webjars/**"
                         ).permitAll()
                         // Protected authentication endpoints
-                        .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/me", "/auth/me", "/users/me", "/api/users/me", "/api/v1/users/me").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/logout", "/auth/logout").authenticated()
                         // Any other endpoint requires authentication by default
                         .anyRequest().authenticated()
                 )

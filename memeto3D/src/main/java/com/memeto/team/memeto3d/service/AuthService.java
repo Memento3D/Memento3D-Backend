@@ -8,4 +8,5 @@ public interface AuthService {
     AuthResponse refreshToken(RefreshTokenRequest request);
     UserResponse getCurrentUser();
     LogoutResponse logout(String bearerToken);
+    LogoutResponse logout(String bearerToken, String refreshToken);
 }

@@ -39,11 +39,15 @@ class AuthControllerIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private com.memeto.team.memeto3d.repository.RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
     private BlacklistedTokenRepository blacklistedTokenRepository;
 
     @BeforeEach
     void cleanDatabase() {
         blacklistedTokenRepository.deleteAll();
+        refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
     }
 

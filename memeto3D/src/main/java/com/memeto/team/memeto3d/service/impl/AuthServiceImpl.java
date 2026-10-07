@@ -65,7 +65,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         String normalizedEmail = request.getEmail().trim().toLowerCase();
 
@@ -77,8 +77,8 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + normalizedEmail));
 
         String token = jwtService.generateToken(user);
-        String refreshToken = refreshTokenService.createRefreshToken(user.getId());
-        log.info("User {} successfully authenticated with Redis refresh token", normalizedEmail);
+        String refreshToken = refreshTokenService.createRefreshToken(user);
+        log.info("User {} successfully authenticated with persistent refresh token", normalizedEmail);
 
         return AuthResponse.builder()
                 .accessToken(token)
@@ -90,22 +90,27 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse refreshToken(RefreshTokenRequest request) {
         if (request == null || request.getRefreshToken() == null || request.getRefreshToken().isBlank()) {
             throw new InvalidTokenException("Refresh token is required");
         }
 
-        UUID userId = refreshTokenService.validateRefreshToken(request.getRefreshToken())
+        String rawToken = request.getRefreshToken().trim();
+
+        UUID userId = refreshTokenService.validateRefreshToken(rawToken)
                 .orElseThrow(() -> new InvalidTokenException("Invalid, expired, or revoked refresh token"));
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
 
-        String newAccessToken = jwtService.generateToken(user);
-        String newRefreshToken = refreshTokenService.createRefreshToken(user.getId());
+        // Revoke the old refresh token and rotate to a new one
+        refreshTokenService.revokeRefreshToken(rawToken);
 
-        log.info("Successfully refreshed access token for user ID: {}", userId);
+        String newAccessToken = jwtService.generateToken(user);
+        String newRefreshToken = refreshTokenService.createRefreshToken(user);
+
+        log.info("Successfully refreshed access token & rotated refresh token for user ID: {}", userId);
 
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
@@ -142,17 +147,28 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LogoutResponse logout(String bearerToken) {
+        return logout(bearerToken, null);
+    }
+
+    @Override
+    @Transactional
+    public LogoutResponse logout(String bearerToken, String refreshTokenStr) {
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
             String token = bearerToken.substring(7).trim();
             try {
                 Date expiration = jwtService.extractExpiration(token);
                 tokenBlacklistService.blacklistToken(token, expiration.toInstant());
-                log.info("Token successfully blacklisted in Redis on logout");
+                log.info("Access token successfully blacklisted in Redis on logout");
             } catch (Exception e) {
                 log.warn("Could not extract expiration from token on logout: {}", e.getMessage());
                 tokenBlacklistService.blacklistToken(token, Instant.now().plusSeconds(3600));
             }
+        }
 
+        if (refreshTokenStr != null && !refreshTokenStr.isBlank()) {
+            refreshTokenService.revokeRefreshToken(refreshTokenStr.trim());
+            log.info("Refresh token successfully revoked on logout");
+        } else {
             try {
                 Authentication auth = SecurityContextHolder.getContext().getAuthentication();
                 if (auth != null && auth.getPrincipal() instanceof UserDetails userDetails) {
@@ -160,7 +176,7 @@ public class AuthServiceImpl implements AuthService {
                             .ifPresent(u -> refreshTokenService.revokeUserRefreshTokens(u.getId()));
                 }
             } catch (Exception e) {
-                log.warn("Could not revoke refresh tokens on logout: {}", e.getMessage());
+                log.warn("Could not revoke user refresh tokens on logout: {}", e.getMessage());
             }
         }
 
@@ -168,7 +184,7 @@ public class AuthServiceImpl implements AuthService {
 
         return LogoutResponse.builder()
                 .message("Logout successfully")
-                .details("JWT is stateless; token blacklisted and refresh tokens revoked in Redis.")
+                .details("Session revoked and token blacklisted successfully")
                 .build();
     }
 }

@@ -24,6 +24,25 @@ import java.util.UUID;
 public class UserController {
 
     private final UserService userService;
+    private final com.memeto.team.memeto3d.service.AuthService authService;
+
+    @GetMapping({"/users/me", "/api/v1/users/me", "/api/users/me"})
+    @Operation(
+            summary = "Get current authenticated user profile",
+            description = "Retrieves profile details of the currently authenticated user based on JWT in SecurityContextHolder",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Current user profile retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<UserResponse> getCurrentUser() {
+        log.info("Received request to get current logged-in user profile");
+        UserResponse response = authService.getCurrentUser();
+        return ResponseEntity.ok(response);
+    }
 
     @GetMapping({"/users/{id}", "/api/v1/users/{id}", "/api/users/{id}"})
     @Operation(
