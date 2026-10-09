@@ -7,6 +7,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,4 +28,15 @@ public interface ScanRepository extends JpaRepository<Scan, UUID> {
 
     @EntityGraph(attributePaths = {"user"})
     Page<Scan> findByUserIdAndStatusAndDeletedAtIsNull(UUID userId, ScanStatus status, Pageable pageable);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT s
+        FROM Scan s
+        WHERE s.id = :scanId
+          AND s.deletedAt IS NULL
+        """)
+    Optional<Scan> findByIdForUpdate(
+            @Param("scanId") UUID scanId
+    );
 }

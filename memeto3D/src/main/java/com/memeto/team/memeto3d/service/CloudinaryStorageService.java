@@ -36,4 +36,28 @@ public class CloudinaryStorageService {
         return cloudinary.uploader()
                 .upload(file.getBytes(), options);
     }
+
+    public Map<String, Object> uploadGlb(
+            byte[] bytes,
+            UUID userId,
+            UUID scanId,
+            UUID jobId,
+            UUID attemptId
+    ) throws IOException {
+
+        String publicId = "memento3d/users/" + userId
+                + "/scans/" + scanId
+                + "/jobs/" + jobId
+                + "/attempts/" + attemptId
+                + "/model.glb";
+
+        Map<String, Object> options = ObjectUtils.asMap(
+                "public_id", publicId,
+                "resource_type", "raw",
+                "type", "upload",
+                "overwrite", true
+        );
+
+        return cloudinary.uploader().upload(bytes, options);
+    }
 }
