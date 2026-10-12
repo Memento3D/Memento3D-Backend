@@ -35,6 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.memeto.team.memeto3d.service.CloudinaryStorageService;
+import com.memeto.team.memeto3d.service.ScanAccessGuard;
 import java.util.Map;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -70,6 +71,7 @@ public class ScanServiceImpl implements ScanService {
     private final com.memeto.team.memeto3d.repository.QualityCheckRunRepository qualityCheckRunRepository;
     private final CloudinaryStorageService cloudinaryStorageService;
     private final com.memeto.team.memeto3d.service.ScanStatusCacheService scanStatusCacheService;
+    private final ScanAccessGuard scanAccessGuard;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -386,8 +388,10 @@ public class ScanServiceImpl implements ScanService {
         if (page < 1) throw new IllegalArgumentException("Page must be at least 1");
         if (limit < 1 || limit > 100) throw new IllegalArgumentException("Limit must be between 1 and 100");
 
-        Scan scan = scanRepository.findByIdAndDeletedAtIsNull(scanId)
-                .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + scanId));
+        Scan scan = scanRepository.findByIdForUpdate(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Scan not found with ID: " + scanId
+                ));
 
         enforceOwnership(scan, currentUserId, currentUserRole, scanId);
 
@@ -557,11 +561,11 @@ public class ScanServiceImpl implements ScanService {
 //        scanImageRepository.saveAndFlush(image);
 
         // 14. Update scan counters and promote status to 'uploading' if still draft
+        // Upload Cloudinary và lưu ScanImage đã thành công.
+        // uploaded chỉ thể hiện đã có input, không có nghĩa đã vượt qua QC.
         scan.setFileCount(scan.getFileCount() + 1);
         scan.setTotalSizeBytes(scan.getTotalSizeBytes() + file.getSize());
-        if (scan.getStatus() == ScanStatus.draft) {
-            scan.setStatus(ScanStatus.uploading);
-        }
+        scan.setStatus(ScanStatus.uploaded);
         scan.setUpdatedAt(Instant.now());
         scanRepository.saveAndFlush(scan);
 
@@ -866,12 +870,17 @@ public class ScanServiceImpl implements ScanService {
      * current user does not own the scan and is not admin/operator.
      */
     private void enforceOwnership(Scan scan, UUID currentUserId, Role currentUserRole, UUID scanId) {
-        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
-        if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
-            log.warn("Access denied for user {} to scan {} owned by {}",
-                    currentUserId, scanId, scan.getUser() != null ? scan.getUser().getId() : null);
-            throw new ResourceNotFoundException("Scan not found with ID: " + scanId);
-        }
+//        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+//        if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
+//            log.warn("Access denied for user {} to scan {} owned by {}",
+//                    currentUserId, scanId, scan.getUser() != null ? scan.getUser().getId() : null);
+//            throw new ResourceNotFoundException("Scan not found with ID: " + scanId);
+//        }
+        scanAccessGuard.requireAccess(
+                scan,
+                currentUserId,
+                currentUserRole
+        );
     }
 
     /** Validates MIME type and file extension against allowed image formats. */

@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -27,4 +28,9 @@ public interface ScanImageRepository extends JpaRepository<ScanImage, UUID> {
     @Query("SELECT COALESCE(MAX(si.sortOrder), -1) FROM ScanImage si " +
            "WHERE si.scan.id = :scanId AND si.deletedAt IS NULL")
     int findMaxSortOrderByScanId(@Param("scanId") UUID scanId);
+
+    Optional<ScanImage> findByIdAndScan_IdAndDeletedAtIsNull(
+            UUID imageId,
+            UUID scanId
+    );
 }
