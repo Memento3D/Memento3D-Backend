@@ -33,11 +33,31 @@ class SecurityConfigTest {
     @Mock
     private CustomUserDetailsService userDetailsService;
 
+    @Mock
+    private com.memento3d.identity.infrastructure.security.oauth2.CustomOAuth2UserService customOAuth2UserService;
+
+    @Mock
+    private com.memento3d.identity.infrastructure.security.oauth2.OAuth2AuthenticationSuccessHandler oauth2AuthenticationSuccessHandler;
+
+    @Mock
+    private com.memento3d.identity.infrastructure.security.oauth2.OAuth2AuthenticationFailureHandler oauth2AuthenticationFailureHandler;
+
+    @Mock
+    private com.memento3d.identity.infrastructure.security.oauth2.HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
+
     private SecurityConfig securityConfig;
 
     @BeforeEach
     void setUp() {
-        securityConfig = new SecurityConfig(jwtAuthenticationFilter, jwtAuthenticationEntryPoint, userDetailsService);
+        securityConfig = new SecurityConfig(
+                jwtAuthenticationFilter,
+                jwtAuthenticationEntryPoint,
+                userDetailsService,
+                customOAuth2UserService,
+                oauth2AuthenticationSuccessHandler,
+                oauth2AuthenticationFailureHandler,
+                httpCookieOAuth2AuthorizationRequestRepository
+        );
         ReflectionTestUtils.setField(securityConfig, "allowedOrigins", "http://localhost:3000,http://localhost:8080");
     }
 

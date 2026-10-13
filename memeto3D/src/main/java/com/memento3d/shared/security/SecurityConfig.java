@@ -1,6 +1,10 @@
 package com.memento3d.shared.security;
 
 import com.memento3d.identity.infrastructure.security.CustomUserDetailsService;
+import com.memento3d.identity.infrastructure.security.oauth2.CustomOAuth2UserService;
+import com.memento3d.identity.infrastructure.security.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
+import com.memento3d.identity.infrastructure.security.oauth2.OAuth2AuthenticationFailureHandler;
+import com.memento3d.identity.infrastructure.security.oauth2.OAuth2AuthenticationSuccessHandler;
 import com.memento3d.shared.security.JwtAuthenticationEntryPoint;
 import com.memento3d.shared.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +41,10 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final CustomUserDetailsService userDetailsService;
+    private final CustomOAuth2UserService customOAuth2UserService;
+    private final OAuth2AuthenticationSuccessHandler oauth2AuthenticationSuccessHandler;
+    private final OAuth2AuthenticationFailureHandler oauth2AuthenticationFailureHandler;
+    private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
 
     @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080,http://localhost:5173}")
     private String allowedOrigins;
@@ -55,6 +63,11 @@ public class SecurityConfig {
                                 "/api/auth/login", "/auth/login",
                                 "/api/auth/refresh", "/auth/refresh"
                         ).permitAll()
+                        .requestMatchers(
+                                "/oauth2/**",
+                                "/login/oauth2/**",
+                                "/api/auth/oauth2/**"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/webhooks/**", "/payments/webhooks/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
                         // Swagger & OpenAPI documentation
@@ -68,10 +81,24 @@ public class SecurityConfig {
                                 "/webjars/**"
                         ).permitAll()
                         // Protected authentication endpoints
-                        .requestMatchers(HttpMethod.GET, "/api/auth/me", "/auth/me", "/users/me", "/api/users/me", "/api/v1/users/me").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/me", "/auth/me", "/api/me", "/users/me", "/api/users/me", "/api/v1/users/me").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout", "/auth/logout").authenticated()
                         // Any other endpoint requires authentication by default
                         .anyRequest().authenticated()
+                )
+                .oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(authorization -> authorization
+                                .baseUri("/oauth2/authorization")
+                                .authorizationRequestRepository(httpCookieOAuth2AuthorizationRequestRepository)
+                        )
+                        .redirectionEndpoint(redirection -> redirection
+                                .baseUri("/login/oauth2/code/*")
+                        )
+                        .userInfoEndpoint(userInfo -> userInfo
+                                .userService(customOAuth2UserService)
+                        )
+                        .successHandler(oauth2AuthenticationSuccessHandler)
+                        .failureHandler(oauth2AuthenticationFailureHandler)
                 )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
