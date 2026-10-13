@@ -55,6 +55,7 @@ public class SecurityConfig {
                                 "/api/auth/login", "/auth/login",
                                 "/api/auth/refresh", "/auth/refresh"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/payments/webhooks/**", "/payments/webhooks/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
                         // Swagger & OpenAPI documentation
                         .requestMatchers(

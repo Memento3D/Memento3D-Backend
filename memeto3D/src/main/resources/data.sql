@@ -122,3 +122,13 @@ INSERT INTO daily_stats (id, stat_date, total_jobs, success_count, fail_count, s
 ('d1111111-1111-1111-1111-111111111111', CURRENT_DATE - INTERVAL '1 day', 15, 14, 1, 93.33, 20, 45, 3, 450000.00, 12, NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day'),
 ('d2222222-2222-2222-2222-222222222222', CURRENT_DATE,                   8,  8,  0, 100.00, 10, 22, 1, 150000.00, 8,  NOW(), NOW())
 ON CONFLICT (stat_date) DO NOTHING;
+
+-- ---------------------------------------------------------------------
+-- 9. Sample Print Orders for Payment Testing (print_orders)
+-- ---------------------------------------------------------------------
+INSERT INTO print_orders (id, user_id, scan_id, total_price, currency, status, recipient_name, shipping_address, phone, version, created_at, updated_at) VALUES
+('01111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333', 'a1111111-1111-1111-1111-111111111111', 150000.00, 'VND', 'PENDING_PAYMENT', 'John Doe', '123 Nguyen Hue, Quan 1, TP.HCM', '0901234567', 0, NOW() - INTERVAL '1 hour', NOW()),
+('02222222-2222-2222-2222-222222222222', '33333333-3333-3333-3333-333333333333', 'a2222222-2222-2222-2222-222222222222', 280000.00, 'VND', 'PENDING_PAYMENT', 'John Doe', '123 Nguyen Hue, Quan 1, TP.HCM', '0901234567', 0, NOW() - INTERVAL '30 minutes', NOW()),
+('03333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444', 'a3333333-3333-3333-3333-333333333333', 500000.00, 'VND', 'CONFIRMED',       'Demo User', '456 Le Loi, Quan 1, TP.HCM',    '0912345678', 0, NOW() - INTERVAL '1 day', NOW())
+ON CONFLICT (id) DO NOTHING;
+
