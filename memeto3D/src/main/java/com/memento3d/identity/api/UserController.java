@@ -29,7 +29,7 @@ public class UserController {
     private final UserService userService;
     private final com.memento3d.identity.application.service.AuthService authService;
 
-    @GetMapping("/api/v1/users/me")
+    @GetMapping({"/api/me", "/api/auth/me", "/api/v1/users/me"})
     @Operation(
             summary = "Get current authenticated user profile",
             description = "Retrieves profile details of the currently authenticated user based on JWT in SecurityContextHolder",

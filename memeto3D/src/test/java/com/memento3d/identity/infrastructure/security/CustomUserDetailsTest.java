@@ -41,4 +41,23 @@ class CustomUserDetailsTest {
         assertTrue(userDetails.isCredentialsNonExpired());
         assertTrue(userDetails.isEnabled());
     }
+
+    @Test
+    @DisplayName("Test CustomUserDetails as OAuth2User with attributes")
+    void testCustomUserDetailsOAuth2User() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder()
+                .id(userId)
+                .email("oauth@example.com")
+                .fullName("OAuth User")
+                .role(Role.ROLE_USER)
+                .build();
+
+        java.util.Map<String, Object> attributes = java.util.Map.of("sub", "123456", "name", "OAuth User");
+        CustomUserDetails userDetails = new CustomUserDetails(user, attributes);
+
+        assertEquals("oauth@example.com", userDetails.getName());
+        assertEquals(attributes, userDetails.getAttributes());
+        assertEquals(user, userDetails.getUser());
+    }
 }

@@ -99,6 +99,54 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
     }
 
+    @ExceptionHandler(com.memento3d.payment.domain.exception.PaymentSecurityException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentSecurityException(com.memento3d.payment.domain.exception.PaymentSecurityException ex, HttpServletRequest request) {
+        log.warn("Payment security exception on path {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler(com.memento3d.payment.domain.exception.PaymentAmountMismatchException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentAmountMismatchException(com.memento3d.payment.domain.exception.PaymentAmountMismatchException ex, HttpServletRequest request) {
+        log.warn("Payment amount mismatch on path {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler(com.memento3d.payment.domain.exception.PaymentGatewayException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentGatewayException(com.memento3d.payment.domain.exception.PaymentGatewayException ex, HttpServletRequest request) {
+        log.error("Payment gateway error on path {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_GATEWAY.value())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(errorResponse);
+    }
+
+    @ExceptionHandler(com.memento3d.payment.domain.exception.PaymentException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentException(com.memento3d.payment.domain.exception.PaymentException ex, HttpServletRequest request) {
+        log.warn("Payment domain error on path {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex, HttpServletRequest request) {
         log.warn("Authentication failed: Invalid credentials for path {}", request.getRequestURI());

@@ -17,6 +17,7 @@ import com.memento3d.shared.config.JacksonConfig;
 import com.memento3d.shared.config.OpenApiConfig;
 import com.memento3d.identity.domain.model.BlacklistedToken;
 import com.memento3d.scans.domain.model.InputMode;
+import com.memento3d.identity.domain.model.AuthProvider;
 import com.memento3d.identity.domain.model.Role;
 import com.memento3d.scans.domain.model.Scan;
 import com.memento3d.scans.domain.model.ScanStatus;
@@ -98,7 +99,7 @@ class DtoAndModelTest {
         // Test fromEntity(null)
         assertNull(UserResponse.fromEntity(null));
 
-        UserResponse response2 = new UserResponse(id, "user@example.com", "User FullName", Role.ROLE_ADMIN);
+        UserResponse response2 = new UserResponse(id, "user@example.com", "User FullName", Role.ROLE_ADMIN, AuthProvider.LOCAL, null);
         assertEquals(id, response2.getId());
 
         UserResponse emptyResponse = new UserResponse();
@@ -243,7 +244,7 @@ class DtoAndModelTest {
 
         assertEquals(user.getId(), user2.getId());
 
-        User userAllArgs = new User(id, "user@example.com", "password", "User Name", Role.ROLE_USER, 0L, 10737418240L, now, now);
+        User userAllArgs = new User(id, "user@example.com", "password", "User Name", AuthProvider.LOCAL, null, null, Role.ROLE_USER, 0L, 10737418240L, now, now);
         assertEquals(id, userAllArgs.getId());
         assertEquals(0L, userAllArgs.getStorageUsedBytes());
         assertEquals(10737418240L, userAllArgs.getStorageQuotaBytes());

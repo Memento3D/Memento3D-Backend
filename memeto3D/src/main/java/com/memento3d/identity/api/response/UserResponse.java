@@ -27,6 +27,12 @@ public class UserResponse {
     @Schema(description = "Assigned user role", example = "USER")
     private Role role;
 
+    @Schema(description = "Authentication provider", example = "GOOGLE")
+    private com.memento3d.identity.domain.model.AuthProvider provider;
+
+    @Schema(description = "User avatar image URL", example = "https://lh3.googleusercontent.com/a/...")
+    private String avatarUrl;
+
     public static UserResponse fromEntity(User user) {
         if (user == null) {
             return null;
@@ -36,6 +42,8 @@ public class UserResponse {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .role(user.getRole())
+                .provider(user.getProvider())
+                .avatarUrl(user.getAvatarUrl())
                 .build();
     }
 }

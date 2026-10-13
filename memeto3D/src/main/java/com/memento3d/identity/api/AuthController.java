@@ -6,6 +6,7 @@ import com.memento3d.identity.api.request.RegisterRequest;
 import com.memento3d.identity.api.response.AuthResponse;
 import com.memento3d.identity.api.response.LogoutResponse;
 import com.memento3d.identity.api.response.RegisterResponse;
+import com.memento3d.identity.api.response.UserResponse;
 import com.memento3d.identity.domain.model.RefreshToken;
 import com.memento3d.identity.domain.model.User;
 import com.memento3d.shared.api.response.ErrorResponse;
@@ -105,5 +106,49 @@ public class AuthController {
         String refreshTokenStr = request != null ? request.getRefreshToken() : null;
         LogoutResponse response = authService.logout(authHeader, refreshTokenStr);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/me")
+    @Operation(
+            summary = "Get current authenticated user profile",
+            description = "Retrieves profile details of the currently authenticated user based on JWT in SecurityContextHolder",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Current user profile retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<UserResponse> getCurrentUser() {
+        log.info("Received request to get current logged-in user profile");
+        UserResponse response = authService.getCurrentUser();
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/oauth2/google")
+    @Operation(
+            summary = "Login with Google (OAuth2 / OIDC)",
+            description = "Chuyển hướng đến màn hình xác thực tài khoản Google. <br/><br/>"
+                    + "⚠️ <b>LƯU Ý:</b> Không dùng nút 'Execute' màu xanh của Swagger vì đây là API chuyển hướng trình duyệt (trình duyệt sẽ chặn CORS khi fetch ngầm sang Google). <br/>"
+                    + "👉 Hãy click chuột phải mở link này trong tab mới: <a href=\"http://localhost:8080/oauth2/authorization/google\" target=\"_blank\"><b>BẤM VÀO ĐÂY ĐỂ ĐĂNG NHẬP BẰNG GOOGLE</b></a>"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "302", description = "Redirect to Google authorization screen")
+    })
+    public void loginWithGoogle(jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        response.sendRedirect("/oauth2/authorization/google");
+    }
+
+    @GetMapping("/oauth2/google/url")
+    @Operation(
+            summary = "Get Google Login URL (Cho Frontend / Swagger test)",
+            description = "Trả về JSON chứa URL đăng nhập Google để Frontend hoặc Swagger có thể lấy và mở trực tiếp."
+    )
+    public ResponseEntity<java.util.Map<String, String>> getGoogleLoginUrl() {
+        return ResponseEntity.ok(java.util.Map.of(
+                "url", "http://localhost:8080/oauth2/authorization/google",
+                "message", "Mở URL này trên tab trình duyệt mới để đăng nhập Google"
+        ));
     }
 }
