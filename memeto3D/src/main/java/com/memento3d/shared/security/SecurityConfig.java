@@ -75,6 +75,8 @@ public class SecurityConfig {
                                 "/payments/webhooks/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
+                        // Local Printer Agent gateway (authenticated by X-Agent-Token inside the service)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/agent/heartbeat").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
                         // Swagger & OpenAPI documentation
                         .requestMatchers(

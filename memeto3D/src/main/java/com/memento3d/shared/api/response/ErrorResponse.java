@@ -23,6 +23,9 @@ public class ErrorResponse {
     @Schema(description = "HTTP status code", example = "400")
     private int status;
 
+    @Schema(description = "Stable machine-readable error code, if applicable", example = "INVALID_PRINT_JOB_STATE")
+    private String error;
+
     @Schema(description = "Error message", example = "Invalid input or validation error")
     private String message;
 
@@ -31,4 +34,10 @@ public class ErrorResponse {
 
     @Schema(description = "Field-level validation error map, if applicable")
     private Map<String, String> validationErrors;
+
+    /** Legacy constructor kept for backward compatibility (no error code). */
+    public ErrorResponse(Instant timestamp, int status, String message, String path,
+                         Map<String, String> validationErrors) {
+        this(timestamp, status, null, message, path, validationErrors);
+    }
 }
