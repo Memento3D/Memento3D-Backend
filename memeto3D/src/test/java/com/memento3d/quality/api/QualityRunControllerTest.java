@@ -35,6 +35,7 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -137,7 +138,7 @@ class QualityRunControllerTest {
         when(qualityRunService.getImageQualityDetail(eq(runId), eq(imageId), eq(testUserId), eq(Role.ROLE_USER)))
                 .thenReturn(response);
 
-        mockMvc.perform(get("/api/v1/quality-runs/{run_id}/images/{image_id}", runId, imageId)
+        mockMvc.perform(get("/api/v1/quality-runs/{runId}/images/{imageId}", runId, imageId)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.run_id", is(runId.toString())))
@@ -162,10 +163,32 @@ class QualityRunControllerTest {
         when(qualityRunService.getImageQualityDetail(eq(runId), eq(imageId), eq(testUserId), eq(Role.ROLE_USER)))
                 .thenThrow(new ResourceNotFoundException("Quality run not found with ID: " + runId));
 
-        mockMvc.perform(get("/api/v1/quality-runs/{run_id}/images/{image_id}", runId, imageId)
+        mockMvc.perform(get("/api/v1/quality-runs/{runId}/images/{imageId}", runId, imageId)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.message", is("Quality run not found with ID: " + runId)));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/quality-runs/{runId}/overrides returns 200 with override response")
+    void overrideQualityRun_Success() throws Exception {
+        com.memento3d.quality.api.response.QualityOverrideResponse response =
+                com.memento3d.quality.api.response.QualityOverrideResponse.builder()
+                        .scanId(scanId)
+                        .runId(runId)
+                        .scoreCategory("amber")
+                        .scanStatus("ready")
+                        .build();
+
+        when(qualityRunService.overrideQualityRunDirect(eq(runId), eq(testUserId), eq(Role.ROLE_USER)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/quality-runs/{runId}/overrides", runId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.runId", is(runId.toString())))
+                .andExpect(jsonPath("$.scanId", is(scanId.toString())))
+                .andExpect(jsonPath("$.scoreCategory", is("amber")))
+                .andExpect(jsonPath("$.scanStatus", is("ready")));
     }
 }

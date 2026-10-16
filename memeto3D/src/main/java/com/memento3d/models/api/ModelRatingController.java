@@ -38,12 +38,7 @@ public class ModelRatingController {
     // -------------------------------------------------------------------------
     // POST /api/v1/scans/{scanId}/ratings (Create or Update Rating)
     // -------------------------------------------------------------------------
-    @PostMapping({
-            "/{scanId}/ratings",
-            "/{scanId}/rating",
-            "/{scanId:[0-9a-fA-F\\-]{36}}/ratings",
-            "/{scanId:[0-9a-fA-F\\-]{36}}/rating"
-    })
+    @PostMapping({"/{scanId}/ratings", "/{scanId}/rating"})
     @Operation(
             summary = "Create or update model 3D quality rating",
             description = "Submits a rating (1 to 5 stars) and optional comment for a scan model. " +
@@ -73,11 +68,7 @@ public class ModelRatingController {
     // -------------------------------------------------------------------------
     // GET /api/v1/scans/{scanId}/ratings (List Ratings)
     // -------------------------------------------------------------------------
-    @GetMapping({
-            "/{scanId}/ratings",
-            "/{scanId}/rating",
-            "/{scanId:[0-9a-fA-F\\-]{36}}/ratings"
-    })
+    @GetMapping({"/{scanId}/ratings", "/{scanId}/rating"})
     @Operation(
             summary = "Get ratings for a scan model",
             description = "Retrieves all user feedback and ratings submitted for the 3D model produced from this scan."
@@ -99,11 +90,7 @@ public class ModelRatingController {
     // -------------------------------------------------------------------------
     // DELETE /api/v1/scans/{scanId}/rating (Delete My Rating)
     // -------------------------------------------------------------------------
-    @DeleteMapping({
-            "/{scanId}/rating",
-            "/{scanId}/ratings",
-            "/{scanId:[0-9a-fA-F\\-]{36}}/rating"
-    })
+    @DeleteMapping({"/{scanId}/rating", "/{scanId}/ratings"})
     @Operation(
             summary = "Delete user rating for a scan model",
             description = "Removes the authenticated user's rating for the specified scan model.",

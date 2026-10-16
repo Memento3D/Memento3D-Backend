@@ -159,7 +159,7 @@ public class UserController {
     // -------------------------------------------------------------------------
     // GET /api/v1/users/{userId}
     // -------------------------------------------------------------------------
-    @GetMapping({"/api/v1/users/{userId}", "/api/v1/users/{userId:[0-9a-fA-F\\-]{36}}"})
+    @GetMapping("/api/v1/users/{userId}")
     @Operation(
             summary = "Get user profile by ID",
             description = "Retrieves user profile details by ID using Redis cache first (key pattern user:{userId}), falling back to PostgreSQL."

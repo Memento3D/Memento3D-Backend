@@ -35,10 +35,7 @@ public class ModelOutputController {
     // -------------------------------------------------------------------------
     // GET /api/v1/scans/{scanId}/outputs
     // -------------------------------------------------------------------------
-    @GetMapping({
-            "/api/v1/scans/{scanId}/outputs",
-            "/api/v1/scans/{scanId:[0-9a-fA-F\\-]{36}}/outputs"
-    })
+    @GetMapping("/api/v1/scans/{scanId}/outputs")
     @Operation(summary = "Get available 3D model outputs for a scan session")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Model outputs retrieved successfully",

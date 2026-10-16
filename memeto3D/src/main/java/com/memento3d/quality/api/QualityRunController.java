@@ -28,7 +28,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/quality-runs")
-@RequiredArgsConstructor
 @Slf4j
 @Validated
 @Tag(name = "Quality Runs", description = "Quality check runs and per-image inspection results endpoints")
@@ -37,10 +36,14 @@ public class QualityRunController {
 
     private final QualityRunService qualityRunService;
 
+    public QualityRunController(QualityRunService qualityRunService) {
+        this.qualityRunService = qualityRunService;
+    }
+
     // -------------------------------------------------------------------------
     // GET /api/v1/quality-runs/{runId}
     // -------------------------------------------------------------------------
-    @GetMapping({"/{runId}", "/{runId:[0-9a-fA-F\\-]{36}}"})
+    @GetMapping("/{runId}")
     @Operation(
             summary = "Get quality check run summary details",
             description = "Retrieves score, status, and summary statistics of a specific quality run."
@@ -65,7 +68,7 @@ public class QualityRunController {
     // -------------------------------------------------------------------------
     // GET /api/v1/quality-runs/{runId}/images
     // -------------------------------------------------------------------------
-    @GetMapping({"/{runId}/images", "/{run_id}/images"})
+    @GetMapping("/{runId}/images")
     @Operation(
             summary = "List all image inspection results in a quality check run",
             description = "Returns complete technical quality details for every image evaluated in the specified quality run."
@@ -90,10 +93,7 @@ public class QualityRunController {
     // -------------------------------------------------------------------------
     // GET /api/v1/quality-runs/{runId}/images/{imageId}
     // -------------------------------------------------------------------------
-    @GetMapping({
-            "/{runId}/images/{imageId}",
-            "/{run_id}/images/{image_id}"
-    })
+    @GetMapping("/{runId}/images/{imageId}")
     @Operation(
             summary = "Get detailed technical inspection result for a specific image in a quality check run",
             description = "Returns complete technical quality metrics (sharpness/blur score, mean brightness, exposure status, " +
@@ -109,15 +109,10 @@ public class QualityRunController {
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ImageQualityDetailResponse> getImageQualityDetail(
-            @PathVariable(value = "runId", required = false) UUID runIdCamel,
-            @PathVariable(value = "run_id", required = false) UUID runIdSnake,
-            @PathVariable(value = "imageId", required = false) UUID imageIdCamel,
-            @PathVariable(value = "image_id", required = false) UUID imageIdSnake,
+            @PathVariable("runId") UUID runId,
+            @PathVariable("imageId") UUID imageId,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        UUID runId = runIdCamel != null ? runIdCamel : runIdSnake;
-        UUID imageId = imageIdCamel != null ? imageIdCamel : imageIdSnake;
-
         CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
         log.info("Received request to get image quality detail for run ID: {}, image ID: {} by user: {}, role: {}",
                 runId, imageId, currentUser.getId(), currentUser.getRole());
@@ -130,7 +125,7 @@ public class QualityRunController {
     // -------------------------------------------------------------------------
     // POST /api/v1/quality-runs/{runId}/overrides
     // -------------------------------------------------------------------------
-    @PostMapping({"/{runId}/overrides", "/{runId}/override"})
+    @PostMapping("/{runId}/overrides")
     @Operation(
             summary = "Override an amber quality run directly",
             description = "Allows the user to accept the risk of an amber quality score. Green -> 400, red -> 403. Idempotent."

@@ -53,7 +53,7 @@ public class UploadController {
     private final UploadService uploadService;
 
     @RequestMapping(
-            value = {"/{uploadId}/chunks/{chunkIndex}", "/{uploadId:[0-9a-fA-F\\-]{36}}/chunks/{chunkIndex}", "/{id}/chunks/{index}"},
+            value = {"/{uploadId}/chunks/{chunkIndex}", "/{id}/chunks/{index}"},
             method = {RequestMethod.POST, RequestMethod.PUT},
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
@@ -80,7 +80,7 @@ public class UploadController {
     // GET /api/v1/uploads/{id}/status and GET /api/v1/uploads/{uploadId}
     // -------------------------------------------------------------------------
 
-    @GetMapping({"/{id}/status", "/{id}", "/{uploadId:[0-9a-fA-F\\-]{36}}"})
+    @GetMapping({"/{id}/status", "/{id}"})
     @Operation(
         summary = "Get chunked upload session status",
         description = """
