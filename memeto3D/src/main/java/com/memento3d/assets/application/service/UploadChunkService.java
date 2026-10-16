@@ -35,11 +35,14 @@ import java.util.stream.Collectors;
  * the status-query API.</p>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class UploadChunkService {
 
     private final UploadSessionRepository uploadSessionRepository;
+
+    public UploadChunkService(UploadSessionRepository uploadSessionRepository) {
+        this.uploadSessionRepository = uploadSessionRepository;
+    }
 
     @Value("${app.storage.base-path:./uploads}")
     private String baseStoragePath;
@@ -157,5 +160,24 @@ public class UploadChunkService {
             sb.append(String.format("%02x", b));
         }
         return sb.toString();
+    }
+
+    public void abortUploadSession(UUID sessionId) {
+        if (tempDirPath != null) {
+            Path sessionDir = tempDirPath.resolve(sessionId.toString());
+            if (Files.exists(sessionDir)) {
+                try (var stream = Files.walk(sessionDir)) {
+                    stream.sorted(java.util.Comparator.reverseOrder())
+                            .forEach(path -> {
+                                try {
+                                    Files.deleteIfExists(path);
+                                } catch (IOException ignored) {}
+                            });
+                } catch (IOException e) {
+                    log.warn("Failed to clean up upload session dir {}", sessionId, e);
+                }
+            }
+        }
+        uploadSessionRepository.deleteById(sessionId);
     }
 }

@@ -116,6 +116,31 @@ public class PaymentController {
         return ResponseEntity.ok(response);
     }
 
+    @DeleteMapping("/{paymentId}")
+    @Operation(
+            summary = "Cancel pending payment transaction",
+            description = "Cancels a pending or processing payment transaction.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Payment cancelled successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = PaymentStatusResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Payment is in terminal status"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden: user does not own transaction"),
+            @ApiResponse(responseCode = "404", description = "Payment transaction not found")
+    })
+    public ResponseEntity<PaymentStatusResponse> cancelPayment(
+            @PathVariable UUID paymentId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails cud = getAuthenticatedUserDetails(userDetails);
+        log.info("Received request to cancel payment ID: {}, user: {}", paymentId, cud.getId());
+
+        PaymentStatusResponse response = paymentService.cancelPayment(paymentId, cud.getId(), cud.getRole());
+        return ResponseEntity.ok(response);
+    }
+
     private CustomUserDetails getAuthenticatedUserDetails(CustomUserDetails userDetails) {
         if (userDetails != null) {
             return userDetails;

@@ -35,10 +35,10 @@ public class ModelRatingController {
 
     private final ModelRatingService modelRatingService;
 
-    // -------------------------------------------------------------------------
-    // POST /api/v1/scans/{scanId}/ratings (Create or Update Rating)
-    // -------------------------------------------------------------------------
-    @PostMapping({"/{scanId}/ratings", "/{scanId}/rating"})
+    @RequestMapping(
+            value = {"/{scanId}/ratings", "/{scanId}/rating"},
+            method = {RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH}
+    )
     @Operation(
             summary = "Create or update model 3D quality rating",
             description = "Submits a rating (1 to 5 stars) and optional comment for a scan model. " +

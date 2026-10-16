@@ -70,4 +70,20 @@ public class ModelOutputServiceImpl implements ModelOutputService {
 
         return ModelOutputResponse.fromEntity(output);
     }
+
+    @Override
+    @Transactional
+    public void deleteModelOutput(
+            UUID modelId,
+            UUID currentUserId,
+            Role currentUserRole
+    ) {
+        com.memento3d.models.domain.model.ModelOutput output = outputRepository.findById(modelId)
+                .orElseThrow(() -> new ResourceNotFoundException("Model output not found with ID: " + modelId));
+
+        Scan scan = output.getJob().getScan();
+        scanAccessGuard.requireAccess(scan, currentUserId, currentUserRole);
+
+        outputRepository.delete(output);
+    }
 }

@@ -89,6 +89,8 @@ public class SecurityConfig {
                         // Protected authentication endpoints
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/me", "/api/v1/auth/me", "/api/auth/me", "/auth/me", "/api/me", "/users/me", "/api/users/me").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/users/me", "/api/me", "/api/auth/me").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/users/me", "/api/me").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me", "/api/me").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout", "/api/auth/logout", "/auth/logout").authenticated()
                         // Any other endpoint requires authentication by default
                         .anyRequest().authenticated()

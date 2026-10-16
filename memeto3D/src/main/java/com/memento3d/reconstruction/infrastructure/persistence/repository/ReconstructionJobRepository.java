@@ -52,4 +52,15 @@ public interface ReconstructionJobRepository
             Pageable pageable
     );
 
+    org.springframework.data.domain.Page<ReconstructionJob>
+    findByScan_User_IdOrderByCreatedAtDesc(
+            UUID userId,
+            Pageable pageable
+    );
+
+    org.springframework.data.domain.Page<ReconstructionJob>
+    findAllByOrderByCreatedAtDesc(
+            Pageable pageable
+    );
+
 }

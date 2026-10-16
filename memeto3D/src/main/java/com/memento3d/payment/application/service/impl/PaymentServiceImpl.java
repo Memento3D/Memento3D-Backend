@@ -182,6 +182,28 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional
+    public PaymentStatusResponse cancelPayment(UUID paymentId, UUID userId, Role role) {
+        PaymentTransaction transaction = transactionRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment transaction not found with ID: " + paymentId));
+
+        if (!transaction.getUserId().equals(userId) && role != Role.ROLE_ADMIN && role != Role.ROLE_OPERATOR) {
+            log.warn("Access denied: User {} cannot cancel payment {}", userId, paymentId);
+            throw new AccessDeniedException("User is not authorized to cancel this payment transaction");
+        }
+
+        if (transaction.isTerminal()) {
+            throw new PaymentException("Cannot cancel payment in terminal state: " + transaction.getStatus());
+        }
+
+        transaction.markCancelled("Cancelled by user request");
+        transaction = transactionRepository.save(transaction);
+        log.info("Cancelled payment transaction {} by user {}", paymentId, userId);
+
+        return PaymentStatusResponse.fromEntity(transaction);
+    }
+
+    @Override
+    @Transactional
     public MomoIpnResponse processMomoIpn(MomoIpnRequest ipnRequest) {
         log.info("Processing MoMo IPN notification for orderId: {}, requestId: {}, resultCode: {}",
                 ipnRequest.getOrderId(), ipnRequest.getRequestId(), ipnRequest.getResultCode());

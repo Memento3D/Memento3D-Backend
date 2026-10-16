@@ -145,6 +145,32 @@ public class UploadController {
     }
 
     // -------------------------------------------------------------------------
+    // DELETE /api/v1/uploads/{id} (Abort Upload Session)
+    // -------------------------------------------------------------------------
+
+    @DeleteMapping("/{id}")
+    @Operation(
+        summary = "Abort chunked upload session",
+        description = "Aborts an ongoing chunked upload session and deletes temporary chunks.",
+        security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Upload session aborted and chunks purged"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    public ResponseEntity<Void> abortUpload(
+            @PathVariable("id")
+            @Parameter(description = "Upload session UUID to abort")
+            UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Abort upload session {} by user {}", id, currentUser.getId());
+        uploadChunkService.abortUploadSession(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // -------------------------------------------------------------------------
     // Auth helpers
     // -------------------------------------------------------------------------
 

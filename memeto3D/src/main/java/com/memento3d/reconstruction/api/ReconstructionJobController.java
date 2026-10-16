@@ -162,9 +162,35 @@ public class ReconstructionJobController {
     }
 
     // -------------------------------------------------------------------------
-    // POST /api/v1/reconstruction-jobs/{jobId}/cancellations (Cancel Job)
+    // GET /api/v1/reconstruction-jobs (List Jobs for User / Admin)
     // -------------------------------------------------------------------------
-    @PostMapping("/api/v1/reconstruction-jobs/{jobId}/cancellations")
+    @GetMapping("/api/v1/reconstruction-jobs")
+    @Operation(summary = "List reconstruction jobs", description = "Retrieves a paginated list of 3D reconstruction jobs for current user (or all jobs if Admin/Operator)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Jobs retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    public ResponseEntity<org.springframework.data.domain.Page<ReconstructionJobResponse>> listJobs(
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "limit", defaultValue = "20") int limit,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = requireAuthenticatedUser(userDetails);
+        log.info("Listing reconstruction jobs for user {} (page: {}, limit: {})", currentUser.getId(), page, limit);
+
+        org.springframework.data.domain.Page<ReconstructionJobResponse> response =
+                reconstructionJobService.listJobs(currentUser.getId(), currentUser.getRole(), page, limit);
+
+        return ResponseEntity.ok(response);
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/v1/reconstruction-jobs/{jobId}/cancellations & DELETE /api/v1/reconstruction-jobs/{jobId} (Cancel Job)
+    // -------------------------------------------------------------------------
+    @RequestMapping(
+            value = {"/api/v1/reconstruction-jobs/{jobId}/cancellations", "/api/v1/reconstruction-jobs/{jobId}"},
+            method = {RequestMethod.POST, RequestMethod.DELETE}
+    )
     @Operation(summary = "Cancel an in-progress or queued reconstruction job")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Job cancelled successfully",

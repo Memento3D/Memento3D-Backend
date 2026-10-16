@@ -381,6 +381,30 @@ public class ReconstructionJobServiceImpl
         };
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<ReconstructionJobResponse> listJobs(
+            UUID currentUserId,
+            Role currentUserRole,
+            int page,
+            int limit
+    ) {
+        int pageIndex = Math.max(0, page - 1);
+        int pageSize = Math.min(Math.max(1, limit), 100);
+        org.springframework.data.domain.Pageable pageable =
+                org.springframework.data.domain.PageRequest.of(pageIndex, pageSize);
+
+        boolean isStaff = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        org.springframework.data.domain.Page<ReconstructionJob> jobPage;
+        if (isStaff) {
+            jobPage = jobRepository.findAllByOrderByCreatedAtDesc(pageable);
+        } else {
+            jobPage = jobRepository.findByScan_User_IdOrderByCreatedAtDesc(currentUserId, pageable);
+        }
+
+        return jobPage.map(ReconstructionJobResponse::fromEntity);
+    }
+
 }
 
 /*

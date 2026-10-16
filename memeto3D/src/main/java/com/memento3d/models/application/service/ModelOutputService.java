@@ -19,4 +19,10 @@ public interface ModelOutputService {
             UUID currentUserId,
             Role currentUserRole
     );
+
+    void deleteModelOutput(
+            UUID modelId,
+            UUID currentUserId,
+            Role currentUserRole
+    );
 }

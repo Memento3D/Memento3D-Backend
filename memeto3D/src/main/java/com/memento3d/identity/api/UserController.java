@@ -71,9 +71,12 @@ public class UserController {
     }
 
     // -------------------------------------------------------------------------
-    // PATCH /api/v1/users/me (Update Self Profile)
+    // PATCH / PUT /api/v1/users/me (Update Self Profile)
     // -------------------------------------------------------------------------
-    @PatchMapping({"/api/v1/users/me", "/api/me"})
+    @RequestMapping(
+            value = {"/api/v1/users/me", "/api/me"},
+            method = {RequestMethod.PATCH, RequestMethod.PUT}
+    )
     @Operation(
             summary = "Update current user profile",
             description = "Allows the authenticated user to update their own display full name and avatar URL. Protected against mass assignment of sensitive fields."
@@ -94,6 +97,28 @@ public class UserController {
         log.info("Received request to update profile for user ID: {}", currentUserId);
         UserResponse response = userService.updateMyProfile(currentUserId, request);
         return ResponseEntity.ok(response);
+    }
+
+    // -------------------------------------------------------------------------
+    // DELETE /api/v1/users/me (Self Delete / Deactivate Account)
+    // -------------------------------------------------------------------------
+    @DeleteMapping({"/api/v1/users/me", "/api/me"})
+    @Operation(
+            summary = "Deactivate current user account",
+            description = "Allows the authenticated user to deactivate or delete their own account."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Account successfully deactivated"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: missing, invalid, or expired JWT",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<Void> deleteCurrentUser(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        UUID currentUserId = getAuthenticatedUserId(userDetails);
+        log.info("Received request to deactivate own account for user ID: {}", currentUserId);
+        userService.deleteUser(currentUserId);
+        return ResponseEntity.noContent().build();
     }
 
     // -------------------------------------------------------------------------

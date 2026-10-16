@@ -38,4 +38,11 @@ public interface ReconstructionJobService {
             UUID currentUserId,
             Role currentUserRole
     );
+
+    org.springframework.data.domain.Page<ReconstructionJobResponse> listJobs(
+            UUID currentUserId,
+            Role currentUserRole,
+            int page,
+            int limit
+    );
 }

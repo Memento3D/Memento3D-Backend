@@ -86,6 +86,32 @@ public class ModelOutputController {
         );
     }
 
+    // -------------------------------------------------------------------------
+    // DELETE /api/v1/models/{modelId}
+    // -------------------------------------------------------------------------
+    @DeleteMapping("/api/v1/models/{modelId}")
+    @Operation(summary = "Delete specific 3D model output artifact by model ID")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Model output successfully deleted"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Model not found or access denied")
+    })
+    public ResponseEntity<Void> deleteModelById(
+            @PathVariable("modelId") UUID modelId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = requireAuthenticatedUser(userDetails);
+        log.info("DELETE model output {} by user {}", modelId, currentUser.getId());
+
+        modelOutputService.deleteModelOutput(
+                modelId,
+                currentUser.getId(),
+                currentUser.getRole()
+        );
+
+        return ResponseEntity.noContent().build();
+    }
+
     private CustomUserDetails requireAuthenticatedUser(CustomUserDetails userDetails) {
         if (userDetails != null && userDetails.getId() != null) {
             return userDetails;
