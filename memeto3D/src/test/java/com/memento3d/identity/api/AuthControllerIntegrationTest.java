@@ -47,10 +47,16 @@ class AuthControllerIntegrationTest {
     @Autowired
     private BlacklistedTokenRepository blacklistedTokenRepository;
 
+    @Autowired(required = false)
+    private com.memento3d.scans.infrastructure.persistence.repository.ScanRepository scanRepository;
+
     @BeforeEach
     void cleanDatabase() {
         blacklistedTokenRepository.deleteAll();
         refreshTokenRepository.deleteAll();
+        if (scanRepository != null) {
+            scanRepository.deleteAll();
+        }
         userRepository.deleteAll();
     }
 

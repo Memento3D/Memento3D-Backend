@@ -59,17 +59,23 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
                         .requestMatchers(HttpMethod.POST,
-                                "/api/auth/register", "/auth/register",
-                                "/api/auth/login", "/auth/login",
-                                "/api/auth/refresh", "/auth/refresh"
+                                "/api/v1/auth/register", "/api/auth/register", "/auth/register",
+                                "/api/v1/auth/login", "/api/auth/login", "/auth/login",
+                                "/api/v1/auth/refresh", "/api/auth/refresh", "/auth/refresh"
                         ).permitAll()
                         .requestMatchers(
                                 "/oauth2/**",
                                 "/login/oauth2/**",
+                                "/api/v1/auth/oauth2/**",
                                 "/api/auth/oauth2/**"
                         ).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/payments/webhooks/**", "/payments/webhooks/**").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/v1/webhooks/payments/**",
+                                "/api/payments/webhooks/**",
+                                "/payments/webhooks/**"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
                         // Swagger & OpenAPI documentation
                         .requestMatchers(
                                 "/v3/api-docs",
@@ -81,8 +87,9 @@ public class SecurityConfig {
                                 "/webjars/**"
                         ).permitAll()
                         // Protected authentication endpoints
-                        .requestMatchers(HttpMethod.GET, "/api/auth/me", "/auth/me", "/api/me", "/users/me", "/api/users/me", "/api/v1/users/me").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/logout", "/auth/logout").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/me", "/api/v1/auth/me", "/api/auth/me", "/auth/me", "/api/me", "/users/me", "/api/users/me").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/users/me", "/api/me", "/api/auth/me").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout", "/api/auth/logout", "/auth/logout").authenticated()
                         // Any other endpoint requires authentication by default
                         .anyRequest().authenticated()
                 )

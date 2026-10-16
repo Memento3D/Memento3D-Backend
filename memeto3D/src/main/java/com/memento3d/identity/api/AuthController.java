@@ -28,7 +28,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/v1/auth", "/api/auth"})
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Authentication", description = "Authentication endpoints: Register, Login, Refresh Token, Logout, and Current User profile")

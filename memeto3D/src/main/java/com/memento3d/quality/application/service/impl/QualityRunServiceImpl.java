@@ -334,4 +334,70 @@ public class QualityRunServiceImpl implements QualityRunService {
                     .build();
         };
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.memento3d.quality.api.response.QualityCheckRunSummaryResponse getQualityRunById(
+            UUID runId, UUID currentUserId, Role currentUserRole) {
+        log.info("Fetching quality check run ID: {} by user: {}", runId, currentUserId);
+        QualityCheckRun run = qualityCheckRunRepository.findById(runId)
+                .orElseThrow(() -> new ResourceNotFoundException("Quality run not found with ID: " + runId));
+
+        Scan scan = run.getScan();
+        if (scan == null || scan.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Quality run not found with ID: " + runId);
+        }
+
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
+            throw new ResourceNotFoundException("Quality run not found with ID: " + runId);
+        }
+
+        return com.memento3d.quality.api.response.QualityCheckRunSummaryResponse.fromEntity(run);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ImageQualityDetailResponse> getQualityRunImages(
+            UUID runId, UUID currentUserId, Role currentUserRole) {
+        log.info("Fetching inspection results for quality run ID: {} by user: {}", runId, currentUserId);
+        QualityCheckRun run = qualityCheckRunRepository.findById(runId)
+                .orElseThrow(() -> new ResourceNotFoundException("Quality run not found with ID: " + runId));
+
+        Scan scan = run.getScan();
+        if (scan == null || scan.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Quality run not found with ID: " + runId);
+        }
+
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
+            throw new ResourceNotFoundException("Quality run not found with ID: " + runId);
+        }
+
+        List<ImageQualityResult> results = imageQualityResultRepository.findByQualityCheckRunId(runId);
+        return results.stream()
+                .filter(res -> res.getScanImage() != null && res.getScanImage().getDeletedAt() == null)
+                .map(res -> getImageQualityDetail(runId, res.getScanImage().getId(), currentUserId, currentUserRole))
+                .toList();
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.memento3d.scans.application.service.ScanService scanService;
+
+    @Override
+    @Transactional
+    public com.memento3d.quality.api.response.QualityOverrideResponse overrideQualityRunDirect(
+            UUID runId, UUID currentUserId, Role currentUserRole) {
+        log.info("Direct override for quality run ID: {} by user: {}", runId, currentUserId);
+        QualityCheckRun run = qualityCheckRunRepository.findById(runId)
+                .orElseThrow(() -> new ResourceNotFoundException("Quality run not found with ID: " + runId));
+
+        Scan scan = run.getScan();
+        if (scan == null || scan.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Quality run not found with ID: " + runId);
+        }
+
+        return scanService.overrideQualityRun(scan.getId(), runId, currentUserId, currentUserRole);
+    }
 }

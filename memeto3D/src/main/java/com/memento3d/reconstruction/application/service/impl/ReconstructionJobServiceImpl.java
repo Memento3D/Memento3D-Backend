@@ -50,6 +50,7 @@ public class ReconstructionJobServiceImpl
     private final ReconstructionJobRepository jobRepository;
     private final ScanAccessGuard scanAccessGuard;
     private final ScanStatusCacheService scanStatusCacheService;
+    private final com.memento3d.models.infrastructure.persistence.repository.ModelOutputRepository modelOutputRepository;
 
     @Value("${app.ai.execution-mode:real}")
     private String configuredExecutionMode;
@@ -185,6 +186,69 @@ public class ReconstructionJobServiceImpl
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Reconstruction job not found for scan: " + scanId
                 ));
+
+        return ReconstructionJobResponse.fromEntity(job);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReconstructionJobResponse getJobById(
+            UUID jobId,
+            UUID currentUserId,
+            Role currentUserRole
+    ) {
+        ReconstructionJob job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Reconstruction job not found with ID: " + jobId));
+
+        findAccessibleScan(job.getScan().getId(), currentUserId, currentUserRole);
+        return ReconstructionJobResponse.fromEntity(job);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.memento3d.models.api.response.ModelOutputResponse> getJobOutputs(
+            UUID jobId,
+            UUID currentUserId,
+            Role currentUserRole
+    ) {
+        ReconstructionJob job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Reconstruction job not found with ID: " + jobId));
+
+        findAccessibleScan(job.getScan().getId(), currentUserId, currentUserRole);
+
+        return modelOutputRepository.findByJob_IdOrderByCreatedAtDesc(jobId).stream()
+                .map(com.memento3d.models.api.response.ModelOutputResponse::fromEntity)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public ReconstructionJobResponse cancelJob(
+            UUID jobId,
+            UUID currentUserId,
+            Role currentUserRole
+    ) {
+        ReconstructionJob job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Reconstruction job not found with ID: " + jobId));
+
+        Scan scan = findAccessibleScan(job.getScan().getId(), currentUserId, currentUserRole);
+
+        if (job.getStatus() == ReconstructionJobStatus.done || job.getStatus() == ReconstructionJobStatus.failed) {
+            throw new ScanConflictException("Cannot cancel a completed or failed reconstruction job");
+        }
+
+        if (job.getStatus() == ReconstructionJobStatus.cancelled) {
+            return ReconstructionJobResponse.fromEntity(job);
+        }
+
+        job.setStatus(ReconstructionJobStatus.cancelled);
+        jobRepository.save(job);
+
+        scan.setStatus(ScanStatus.ready);
+        scanRepository.save(scan);
+
+        updateCacheAfterCommit(scan.getId());
+        log.info("Cancelled reconstruction job {} for scan {}", jobId, scan.getId());
 
         return ReconstructionJobResponse.fromEntity(job);
     }

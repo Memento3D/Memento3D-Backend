@@ -54,4 +54,20 @@ public class ModelOutputServiceImpl implements ModelOutputService {
                 .map(ModelOutputResponse::fromEntity)
                 .toList();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ModelOutputResponse getModelOutputById(
+            UUID modelId,
+            UUID currentUserId,
+            Role currentUserRole
+    ) {
+        com.memento3d.models.domain.model.ModelOutput output = outputRepository.findById(modelId)
+                .orElseThrow(() -> new ResourceNotFoundException("Model output not found with ID: " + modelId));
+
+        Scan scan = output.getJob().getScan();
+        scanAccessGuard.requireAccess(scan, currentUserId, currentUserRole);
+
+        return ModelOutputResponse.fromEntity(output);
+    }
 }

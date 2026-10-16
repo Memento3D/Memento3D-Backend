@@ -389,6 +389,32 @@ public class ScanController {
     }
 
     // -------------------------------------------------------------------------
+    // DELETE /api/v1/scans/{id}/video
+    // -------------------------------------------------------------------------
+
+    @DeleteMapping("/{id}/video")
+    @Operation(
+            summary = "Delete scan video",
+            description = "Deletes the video associated with a scan session. Blocked if scan is in processing status.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Video successfully deleted"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Scan or video not found, or IDOR denied"),
+            @ApiResponse(responseCode = "409", description = "Conflict: scan is in processing status")
+    })
+    public ResponseEntity<Void> deleteScanVideo(
+            @PathVariable("id") UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Delete video for scan ID: {} by user: {} role: {}", id, currentUser.getId(), currentUser.getRole());
+        scanService.deleteScanVideo(id, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.noContent().build();
+    }
+
+    // -------------------------------------------------------------------------
     //  DELETE /api/v1/scans/{id}/images/{image_id}
     // -------------------------------------------------------------------------
 
@@ -421,6 +447,94 @@ public class ScanController {
         scanService.deleteImageFromScan(id, imageId, currentUser.getId(), currentUser.getRole());
         return ResponseEntity.noContent().build();
     }
+
+    // -------------------------------------------------------------------------
+    // GET /api/v1/scans/{id}/images/{imageId}
+    // -------------------------------------------------------------------------
+
+    @GetMapping({"/{id}/images/{imageId}", "/{id}/images/{imageId:[0-9a-fA-F\\-]{36}}"})
+    @Operation(
+            summary = "Get scan image details by ID",
+            description = "Retrieves metadata and storage paths for a specific image in a scan session.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Image details retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = com.memento3d.scans.api.response.ScanImageResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Scan or image not found, or IDOR denied")
+    })
+    public ResponseEntity<com.memento3d.scans.api.response.ScanImageResponse> getScanImage(
+            @PathVariable("id") UUID id,
+            @PathVariable("imageId") UUID imageId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Get image {} from scan {} by user {}", imageId, id, currentUser.getId());
+        com.memento3d.scans.api.response.ScanImageResponse response =
+                scanService.getScanImage(id, imageId, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.ok(response);
+    }
+
+    // -------------------------------------------------------------------------
+    // PATCH /api/v1/scans/{id}/images/{imageId}
+    // -------------------------------------------------------------------------
+
+    @PatchMapping({"/{id}/images/{imageId}", "/{id}/images/{imageId:[0-9a-fA-F\\-]{36}}"})
+    @Operation(
+            summary = "Update scan image metadata",
+            description = "Updates user-editable metadata of an image (sort_order, is_excluded, exclude_reason).",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Image metadata updated successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = com.memento3d.scans.api.response.ScanImageResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation error"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Scan or image not found, or IDOR denied"),
+            @ApiResponse(responseCode = "409", description = "Conflict: scan is in processing status")
+    })
+    public ResponseEntity<com.memento3d.scans.api.response.ScanImageResponse> updateScanImage(
+            @PathVariable("id") UUID id,
+            @PathVariable("imageId") UUID imageId,
+            @Valid @RequestBody com.memento3d.scans.api.request.UpdateScanImageRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Update image {} in scan {} by user {}", imageId, id, currentUser.getId());
+        com.memento3d.scans.api.response.ScanImageResponse response =
+                scanService.updateScanImage(id, imageId, request, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.ok(response);
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/v1/scans/{id}/quality-runs
+    // -------------------------------------------------------------------------
+
+    @PostMapping("/{id}/quality-runs")
+    @Operation(
+            summary = "Trigger quality check run for a scan",
+            description = "Initiates an automated AI quality check analysis on the images in the scan session.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Quality run triggered successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = com.memento3d.quality.api.response.QualityCheckRunSummaryResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Scan not found or access denied"),
+            @ApiResponse(responseCode = "409", description = "Scan is currently processing")
+    })
+    public ResponseEntity<com.memento3d.quality.api.response.QualityCheckRunSummaryResponse> triggerQualityRun(
+            @PathVariable("id") UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Trigger quality run for scan {} by user {}", id, currentUser.getId());
+        com.memento3d.quality.api.response.QualityCheckRunSummaryResponse response =
+                scanService.triggerQualityRun(id, currentUser.getId(), currentUser.getRole());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
     // -------------------------------------------------------------------------
     // GET /api/v1/scans/{id}/quality-runs
     // -------------------------------------------------------------------------

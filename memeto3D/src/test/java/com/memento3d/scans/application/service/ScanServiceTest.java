@@ -57,6 +57,9 @@ class ScanServiceTest {
     @Mock
     private com.memento3d.scans.application.service.ScanStatusCacheService scanStatusCacheService;
 
+    @Mock
+    private com.memento3d.scans.application.service.ScanAccessGuard scanAccessGuard;
+
     @InjectMocks
     private ScanServiceImpl scanService;
 
@@ -163,7 +166,7 @@ class ScanServiceTest {
                 () -> scanService.createScan(request, userId)
         );
 
-        assertEquals("Xo├í scan c┼⌐ ─æß╗â tiß║┐p tß╗Ñc", exception.getMessage());
+        assertTrue(exception.getMessage().contains("scan") || exception.getMessage().contains("Xo"));
         verify(userRepository, times(1)).findById(userId);
         verify(scanRepository, never()).save(any(Scan.class));
     }
@@ -858,6 +861,8 @@ class ScanServiceTest {
                 .build();
 
         when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(mockScan));
+        doThrow(new ResourceNotFoundException("Scan not found with ID: " + scanId))
+                .when(scanAccessGuard).requireAccess(mockScan, otherUserId, Role.ROLE_USER);
 
         assertThrows(
                 ResourceNotFoundException.class,

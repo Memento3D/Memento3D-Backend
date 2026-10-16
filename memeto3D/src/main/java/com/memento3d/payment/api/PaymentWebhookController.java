@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/payments/webhooks")
+@RequestMapping({"/api/v1/webhooks/payments", "/api/payments/webhooks"})
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Payment Webhooks", description = "Public webhook receiver endpoints for payment gateway callbacks (MoMo, ZaloPay)")

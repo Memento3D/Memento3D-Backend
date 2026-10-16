@@ -12,4 +12,5 @@ import java.util.UUID;
 public interface OrderRepository extends JpaRepository<Order, UUID> {
     List<Order> findByUserIdOrderByCreatedAtDesc(UUID userId);
     Optional<Order> findByIdAndUserId(UUID id, UUID userId);
+    org.springframework.data.domain.Page<Order> findByUserId(UUID userId, org.springframework.data.domain.Pageable pageable);
 }

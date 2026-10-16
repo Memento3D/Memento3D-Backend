@@ -52,31 +52,35 @@ public class UploadController {
     /** Handles upload session status queries (resume support). */
     private final UploadService uploadService;
 
-    // -------------------------------------------------------------------------
-    // POST /api/v1/uploads/{id}/chunks/{index}
-    // -------------------------------------------------------------------------
-
-    @PostMapping(value = "/{id}/chunks/{index}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequestMapping(
+            value = {"/{uploadId}/chunks/{chunkIndex}", "/{uploadId:[0-9a-fA-F\\-]{36}}/chunks/{chunkIndex}", "/{id}/chunks/{index}"},
+            method = {RequestMethod.POST, RequestMethod.PUT},
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
     @Operation(
-        summary = "Upload a file chunk",
+        summary = "Upload a file chunk (POST or PUT)",
         description = "Uploads a specific chunk of a file. Supports retry on duplicate chunks. " +
                       "Merges chunks when the last one is received."
     )
     public ResponseEntity<?> uploadChunk(
-            @PathVariable("id") UUID id,
-            @PathVariable("index") int index,
+            @PathVariable(value = "uploadId", required = false) UUID uploadId,
+            @PathVariable(value = "id", required = false) UUID id,
+            @PathVariable(value = "chunkIndex", required = false) Integer chunkIndex,
+            @PathVariable(value = "index", required = false) Integer index,
             @RequestParam("file") MultipartFile file
     ) {
-        log.info("Received chunk {} for upload session {}", index, id);
-        uploadChunkService.uploadChunk(id, index, file);
+        UUID effectiveId = uploadId != null ? uploadId : id;
+        int effectiveIndex = chunkIndex != null ? chunkIndex : (index != null ? index : 0);
+        log.info("Received chunk {} for upload session {}", effectiveIndex, effectiveId);
+        uploadChunkService.uploadChunk(effectiveId, effectiveIndex, file);
         return ResponseEntity.ok().build();
     }
 
     // -------------------------------------------------------------------------
-    // GET /api/v1/uploads/{id}/status
+    // GET /api/v1/uploads/{id}/status and GET /api/v1/uploads/{uploadId}
     // -------------------------------------------------------------------------
 
-    @GetMapping("/{id}/status")
+    @GetMapping({"/{id}/status", "/{id}", "/{uploadId:[0-9a-fA-F\\-]{36}}"})
     @Operation(
         summary = "Get chunked upload session status",
         description = """

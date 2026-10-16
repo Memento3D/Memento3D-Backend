@@ -1,18 +1,16 @@
 package com.memento3d.models.api;
 
-import com.memento3d.identity.domain.model.User;
-import com.memento3d.scans.domain.model.Scan;
-
-import com.memento3d.models.api.request.CreateModelRatingRequest;
-import com.memento3d.shared.api.response.ErrorResponse;
-import com.memento3d.models.api.response.ModelRatingResponse;
 import com.memento3d.identity.infrastructure.security.CustomUserDetails;
+import com.memento3d.models.api.request.CreateModelRatingRequest;
+import com.memento3d.models.api.response.ModelRatingResponse;
 import com.memento3d.models.application.service.ModelRatingService;
+import com.memento3d.shared.api.response.ErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +22,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -36,7 +35,15 @@ public class ModelRatingController {
 
     private final ModelRatingService modelRatingService;
 
-    @PostMapping({"/{scan_id}/ratings", "/{scan_id}/rating"})
+    // -------------------------------------------------------------------------
+    // POST /api/v1/scans/{scanId}/ratings (Create or Update Rating)
+    // -------------------------------------------------------------------------
+    @PostMapping({
+            "/{scanId}/ratings",
+            "/{scanId}/rating",
+            "/{scanId:[0-9a-fA-F\\-]{36}}/ratings",
+            "/{scanId:[0-9a-fA-F\\-]{36}}/rating"
+    })
     @Operation(
             summary = "Create or update model 3D quality rating",
             description = "Submits a rating (1 to 5 stars) and optional comment for a scan model. " +
@@ -52,7 +59,7 @@ public class ModelRatingController {
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ModelRatingResponse> createOrUpdateRating(
-            @PathVariable("scan_id") UUID scanId,
+            @PathVariable("scanId") UUID scanId,
             @Valid @RequestBody CreateModelRatingRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
@@ -61,6 +68,64 @@ public class ModelRatingController {
 
         ModelRatingResponse response = modelRatingService.createOrUpdateRating(scanId, request, userId);
         return ResponseEntity.ok(response);
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/v1/scans/{scanId}/ratings (List Ratings)
+    // -------------------------------------------------------------------------
+    @GetMapping({
+            "/{scanId}/ratings",
+            "/{scanId}/rating",
+            "/{scanId:[0-9a-fA-F\\-]{36}}/ratings"
+    })
+    @Operation(
+            summary = "Get ratings for a scan model",
+            description = "Retrieves all user feedback and ratings submitted for the 3D model produced from this scan."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Ratings retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ModelRatingResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Scan session not found",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<List<ModelRatingResponse>> getScanRatings(
+            @PathVariable("scanId") UUID scanId
+    ) {
+        log.info("Received request to get ratings for scan ID: {}", scanId);
+        List<ModelRatingResponse> response = modelRatingService.getScanRatings(scanId);
+        return ResponseEntity.ok(response);
+    }
+
+    // -------------------------------------------------------------------------
+    // DELETE /api/v1/scans/{scanId}/rating (Delete My Rating)
+    // -------------------------------------------------------------------------
+    @DeleteMapping({
+            "/{scanId}/rating",
+            "/{scanId}/ratings",
+            "/{scanId:[0-9a-fA-F\\-]{36}}/rating"
+    })
+    @Operation(
+            summary = "Delete user rating for a scan model",
+            description = "Removes the authenticated user's rating for the specified scan model.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Rating successfully deleted"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Scan session not found",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<Void> deleteMyRating(
+            @PathVariable("scanId") UUID scanId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        UUID userId = getOptionalUserId(userDetails);
+        if (userId == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Must be authenticated to delete rating");
+        }
+        log.info("Received request to delete rating for scan ID: {}, user ID: {}", scanId, userId);
+        modelRatingService.deleteMyRating(scanId, userId);
+        return ResponseEntity.noContent().build();
     }
 
     private UUID getOptionalUserId(CustomUserDetails userDetails) {

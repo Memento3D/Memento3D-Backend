@@ -65,6 +65,32 @@ public class ModelRatingServiceImpl implements ModelRatingService {
         return mapToResponse(savedRating);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<ModelRatingResponse> getScanRatings(UUID scanId) {
+        log.info("Fetching ratings for scan ID: {}", scanId);
+        scanRepository.findById(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan session not found with ID: " + scanId));
+
+        return modelRatingRepository.findByScanIdOrderByCreatedAtDesc(scanId).stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void deleteMyRating(UUID scanId, UUID userId) {
+        log.info("Deleting rating for scan ID: {}, userId: {}", scanId, userId);
+        scanRepository.findById(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("Scan session not found with ID: " + scanId));
+
+        if (userId == null) {
+            throw new IllegalArgumentException("User ID is required to delete rating");
+        }
+
+        modelRatingRepository.deleteByScanIdAndUserId(scanId, userId);
+    }
+
     private ModelRatingResponse mapToResponse(ModelRating rating) {
         return ModelRatingResponse.builder()
                 .id(rating.getId())

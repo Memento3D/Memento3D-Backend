@@ -13,4 +13,8 @@ public interface ModelRatingRepository extends JpaRepository<ModelRating, UUID> 
     Optional<ModelRating> findByScanIdAndUserId(UUID scanId, UUID userId);
 
     Optional<ModelRating> findByScanIdAndUserIdIsNull(UUID scanId);
+
+    java.util.List<ModelRating> findByScanIdOrderByCreatedAtDesc(UUID scanId);
+
+    void deleteByScanIdAndUserId(UUID scanId, UUID userId);
 }

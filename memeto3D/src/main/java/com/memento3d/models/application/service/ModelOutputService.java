@@ -13,4 +13,10 @@ public interface ModelOutputService {
             UUID currentUserId,
             Role currentUserRole
     );
+
+    ModelOutputResponse getModelOutputById(
+            UUID modelId,
+            UUID currentUserId,
+            Role currentUserRole
+    );
 }

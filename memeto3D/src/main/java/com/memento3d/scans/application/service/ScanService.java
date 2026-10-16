@@ -85,4 +85,24 @@ public interface ScanService {
      * green -> 400, red -> 403, amber -> OK (idempotent).
      */
     com.memento3d.quality.api.response.QualityOverrideResponse overrideQualityRun(UUID scanId, UUID runId, UUID currentUserId, Role currentUserRole);
+
+    /**
+     * Retrieves detail of a single scan image.
+     */
+    com.memento3d.scans.api.response.ScanImageResponse getScanImage(UUID scanId, UUID imageId, UUID currentUserId, Role currentUserRole);
+
+    /**
+     * Updates editable metadata of a scan image (sortOrder, isExcluded, excludeReason).
+     */
+    com.memento3d.scans.api.response.ScanImageResponse updateScanImage(UUID scanId, UUID imageId, com.memento3d.scans.api.request.UpdateScanImageRequest request, UUID currentUserId, Role currentUserRole);
+
+    /**
+     * Deletes the video of a scan session.
+     */
+    void deleteScanVideo(UUID scanId, UUID currentUserId, Role currentUserRole);
+
+    /**
+     * Triggers a new quality check run for a scan.
+     */
+    com.memento3d.quality.api.response.QualityCheckRunSummaryResponse triggerQualityRun(UUID scanId, UUID currentUserId, Role currentUserRole);
 }

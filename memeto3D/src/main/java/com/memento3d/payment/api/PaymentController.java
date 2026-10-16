@@ -28,13 +28,37 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/payments")
+@RequestMapping({"/api/v1/payments", "/api/payments"})
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Payment", description = "Online payment processing for 3D orders (MoMo, ZaloPay)")
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final com.memento3d.payment.infrastructure.persistence.repository.PaymentTransactionRepository paymentTransactionRepository;
+
+    @GetMapping
+    @Operation(
+            summary = "List payment transactions",
+            description = "Retrieves payment transactions for the authenticated user (or all transactions if Admin/Operator)",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    public ResponseEntity<java.util.List<PaymentStatusResponse>> listPayments(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails cud = getAuthenticatedUserDetails(userDetails);
+        boolean isStaff = cud.getRole() == Role.ROLE_ADMIN || cud.getRole() == Role.ROLE_OPERATOR;
+        
+        java.util.List<com.memento3d.payment.domain.model.PaymentTransaction> txs;
+        if (isStaff) {
+            txs = paymentTransactionRepository.findAll(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        } else {
+            txs = paymentTransactionRepository.findByUserIdOrderByCreatedAtDesc(cud.getId());
+        }
+
+        java.util.List<PaymentStatusResponse> list = txs.stream().map(PaymentStatusResponse::fromEntity).toList();
+        return ResponseEntity.ok(list);
+    }
 
     @PostMapping
     @Operation(

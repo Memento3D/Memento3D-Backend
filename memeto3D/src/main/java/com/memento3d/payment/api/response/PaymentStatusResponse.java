@@ -55,4 +55,23 @@ public class PaymentStatusResponse {
 
     @Schema(description = "Last update timestamp")
     private Instant updatedAt;
+
+    public static PaymentStatusResponse fromEntity(com.memento3d.payment.domain.model.PaymentTransaction tx) {
+        if (tx == null) return null;
+        return PaymentStatusResponse.builder()
+                .paymentId(tx.getId())
+                .orderId(tx.getOrderId())
+                .paymentMethod(tx.getPaymentMethod())
+                .status(tx.getStatus())
+                .amount(tx.getAmount())
+                .currency(tx.getCurrency())
+                .merchantTransactionId(tx.getMerchantTransactionId())
+                .providerTransactionId(tx.getProviderTransactionId())
+                .failureCode(tx.getFailureCode())
+                .failureMessage(tx.getFailureMessage())
+                .paidAt(tx.getPaidAt())
+                .createdAt(tx.getCreatedAt())
+                .updatedAt(tx.getUpdatedAt())
+                .build();
+    }
 }

@@ -20,4 +20,22 @@ public interface ReconstructionJobService {
             UUID currentUserId,
             Role currentUserRole
     );
+
+    ReconstructionJobResponse getJobById(
+            UUID jobId,
+            UUID currentUserId,
+            Role currentUserRole
+    );
+
+    java.util.List<com.memento3d.models.api.response.ModelOutputResponse> getJobOutputs(
+            UUID jobId,
+            UUID currentUserId,
+            Role currentUserRole
+    );
+
+    ReconstructionJobResponse cancelJob(
+            UUID jobId,
+            UUID currentUserId,
+            Role currentUserRole
+    );
 }

@@ -21,12 +21,32 @@ Hệ thống quản lý toàn bộ quy trình từ xác thực người dùng, l
 
 ## ⚡ Các Chức Năng Chính (Core Features)
 
-1. **🔐 Xác thực & Phân quyền (Auth & Security)**: Đăng ký, Đăng nhập JWT, Phân quyền Role, Thu hồi JWT Token khi Đăng xuất (Database Token Blacklisting).
-2. **📷 Quản lý Phiên Quét 3D (3D Scan Management)**: Khởi tạo & quản lý phiên quét 3D hỗ trợ 3 chế độ (`IMAGES`, `VIDEO`, `DUAL`).
-3. **🚀 Resumable Chunked Upload**: Hỗ trợ cắt file video/ảnh dung lượng lớn thành từng chunk để tải lên, có cơ chế Resume khi đứt kết nối mạng và tự động Merge file.
-4. **🔍 Kiểm tra Chất lượng Ảnh Scan (Quality Inspection)**: Phân tích tự động độ mờ/sắc nét (sharpness), độ sáng (brightness), ảnh trùng lặp (duplicates), điểm đặc trưng (feature points), nhiễu (SNR noise) và cho phép người dùng ghi đè (override).
-5. **🛠️ 3D Reconstruction Pipeline Ready**: Tích hợp các bảng theo dõi Job dựng 3D, stage log, chỉ số chất lượng mô hình và quản lý file đầu ra (`.glb`, `.obj`, `.ply`, `.splat`).
-6. **🛒 Dịch vụ Thương mại & Vận hành**: Hỗ trợ Thanh toán, Đơn hàng in 3D, Đánh giá mô hình 3D, Thống kê và Outbox Event Driven Architecture.
+1. **🔐 Xác thực & Quản lý Người Dùng (Auth & Users)**: Đăng ký, Đăng nhập JWT, Persistent Database Refresh Token Rotation, Google OAuth2/OIDC, Thu hồi Token qua Redis Blacklist, Profile cá nhân (`/api/v1/users/me`), Quản trị phân quyền Admin (`/api/v1/users`).
+2. **📷 Quản lý Phiên Quét 3D (3D Scan Management)**: Khởi tạo & quản lý phiên quét 3D hỗ trợ 3 chế độ (`image`, `video`, `dual`), quản lý metadata ảnh scan, loại bỏ ảnh khỏi AI, xóa mềm video hoàn trả dung lượng lưu trữ (Storage Quota).
+3. **🚀 Resumable Chunked Upload**: Hỗ trợ cắt file video/ảnh dung lượng lớn thành từng chunk để tải lên (`/api/v1/uploads/**`), có cơ chế Resume khi đứt kết nối mạng và xác thực tính toàn vẹn SHA-256.
+4. **🔍 Kiểm tra Chất lượng Ảnh Scan (Quality Inspection)**: Phân tích tự động độ mờ/sắc nét (sharpness), độ sáng (brightness), ảnh trùng lặp (duplicates), điểm đặc trưng (feature points), nhiễu (SNR noise) và ghi đè kết quả (`/api/v1/quality-runs/**`).
+5. **🛠️ 3D Reconstruction Pipeline**: Quản lý hàng đợi xử lý SfM/MVS, theo dõi tiến trình dựng 3D, hủy bỏ tác vụ đang chạy (`/api/v1/reconstruction-jobs/**`), và quản lý file đầu ra 3D (`.glb`, `.obj`, `.ply`).
+6. **🛒 Đơn Hàng In 3D & Thanh Toán Trực Tuyến**: Đặt in mô hình 3D (`/api/v1/orders/**`), quản lý trạng thái in, tích hợp cổng thanh toán MoMo và ZaloPay với đối soát tự động và Webhook IPN (`/api/v1/webhooks/payments/**`).
+7. **⭐ Đánh Giá Mô Hình (Model Rating)**: Đánh giá chất lượng mô hình 3D (1 - 5 sao, nhận xét) theo phiên quét (`/api/v1/scans/{scanId}/ratings`).
+
+---
+
+## 🌐 Chuẩn Hóa RESTful API (`/api/v1`)
+
+Toàn bộ hệ thống Backend đã được chuẩn hóa về tiền tố `/api/v1` theo tiêu chuẩn RESTful API:
+- **Authentication**: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/oauth2/google/url`.
+- **Users**: `GET /api/v1/users/me`, `PATCH /api/v1/users/me`, `GET /api/v1/users`, `POST /api/v1/users`, `GET /api/v1/users/{userId}`, `PATCH /api/v1/users/{userId}`, `DELETE /api/v1/users/{userId}`.
+- **Scans**: `POST /api/v1/scans`, `GET /api/v1/scans`, `GET /api/v1/scans/{scanId}`, `PATCH /api/v1/scans/{scanId}`, `DELETE /api/v1/scans/{scanId}`.
+- **Scan Images**: `POST .../images`, `GET .../images`, `GET .../images/{imageId}`, `PATCH .../images/{imageId}`, `DELETE .../images/{imageId}`.
+- **Scan Video**: `POST .../video`, `GET .../video`, `DELETE .../video`.
+- **Quality Runs**: `GET .../quality-runs`, `POST .../quality-runs`, `GET /api/v1/quality-runs/{runId}`, `GET .../images`, `POST .../overrides`.
+- **Reconstruction Jobs**: `POST .../reconstruction-jobs`, `GET .../reconstruction-jobs`, `GET /api/v1/reconstruction-jobs/{jobId}`, `GET .../outputs`, `POST .../cancellations`.
+- **3D Models & Ratings**: `GET /api/v1/models/{modelId}`, `GET .../ratings`, `GET .../rating`, `POST .../ratings`, `PUT .../rating`, `DELETE .../rating`.
+- **Chunked Uploads**: `POST /api/v1/uploads`, `GET /api/v1/uploads/{uploadId}`, `PUT .../chunks/{chunkIndex}`, `DELETE /api/v1/uploads/{uploadId}`.
+- **Orders**: `POST /api/v1/orders`, `GET /api/v1/orders`, `GET /api/v1/orders/{orderId}`, `PATCH /api/v1/orders/{orderId}`, `DELETE /api/v1/orders/{orderId}`.
+- **Payments & Webhooks**: `POST /api/v1/payments`, `GET /api/v1/payments`, `GET /api/v1/payments/{paymentId}`, `POST /api/v1/webhooks/payments/momo`, `POST /api/v1/webhooks/payments/zalopay`.
+
+*(Các endpoint cũ `/api/...` được duy trì song song dưới dạng URL alias nhằm tương thích ngược tuyệt đối với Flutter Mobile Client và Payment Webhook callbacks).*
 
 ---
 

@@ -19,4 +19,8 @@ public interface ModelOutputRepository
     List<ModelOutput> findByJob_Scan_IdOrderByCreatedAtDesc(
             UUID scanId
     );
+
+    List<ModelOutput> findByJob_IdOrderByCreatedAtDesc(
+            UUID jobId
+    );
 }

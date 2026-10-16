@@ -20,4 +20,10 @@ public interface QualityRunService {
      * @return Full technical quality result details for image zooming, histogram rendering, and failure remediation.
      */
     ImageQualityDetailResponse getImageQualityDetail(UUID runId, UUID imageId, UUID currentUserId, Role currentUserRole);
+
+    com.memento3d.quality.api.response.QualityCheckRunSummaryResponse getQualityRunById(UUID runId, UUID currentUserId, Role currentUserRole);
+
+    java.util.List<ImageQualityDetailResponse> getQualityRunImages(UUID runId, UUID currentUserId, Role currentUserRole);
+
+    com.memento3d.quality.api.response.QualityOverrideResponse overrideQualityRunDirect(UUID runId, UUID currentUserId, Role currentUserRole);
 }
