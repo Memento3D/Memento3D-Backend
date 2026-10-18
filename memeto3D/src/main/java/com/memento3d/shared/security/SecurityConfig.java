@@ -46,7 +46,7 @@ public class SecurityConfig {
     private final OAuth2AuthenticationFailureHandler oauth2AuthenticationFailureHandler;
     private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
 
-    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080,http://localhost:5173}")
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176}")
     private String allowedOrigins;
 
     @Bean
@@ -75,6 +75,8 @@ public class SecurityConfig {
                                 "/payments/webhooks/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
+                        // Local Printer Agent gateway (authenticated by X-Agent-Token inside the service)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/agent/heartbeat").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
                         // Swagger & OpenAPI documentation
                         .requestMatchers(
@@ -142,6 +144,7 @@ public class SecurityConfig {
                 .toList();
 
         configuration.setAllowedOrigins(origins);
+        configuration.setAllowedOriginPatterns(List.of("http://localhost:[*]", "http://127.0.0.1:[*]"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Requested-With", "Origin"));
         configuration.setExposedHeaders(List.of("Authorization"));

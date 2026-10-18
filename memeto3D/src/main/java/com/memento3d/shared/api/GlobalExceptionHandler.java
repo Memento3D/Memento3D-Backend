@@ -39,6 +39,32 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(com.memento3d.shared.exception.BusinessException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessException(com.memento3d.shared.exception.BusinessException ex, HttpServletRequest request) {
+        log.warn("Business error {} on path {}: {}", ex.getErrorCode(), request.getRequestURI(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(ex.getStatus().value())
+                .error(ex.getErrorCode())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(ex.getStatus()).body(errorResponse);
+    }
+
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(org.springframework.orm.ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
+        log.warn("Optimistic locking conflict on path {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.CONFLICT.value())
+                .error("CONCURRENT_MODIFICATION")
+                .message("The resource was modified by another request. Please retry.")
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+    }
+
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handleEmailAlreadyExists(EmailAlreadyExistsException ex, HttpServletRequest request) {
         log.warn("Email already exists conflict: {}", ex.getMessage());
