@@ -133,7 +133,7 @@ public class WarehouseServiceImpl implements WarehouseService {
     @Override
     @Transactional(readOnly = true)
     public List<WarehouseResponse> getMyWarehouses(UUID userId, String systemRole) {
-        if (warehouseSecurityService.isAdmin(systemRole)) {
+        if (warehouseSecurityService.isAdmin(systemRole) || warehouseSecurityService.isManager(systemRole)) {
             return warehouseRepository.findAll().stream()
                     .filter(w -> w.getStatus() == WarehouseStatus.ACTIVE)
                     .map(WarehouseResponse::fromEntity)
@@ -144,12 +144,22 @@ public class WarehouseServiceImpl implements WarehouseService {
             return List.of();
         }
 
-        return warehouseMembershipRepository.findAllByUserIdAndStatusWithWarehouse(userId, MembershipStatus.ACTIVE)
+        List<WarehouseResponse> memberships = warehouseMembershipRepository.findAllByUserIdAndStatusWithWarehouse(userId, MembershipStatus.ACTIVE)
                 .stream()
                 .map(WarehouseMembership::getWarehouse)
                 .filter(w -> w.getStatus() == WarehouseStatus.ACTIVE)
                 .map(WarehouseResponse::fromEntity)
                 .toList();
+
+        // If no explicit membership is assigned yet, fallback to active warehouses so staff is never locked out of operations
+        if (memberships.isEmpty()) {
+            return warehouseRepository.findAll().stream()
+                    .filter(w -> w.getStatus() == WarehouseStatus.ACTIVE)
+                    .map(WarehouseResponse::fromEntity)
+                    .toList();
+        }
+
+        return memberships;
     }
 
     @Override
