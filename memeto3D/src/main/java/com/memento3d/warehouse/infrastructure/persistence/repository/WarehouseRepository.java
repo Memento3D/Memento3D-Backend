@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,6 +21,12 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
     boolean existsByCodeIgnoreCase(String code);
 
     boolean existsByCodeIgnoreCaseAndIdNot(String code, UUID id);
+
+    List<Warehouse> findByManagerId(UUID managerId);
+
+    List<Warehouse> findByStatus(WarehouseStatus status);
+
+    long countByStatus(WarehouseStatus status);
 
     @Query("SELECT w FROM Warehouse w WHERE " +
             "(:status IS NULL OR w.status = :status) AND " +

@@ -30,6 +30,16 @@ public class CreateMaterialRequest {
     @Schema(description = "Display name", example = "eSun PLA+ Cold White")
     private String name;
 
+    @Schema(description = "Category (e.g. Standard, Engineering, Support, Packaging)", example = "Standard")
+    private String category;
+
+    @Schema(description = "Measurement unit", example = "g")
+    @Builder.Default
+    private String unit = "g";
+
+    @Schema(description = "Manufacturer brand", example = "eSun")
+    private String brand;
+
     @NotNull(message = "Material type is required")
     @Schema(description = "Type of filament or resin", example = "PLA")
     private MaterialType materialType;
@@ -67,6 +77,11 @@ public class CreateMaterialRequest {
     @DecimalMin(value = "0.0", message = "Unit cost must be non-negative")
     @Schema(description = "Standard cost per gram in VND", example = "250.00")
     private BigDecimal unitCost;
+
+    @DecimalMin(value = "0.0", message = "Minimum stock threshold must be non-negative")
+    @Schema(description = "Minimum stock threshold before alert", example = "500.00")
+    @Builder.Default
+    private BigDecimal minimumStock = new BigDecimal("500.00");
 
     @Schema(description = "Optional notes or technical description")
     private String description;

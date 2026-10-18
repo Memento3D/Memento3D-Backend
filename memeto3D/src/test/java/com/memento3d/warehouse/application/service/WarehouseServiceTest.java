@@ -55,6 +55,9 @@ class WarehouseServiceTest {
     @Mock
     private WarehouseSecurityService warehouseSecurityService;
 
+    @Mock
+    private com.memento3d.shared.application.service.AuditLogService auditLogService;
+
     @InjectMocks
     private WarehouseServiceImpl warehouseService;
 

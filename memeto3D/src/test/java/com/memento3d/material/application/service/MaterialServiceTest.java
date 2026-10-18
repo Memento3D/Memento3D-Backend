@@ -8,6 +8,7 @@ import com.memento3d.material.domain.model.Material;
 import com.memento3d.material.domain.model.MaterialStatus;
 import com.memento3d.material.domain.model.MaterialType;
 import com.memento3d.material.infrastructure.persistence.repository.MaterialRepository;
+import com.memento3d.shared.application.service.AuditLogService;
 import com.memento3d.shared.exception.BusinessException;
 import com.memento3d.shared.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,9 @@ class MaterialServiceTest {
 
     @Mock
     private MaterialRepository materialRepository;
+
+    @Mock
+    private AuditLogService auditLogService;
 
     @InjectMocks
     private MaterialServiceImpl materialService;

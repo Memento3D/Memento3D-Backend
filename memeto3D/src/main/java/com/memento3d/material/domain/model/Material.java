@@ -14,7 +14,9 @@ import java.util.UUID;
         name = "materials",
         indexes = {
                 @Index(name = "idx_materials_status", columnList = "status"),
-                @Index(name = "idx_materials_type", columnList = "material_type")
+                @Index(name = "idx_materials_type", columnList = "material_type"),
+                @Index(name = "idx_materials_category", columnList = "category"),
+                @Index(name = "idx_materials_brand", columnList = "brand")
         }
 )
 @Getter
@@ -34,6 +36,16 @@ public class Material {
 
     @Column(name = "name", nullable = false, length = 200)
     private String name;
+
+    @Column(name = "category", length = 100)
+    private String category;
+
+    @Column(name = "unit", nullable = false, length = 50)
+    @Builder.Default
+    private String unit = "g";
+
+    @Column(name = "brand", length = 100)
+    private String brand;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "material_type", nullable = false, length = 50)
@@ -68,6 +80,10 @@ public class Material {
     @Builder.Default
     private BigDecimal unitCost = BigDecimal.ZERO;
 
+    @Column(name = "minimum_stock", nullable = false, precision = 14, scale = 2)
+    @Builder.Default
+    private BigDecimal minimumStock = new BigDecimal("500.00");
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
@@ -78,6 +94,9 @@ public class Material {
 
     @Column(name = "created_by")
     private UUID createdBy;
+
+    @Column(name = "updated_by")
+    private UUID updatedBy;
 
     @Version
     @Column(name = "version", nullable = false)

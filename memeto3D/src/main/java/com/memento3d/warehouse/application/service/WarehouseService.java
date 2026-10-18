@@ -20,7 +20,9 @@ public interface WarehouseService {
 
     Page<WarehouseResponse> listWarehouses(WarehouseStatus status, String search, Pageable pageable);
 
-    WarehouseResponse updateWarehouse(UUID id, UpdateWarehouseRequest request);
+    WarehouseResponse updateWarehouse(UUID id, UpdateWarehouseRequest request, UUID actorId);
+
+    WarehouseResponse updateWarehouseStatus(UUID id, WarehouseStatus status, UUID actorId);
 
     WarehouseResponse deactivateWarehouse(UUID id);
 

@@ -72,8 +72,18 @@ public class InventoryTransaction {
     @Column(name = "idempotency_key", length = 100)
     private String idempotencyKey;
 
+    @Column(name = "reason", columnDefinition = "TEXT")
+    private String reason;
+
+    @Column(name = "unit_cost", precision = 14, scale = 2)
+    @Builder.Default
+    private BigDecimal unitCost = BigDecimal.ZERO;
+
     @Column(name = "performed_by")
     private UUID performedBy;
+
+    @Column(name = "approved_by")
+    private UUID approvedBy;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

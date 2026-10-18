@@ -8,6 +8,7 @@ import com.memento3d.material.domain.model.Material;
 import com.memento3d.material.domain.model.MaterialStatus;
 import com.memento3d.material.domain.model.MaterialType;
 import com.memento3d.material.infrastructure.persistence.repository.MaterialRepository;
+import com.memento3d.shared.application.service.AuditLogService;
 import com.memento3d.shared.exception.BusinessException;
 import com.memento3d.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
@@ -26,6 +28,7 @@ import java.util.UUID;
 public class MaterialServiceImpl implements MaterialService {
 
     private final MaterialRepository materialRepository;
+    private final AuditLogService auditLogService;
 
     @Override
     @Transactional
@@ -38,6 +41,9 @@ public class MaterialServiceImpl implements MaterialService {
         Material material = Material.builder()
                 .sku(cleanSku)
                 .name(request.getName().trim())
+                .category(request.getCategory() != null ? request.getCategory().trim() : "Standard")
+                .unit(request.getUnit() != null ? request.getUnit().trim() : "g")
+                .brand(request.getBrand() != null ? request.getBrand().trim() : null)
                 .materialType(request.getMaterialType())
                 .color(request.getColor().trim())
                 .colorHex(request.getColorHex())
@@ -48,13 +54,18 @@ public class MaterialServiceImpl implements MaterialService {
                 .bedTempMin(request.getBedTempMin())
                 .bedTempMax(request.getBedTempMax())
                 .unitCost(request.getUnitCost())
+                .minimumStock(request.getMinimumStock() != null ? request.getMinimumStock() : new BigDecimal("500.00"))
                 .status(MaterialStatus.ACTIVE)
                 .description(request.getDescription())
                 .createdBy(actorId)
+                .updatedBy(actorId)
                 .build();
 
         Material saved = materialRepository.save(material);
         log.info("Created material ID={}, SKU={}", saved.getId(), saved.getSku());
+
+        auditLogService.log(actorId, "CREATE_MATERIAL", "Material", saved.getId().toString(), null, "Created SKU: " + cleanSku);
+
         return MaterialResponse.fromEntity(saved);
     }
 
@@ -68,31 +79,33 @@ public class MaterialServiceImpl implements MaterialService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<MaterialResponse> listMaterials(MaterialStatus status, MaterialType materialType, String search, Pageable pageable) {
+    public Page<MaterialResponse> listMaterials(MaterialStatus status, MaterialType materialType, String category, String search, Pageable pageable) {
         String cleanSearch = (search != null && !search.isBlank()) ? search.trim() : null;
-        if (status == null && materialType == null && cleanSearch == null) {
+        String cleanCategory = (category != null && !category.isBlank()) ? category.trim() : null;
+        if (status == null && materialType == null && cleanCategory == null && cleanSearch == null) {
             return materialRepository.findAll(pageable).map(MaterialResponse::fromEntity);
         }
-        return materialRepository.findAllWithFilters(status, materialType, cleanSearch, pageable)
+        return materialRepository.findAllWithFilters(status, materialType, cleanCategory, cleanSearch, pageable)
                 .map(MaterialResponse::fromEntity);
     }
 
     @Override
     @Transactional
-    public MaterialResponse updateMaterial(UUID id, UpdateMaterialRequest request) {
+    public MaterialResponse updateMaterial(UUID id, UpdateMaterialRequest request, UUID actorId) {
         Material material = materialRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Material not found with id: " + id));
 
-        if (request.getSku() != null && !request.getSku().isBlank()) {
-            String newSku = request.getSku().trim();
-            if (materialRepository.existsBySkuIgnoreCaseAndIdNot(newSku, id)) {
-                throw new BusinessException(HttpStatus.CONFLICT, "DUPLICATE_SKU", "Material with SKU '" + newSku + "' already exists");
-            }
-            material.setSku(newSku);
-        }
-
         if (request.getName() != null && !request.getName().isBlank()) {
             material.setName(request.getName().trim());
+        }
+        if (request.getCategory() != null) {
+            material.setCategory(request.getCategory().trim());
+        }
+        if (request.getUnit() != null) {
+            material.setUnit(request.getUnit().trim());
+        }
+        if (request.getBrand() != null) {
+            material.setBrand(request.getBrand().trim());
         }
         if (request.getMaterialType() != null) {
             material.setMaterialType(request.getMaterialType());
@@ -124,26 +137,40 @@ public class MaterialServiceImpl implements MaterialService {
         if (request.getUnitCost() != null) {
             material.setUnitCost(request.getUnitCost());
         }
-        if (request.getStatus() != null) {
-            material.setStatus(request.getStatus());
+        if (request.getMinimumStock() != null) {
+            material.setMinimumStock(request.getMinimumStock());
         }
         if (request.getDescription() != null) {
             material.setDescription(request.getDescription());
         }
+        material.setUpdatedBy(actorId);
 
         Material saved = materialRepository.save(material);
         log.info("Updated material ID={}", saved.getId());
+
+        auditLogService.log(actorId, "UPDATE_MATERIAL", "Material", saved.getId().toString(), null, "Updated SKU: " + saved.getSku());
+
+        return MaterialResponse.fromEntity(saved);
+    }
+
+    @Override
+    @Transactional
+    public MaterialResponse updateMaterialStatus(UUID id, MaterialStatus status, UUID actorId) {
+        Material material = materialRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Material not found with id: " + id));
+        material.setStatus(status);
+        material.setUpdatedBy(actorId);
+        Material saved = materialRepository.save(material);
+        log.info("Updated material ID={} status to {}", saved.getId(), status);
+
+        auditLogService.log(actorId, "UPDATE_MATERIAL_STATUS", "Material", saved.getId().toString(), null, "Status: " + status);
+
         return MaterialResponse.fromEntity(saved);
     }
 
     @Override
     @Transactional
     public MaterialResponse deactivateMaterial(UUID id) {
-        Material material = materialRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Material not found with id: " + id));
-        material.setStatus(MaterialStatus.INACTIVE);
-        Material saved = materialRepository.save(material);
-        log.info("Deactivated material ID={}", saved.getId());
-        return MaterialResponse.fromEntity(saved);
+        return updateMaterialStatus(id, MaterialStatus.INACTIVE, null);
     }
 }

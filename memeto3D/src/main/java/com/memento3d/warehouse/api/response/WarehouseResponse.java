@@ -22,8 +22,12 @@ public class WarehouseResponse {
     private String code;
     private String name;
     private String location;
+    private String address;
+    private String description;
     private WarehouseStatus status;
+    private UUID managerId;
     private UUID createdBy;
+    private UUID updatedBy;
     private Long version;
     private Instant createdAt;
     private Instant updatedAt;
@@ -35,8 +39,12 @@ public class WarehouseResponse {
                 .code(entity.getCode())
                 .name(entity.getName())
                 .location(entity.getLocation())
+                .address(entity.getAddress())
+                .description(entity.getDescription())
                 .status(entity.getStatus())
+                .managerId(entity.getManagerId())
                 .createdBy(entity.getCreatedBy())
+                .updatedBy(entity.getUpdatedBy())
                 .version(entity.getVersion())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
