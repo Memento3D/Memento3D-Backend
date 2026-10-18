@@ -249,7 +249,7 @@ public class ScanServiceImpl implements ScanService {
         Scan scan = scanRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + id));
 
-        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_MANAGER || currentUserRole == Role.ROLE_OPERATOR;
         if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
             log.warn("Access denied for user {} to scan {} owned by {}",
                     currentUserId, id, scan.getUser() != null ? scan.getUser().getId() : null);
@@ -269,7 +269,7 @@ public class ScanServiceImpl implements ScanService {
         Scan scan = scanRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + id));
 
-        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_MANAGER || currentUserRole == Role.ROLE_OPERATOR;
         if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
             log.warn("Access denied for user {} to scan status {} owned by {}",
                     currentUserId, id, scan.getUser() != null ? scan.getUser().getId() : null);
@@ -304,7 +304,7 @@ public class ScanServiceImpl implements ScanService {
         Scan scan = scanRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + id));
 
-        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_MANAGER || currentUserRole == Role.ROLE_OPERATOR;
         if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
             log.warn("Access denied for user {} to update scan {} owned by {}",
                     currentUserId, id, scan.getUser() != null ? scan.getUser().getId() : null);
@@ -353,7 +353,7 @@ public class ScanServiceImpl implements ScanService {
                 .orElseThrow(() -> new ResourceNotFoundException("Scan not found with ID: " + id));
 
         // IDOR protection: non-privileged users can only delete their own scans
-        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_MANAGER || currentUserRole == Role.ROLE_OPERATOR;
         if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
             log.warn("Access denied for user {} to delete scan {} owned by {}",
                     currentUserId, id, scan.getUser() != null ? scan.getUser().getId() : null);

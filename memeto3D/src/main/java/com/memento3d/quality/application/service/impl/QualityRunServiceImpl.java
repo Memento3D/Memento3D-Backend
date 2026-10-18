@@ -46,7 +46,7 @@ public class QualityRunServiceImpl implements QualityRunService {
         }
 
         // 2. IDOR check
-        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_MANAGER || currentUserRole == Role.ROLE_OPERATOR;
         if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
             log.warn("Access denied for user {} to quality run {} owned by {}",
                     currentUserId, runId, scan.getUser() != null ? scan.getUser().getId() : null);
@@ -348,7 +348,7 @@ public class QualityRunServiceImpl implements QualityRunService {
             throw new ResourceNotFoundException("Quality run not found with ID: " + runId);
         }
 
-        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_MANAGER || currentUserRole == Role.ROLE_OPERATOR;
         if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
             throw new ResourceNotFoundException("Quality run not found with ID: " + runId);
         }
@@ -369,7 +369,7 @@ public class QualityRunServiceImpl implements QualityRunService {
             throw new ResourceNotFoundException("Quality run not found with ID: " + runId);
         }
 
-        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        boolean isPrivileged = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_MANAGER || currentUserRole == Role.ROLE_OPERATOR;
         if (!isPrivileged && (scan.getUser() == null || !scan.getUser().getId().equals(currentUserId))) {
             throw new ResourceNotFoundException("Quality run not found with ID: " + runId);
         }

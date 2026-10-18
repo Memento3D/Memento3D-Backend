@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Redis Monitoring", description = "Redis health check and monitoring endpoints")
+@org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
 public class RedisMonitoringController {
 
     private final RedisMonitoringService redisMonitoringService;

@@ -1,14 +1,21 @@
 package com.memento3d.warehouse.application.service;
 
+import com.memento3d.identity.domain.model.Role;
+import com.memento3d.identity.domain.model.User;
+import com.memento3d.identity.infrastructure.persistence.repository.UserRepository;
 import com.memento3d.inventory.infrastructure.persistence.repository.InventoryBalanceRepository;
 import com.memento3d.shared.exception.BusinessException;
-import com.memento3d.shared.exception.ResourceNotFoundException;
+import com.memento3d.warehouse.api.request.AssignMemberRequest;
 import com.memento3d.warehouse.api.request.CreateWarehouseRequest;
-import com.memento3d.warehouse.api.request.UpdateWarehouseRequest;
+import com.memento3d.warehouse.api.response.WarehouseMembershipResponse;
 import com.memento3d.warehouse.api.response.WarehouseResponse;
 import com.memento3d.warehouse.application.service.impl.WarehouseServiceImpl;
+import com.memento3d.warehouse.domain.model.MembershipStatus;
 import com.memento3d.warehouse.domain.model.Warehouse;
+import com.memento3d.warehouse.domain.model.WarehouseMembership;
+import com.memento3d.warehouse.domain.model.WarehouseRole;
 import com.memento3d.warehouse.domain.model.WarehouseStatus;
+import com.memento3d.warehouse.infrastructure.persistence.repository.WarehouseMembershipRepository;
 import com.memento3d.warehouse.infrastructure.persistence.repository.WarehouseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,6 +27,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,13 +44,23 @@ class WarehouseServiceTest {
     private WarehouseRepository warehouseRepository;
 
     @Mock
+    private WarehouseMembershipRepository warehouseMembershipRepository;
+
+    @Mock
     private InventoryBalanceRepository inventoryBalanceRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private WarehouseSecurityService warehouseSecurityService;
 
     @InjectMocks
     private WarehouseServiceImpl warehouseService;
 
     private UUID warehouseId;
     private Warehouse mockWarehouse;
+    private User mockUser;
 
     @BeforeEach
     void setUp() {
@@ -52,6 +71,13 @@ class WarehouseServiceTest {
                 .name("Central Hub Thu Duc")
                 .location("High-Tech Park")
                 .status(WarehouseStatus.ACTIVE)
+                .build();
+
+        mockUser = User.builder()
+                .id(UUID.randomUUID())
+                .email("operator@memento3d.vn")
+                .fullName("Warehouse Staff")
+                .role(Role.ROLE_OPERATOR)
                 .build();
     }
 
@@ -142,5 +168,77 @@ class WarehouseServiceTest {
                 });
 
         verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
+    @DisplayName("getMyWarehouses: returns active memberships for operator")
+    void getMyWarehouses_operatorReturnsScopedWarehouses() {
+        UUID userId = mockUser.getId();
+        WarehouseMembership membership = WarehouseMembership.builder()
+                .id(UUID.randomUUID())
+                .warehouse(mockWarehouse)
+                .user(mockUser)
+                .role(WarehouseRole.WAREHOUSE_STAFF)
+                .status(MembershipStatus.ACTIVE)
+                .build();
+
+        when(warehouseSecurityService.isAdmin("ROLE_OPERATOR")).thenReturn(false);
+        when(warehouseMembershipRepository.findAllByUserIdAndStatusWithWarehouse(userId, MembershipStatus.ACTIVE))
+                .thenReturn(List.of(membership));
+
+        List<WarehouseResponse> responses = warehouseService.getMyWarehouses(userId, "ROLE_OPERATOR");
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getCode()).isEqualTo("WH-HCM-01");
+    }
+
+    @Test
+    @DisplayName("assignMember: assigns new staff member to warehouse")
+    void assignMember_success() {
+        UUID actorId = UUID.randomUUID();
+        AssignMemberRequest request = AssignMemberRequest.builder()
+                .email("operator@memento3d.vn")
+                .role(WarehouseRole.WAREHOUSE_STAFF)
+                .build();
+
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(mockWarehouse));
+        when(userRepository.findByEmail("operator@memento3d.vn")).thenReturn(Optional.of(mockUser));
+        when(warehouseMembershipRepository.findByWarehouseIdAndUserId(warehouseId, mockUser.getId()))
+                .thenReturn(Optional.empty());
+        when(warehouseMembershipRepository.save(any(WarehouseMembership.class)))
+                .thenAnswer(inv -> {
+                    WarehouseMembership m = inv.getArgument(0);
+                    m.setId(UUID.randomUUID());
+                    return m;
+                });
+
+        WarehouseMembershipResponse response = warehouseService.assignMember(warehouseId, request, actorId, "ROLE_ADMIN");
+
+        assertThat(response).isNotNull();
+        assertThat(response.getRole()).isEqualTo(WarehouseRole.WAREHOUSE_STAFF);
+        assertThat(response.getStatus()).isEqualTo(MembershipStatus.ACTIVE);
+        verify(warehouseMembershipRepository).save(any(WarehouseMembership.class));
+    }
+
+    @Test
+    @DisplayName("revokeMember: marks membership as REVOKED")
+    void revokeMember_success() {
+        UUID actorId = UUID.randomUUID();
+        WarehouseMembership membership = WarehouseMembership.builder()
+                .id(UUID.randomUUID())
+                .warehouse(mockWarehouse)
+                .user(mockUser)
+                .role(WarehouseRole.WAREHOUSE_STAFF)
+                .status(MembershipStatus.ACTIVE)
+                .build();
+
+        when(warehouseMembershipRepository.findByWarehouseIdAndUserId(warehouseId, mockUser.getId()))
+                .thenReturn(Optional.of(membership));
+
+        warehouseService.revokeMember(warehouseId, mockUser.getId(), actorId, "ROLE_ADMIN");
+
+        assertThat(membership.getStatus()).isEqualTo(MembershipStatus.REVOKED);
+        assertThat(membership.getRevokedAt()).isNotNull();
+        verify(warehouseMembershipRepository).save(membership);
     }
 }

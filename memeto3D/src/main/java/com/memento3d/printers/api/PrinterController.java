@@ -29,7 +29,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Printers", description = "Printer inventory and status for managers")
 @SecurityRequirement(name = "BearerAuth")
-@PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
+@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OPERATOR')")
 public class PrinterController {
 
     private final PrinterService printerService;
@@ -50,7 +50,7 @@ public class PrinterController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Register a printer (ADMIN)")
     public ResponseEntity<PrinterResponse> create(
             @Valid @RequestBody CreatePrinterRequest request,

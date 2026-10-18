@@ -44,6 +44,7 @@ public class UploadServiceImpl implements UploadService {
                         "Upload session not found with ID: " + scanId));
 
         boolean isPrivileged = Role.ROLE_ADMIN.equals(currentUserRole)
+                || Role.ROLE_MANAGER.equals(currentUserRole)
                 || Role.ROLE_OPERATOR.equals(currentUserRole);
         if (!isPrivileged && !scan.getUser().getId().equals(currentUserId)) {
             // IDOR: expose as 404, not 403

@@ -138,7 +138,8 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentTransaction transaction = transactionRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment transaction not found with ID: " + paymentId));
 
-        if (!transaction.getUserId().equals(userId) && role != Role.ROLE_ADMIN) {
+        boolean isPrivileged = role == Role.ROLE_ADMIN || role == Role.ROLE_MANAGER || role == Role.ROLE_OPERATOR;
+        if (!transaction.getUserId().equals(userId) && !isPrivileged) {
             log.warn("Access denied: User {} cannot view payment {}", userId, paymentId);
             throw new AccessDeniedException("User is not authorized to access this payment transaction");
         }
@@ -186,7 +187,8 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentTransaction transaction = transactionRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment transaction not found with ID: " + paymentId));
 
-        if (!transaction.getUserId().equals(userId) && role != Role.ROLE_ADMIN && role != Role.ROLE_OPERATOR) {
+        boolean isPrivileged = role == Role.ROLE_ADMIN || role == Role.ROLE_MANAGER || role == Role.ROLE_OPERATOR;
+        if (!transaction.getUserId().equals(userId) && !isPrivileged) {
             log.warn("Access denied: User {} cannot cancel payment {}", userId, paymentId);
             throw new AccessDeniedException("User is not authorized to cancel this payment transaction");
         }

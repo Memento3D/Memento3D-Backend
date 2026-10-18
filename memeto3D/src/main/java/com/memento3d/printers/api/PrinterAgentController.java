@@ -30,7 +30,7 @@ public class PrinterAgentController {
     private final PrinterAgentService agentService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OPERATOR')")
     @Operation(summary = "List printer agents")
     public ResponseEntity<Page<PrinterAgentResponse>> list(
             @RequestParam(name = "page", defaultValue = "1") int page,
@@ -39,14 +39,14 @@ public class PrinterAgentController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','OPERATOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OPERATOR')")
     @Operation(summary = "Get printer agent")
     public ResponseEntity<PrinterAgentResponse> get(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(agentService.get(id));
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(summary = "Register an agent and receive its one-time token (ADMIN)")
     public ResponseEntity<PrinterAgentCredentialResponse> register(
             @Valid @RequestBody RegisterPrinterAgentRequest request,

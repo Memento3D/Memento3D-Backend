@@ -125,7 +125,7 @@ public class UserController {
     // GET /api/v1/users (Admin / Operator List Users)
     // -------------------------------------------------------------------------
     @GetMapping("/api/v1/users")
-    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_OPERATOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     @Operation(
             summary = "List users with pagination and search (Admin/Operator)",
             description = "Retrieves a paginated list of users with optional keyword search across email and full name."
@@ -158,7 +158,7 @@ public class UserController {
     // POST /api/v1/users (Admin Create User)
     // -------------------------------------------------------------------------
     @PostMapping("/api/v1/users")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(
             summary = "Admin create user account",
             description = "Allows an administrator to manually provision a user account with a designated role and storage quota."
@@ -209,7 +209,7 @@ public class UserController {
     // PATCH /api/v1/users/{userId} (Admin Update User)
     // -------------------------------------------------------------------------
     @PatchMapping("/api/v1/users/{userId}")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(
             summary = "Admin update user details",
             description = "Allows an administrator to update role, storage quota, full name, or avatar of a user."
@@ -237,7 +237,7 @@ public class UserController {
     // DELETE /api/v1/users/{userId} (Admin Delete / Deactivate User)
     // -------------------------------------------------------------------------
     @DeleteMapping("/api/v1/users/{userId}")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(
             summary = "Admin delete/deactivate user",
             description = "Removes or deactivates a user account and evicts cached credentials and profile."
