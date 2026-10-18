@@ -213,7 +213,8 @@ CREATE TABLE IF NOT EXISTS public.stock_count_items (
 CREATE INDEX IF NOT EXISTS idx_stock_count_items_count ON public.stock_count_items (stock_count_id);
 
 -- 10. System Audit Logs
-CREATE TABLE IF NOT EXISTS public.audit_logs (
+DROP TABLE IF EXISTS public.audit_logs CASCADE;
+CREATE TABLE public.audit_logs (
     id UUID PRIMARY KEY,
     actor_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
     action VARCHAR(100) NOT NULL,

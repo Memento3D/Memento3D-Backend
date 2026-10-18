@@ -2,10 +2,16 @@ package com.memento3d.payment.domain.model;
 
 public enum PaymentStatus {
     PENDING,
-    PROCESSING,
+    PAID,
     SUCCESS,
+    PROCESSING,
     FAILED,
     CANCELLED,
     EXPIRED,
-    UNKNOWN
+    REFUNDED,
+    UNKNOWN;
+
+    public boolean isPaid() {
+        return this == PAID || this == SUCCESS;
+    }
 }

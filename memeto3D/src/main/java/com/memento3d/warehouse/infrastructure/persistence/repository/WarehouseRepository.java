@@ -30,7 +30,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
     @Query("SELECT w FROM Warehouse w WHERE " +
             "(:status IS NULL OR w.status = :status) AND " +
-            "(:search IS NULL OR LOWER(w.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(w.code) LIKE LOWER(CONCAT('%', :search, '%')))")
+            "(CAST(:search AS string) IS NULL OR LOWER(w.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(w.code) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
     Page<Warehouse> findAllWithFilters(
             @Param("status") WarehouseStatus status,
             @Param("search") String search,

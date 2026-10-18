@@ -46,6 +46,7 @@ public class StockCount {
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
+    @org.hibernate.annotations.BatchSize(size = 50)
     @OneToMany(mappedBy = "stockCount", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<StockCountItem> items = new ArrayList<>();

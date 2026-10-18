@@ -23,9 +23,19 @@ public interface EnterpriseStockIssueRepository extends JpaRepository<Enterprise
 
     boolean existsByIssueCode(String issueCode);
 
-    @Query("SELECT i FROM EnterpriseStockIssue i WHERE " +
-            "(:warehouseId IS NULL OR i.warehouse.id = :warehouseId) AND " +
-            "(:status IS NULL OR i.status = :status)")
+    @EntityGraph(attributePaths = {"warehouse"})
+    @Query(
+        value = """
+            SELECT i FROM EnterpriseStockIssue i WHERE
+            (:warehouseId IS NULL OR i.warehouse.id = :warehouseId) AND
+            (:status IS NULL OR i.status = :status)
+            """,
+        countQuery = """
+            SELECT COUNT(i) FROM EnterpriseStockIssue i WHERE
+            (:warehouseId IS NULL OR i.warehouse.id = :warehouseId) AND
+            (:status IS NULL OR i.status = :status)
+            """
+    )
     Page<EnterpriseStockIssue> findAllWithFilters(
             @Param("warehouseId") UUID warehouseId,
             @Param("status") EnterpriseStockIssueStatus status,

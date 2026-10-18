@@ -55,6 +55,7 @@ public class EnterpriseStockIssue {
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
+    @org.hibernate.annotations.BatchSize(size = 50)
     @OneToMany(mappedBy = "issue", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<EnterpriseStockIssueItem> items = new ArrayList<>();

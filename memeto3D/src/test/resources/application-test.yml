@@ -13,6 +13,10 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
+    properties:
+      hibernate:
+        generate_statistics: true
+        default_batch_fetch_size: 50
   data:
     redis:
       host: ${REDIS_HOST:localhost}

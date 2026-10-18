@@ -23,9 +23,19 @@ public interface GoodsReceiptRepository extends JpaRepository<GoodsReceipt, UUID
 
     boolean existsByReceiptCode(String receiptCode);
 
-    @Query("SELECT r FROM GoodsReceipt r WHERE " +
-            "(:warehouseId IS NULL OR r.warehouse.id = :warehouseId) AND " +
-            "(:status IS NULL OR r.status = :status)")
+    @EntityGraph(attributePaths = {"warehouse"})
+    @Query(
+        value = """
+            SELECT r FROM GoodsReceipt r WHERE
+            (:warehouseId IS NULL OR r.warehouse.id = :warehouseId) AND
+            (:status IS NULL OR r.status = :status)
+            """,
+        countQuery = """
+            SELECT COUNT(r) FROM GoodsReceipt r WHERE
+            (:warehouseId IS NULL OR r.warehouse.id = :warehouseId) AND
+            (:status IS NULL OR r.status = :status)
+            """
+    )
     Page<GoodsReceipt> findAllWithFilters(
             @Param("warehouseId") UUID warehouseId,
             @Param("status") GoodsReceiptStatus status,

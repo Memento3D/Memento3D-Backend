@@ -16,12 +16,22 @@ import java.util.UUID;
 public interface InventoryTransactionRepository extends JpaRepository<InventoryTransaction, UUID> {
 
     @EntityGraph(attributePaths = {"warehouse", "material"})
-    @Query("SELECT t FROM InventoryTransaction t WHERE " +
-            "(:warehouseId IS NULL OR t.warehouse.id = :warehouseId) AND " +
-            "(:materialId IS NULL OR t.material.id = :materialId) AND " +
-            "(:transactionType IS NULL OR t.transactionType = :transactionType) AND " +
-            "(:printJobId IS NULL OR t.printJobId = :printJobId) " +
-            "ORDER BY t.createdAt DESC")
+    @Query(
+        value = """
+            SELECT t FROM InventoryTransaction t WHERE
+            (:warehouseId IS NULL OR t.warehouse.id = :warehouseId) AND
+            (:materialId IS NULL OR t.material.id = :materialId) AND
+            (:transactionType IS NULL OR t.transactionType = :transactionType) AND
+            (:printJobId IS NULL OR t.printJobId = :printJobId)
+            """,
+        countQuery = """
+            SELECT COUNT(t) FROM InventoryTransaction t WHERE
+            (:warehouseId IS NULL OR t.warehouse.id = :warehouseId) AND
+            (:materialId IS NULL OR t.material.id = :materialId) AND
+            (:transactionType IS NULL OR t.transactionType = :transactionType) AND
+            (:printJobId IS NULL OR t.printJobId = :printJobId)
+            """
+    )
     Page<InventoryTransaction> findAllWithFilters(
             @Param("warehouseId") UUID warehouseId,
             @Param("materialId") UUID materialId,

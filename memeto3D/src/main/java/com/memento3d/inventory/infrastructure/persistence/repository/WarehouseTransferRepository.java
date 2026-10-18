@@ -23,9 +23,19 @@ public interface WarehouseTransferRepository extends JpaRepository<WarehouseTran
 
     boolean existsByTransferCode(String transferCode);
 
-    @Query("SELECT t FROM WarehouseTransfer t WHERE " +
-            "(:warehouseId IS NULL OR t.sourceWarehouse.id = :warehouseId OR t.destinationWarehouse.id = :warehouseId) AND " +
-            "(:status IS NULL OR t.status = :status)")
+    @EntityGraph(attributePaths = {"sourceWarehouse", "destinationWarehouse"})
+    @Query(
+        value = """
+            SELECT t FROM WarehouseTransfer t WHERE
+            (:warehouseId IS NULL OR t.sourceWarehouse.id = :warehouseId OR t.destinationWarehouse.id = :warehouseId) AND
+            (:status IS NULL OR t.status = :status)
+            """,
+        countQuery = """
+            SELECT COUNT(t) FROM WarehouseTransfer t WHERE
+            (:warehouseId IS NULL OR t.sourceWarehouse.id = :warehouseId OR t.destinationWarehouse.id = :warehouseId) AND
+            (:status IS NULL OR t.status = :status)
+            """
+    )
     Page<WarehouseTransfer> findAllWithFilters(
             @Param("warehouseId") UUID warehouseId,
             @Param("status") WarehouseTransferStatus status,

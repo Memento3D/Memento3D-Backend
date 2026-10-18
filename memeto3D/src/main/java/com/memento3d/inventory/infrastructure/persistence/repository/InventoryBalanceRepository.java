@@ -37,9 +37,18 @@ public interface InventoryBalanceRepository extends JpaRepository<InventoryBalan
     List<InventoryBalance> findByWarehouseId(UUID warehouseId);
 
     @EntityGraph(attributePaths = {"warehouse", "material"})
-    @Query("SELECT b FROM InventoryBalance b WHERE " +
-            "(:warehouseId IS NULL OR b.warehouse.id = :warehouseId) AND " +
-            "(:materialId IS NULL OR b.material.id = :materialId)")
+    @Query(
+        value = """
+            SELECT b FROM InventoryBalance b WHERE
+            (:warehouseId IS NULL OR b.warehouse.id = :warehouseId) AND
+            (:materialId IS NULL OR b.material.id = :materialId)
+            """,
+        countQuery = """
+            SELECT COUNT(b) FROM InventoryBalance b WHERE
+            (:warehouseId IS NULL OR b.warehouse.id = :warehouseId) AND
+            (:materialId IS NULL OR b.material.id = :materialId)
+            """
+    )
     Page<InventoryBalance> findAllWithFilters(
             @Param("warehouseId") UUID warehouseId,
             @Param("materialId") UUID materialId,

@@ -6,17 +6,31 @@ import com.memento3d.orders.api.request.UpdateOrderRequest;
 import com.memento3d.orders.api.response.OrderListResponse;
 import com.memento3d.orders.api.response.OrderResponse;
 import com.memento3d.orders.domain.model.Order;
+import com.memento3d.orders.domain.model.OrderStatus;
 
 import java.util.UUID;
 
 public interface OrderService {
+
     Order getOrderById(UUID orderId);
+
     Order validateOrderForPayment(UUID orderId, UUID userId);
+
     void updateOrderStatusPaid(UUID orderId);
 
     OrderResponse createOrder(CreateOrderRequest request, UUID userId);
+
     OrderListResponse getUserOrders(UUID userId, Role userRole, int page, int limit);
+
+    OrderListResponse getMyOrders(UUID userId, OrderStatus status, int page, int limit);
+
+    OrderListResponse getManagerOrders(String query, OrderStatus status, int page, int limit);
+
+    OrderResponse updateOrderStatus(UUID orderId, OrderStatus nextStatus, UUID managerId, Role role);
+
     OrderResponse getOrderDetail(UUID orderId, UUID userId, Role userRole);
+
     OrderResponse updateOrder(UUID orderId, UpdateOrderRequest request, UUID userId, Role userRole);
+
     void cancelOrder(UUID orderId, UUID userId, Role userRole);
 }

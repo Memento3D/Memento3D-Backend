@@ -21,8 +21,17 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Page<User> findByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(String email, String fullName, Pageable pageable);
     long countByRole(Role role);
 
-    @Query("SELECT u FROM User u WHERE " +
-            "(:role IS NULL OR u.role = :role) AND " +
-            "(:search IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :search, '%')))")
+    @Query(
+        value = """
+            SELECT u FROM User u WHERE
+            (:role IS NULL OR u.role = :role) AND
+            (CAST(:search AS string) IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+            """,
+        countQuery = """
+            SELECT COUNT(u) FROM User u WHERE
+            (:role IS NULL OR u.role = :role) AND
+            (CAST(:search AS string) IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+            """
+    )
     Page<User> findAllWithFilters(@Param("role") Role role, @Param("search") String search, Pageable pageable);
 }

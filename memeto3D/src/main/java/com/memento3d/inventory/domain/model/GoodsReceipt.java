@@ -50,6 +50,7 @@ public class GoodsReceipt {
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
+    @org.hibernate.annotations.BatchSize(size = 50)
     @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<GoodsReceiptItem> items = new ArrayList<>();

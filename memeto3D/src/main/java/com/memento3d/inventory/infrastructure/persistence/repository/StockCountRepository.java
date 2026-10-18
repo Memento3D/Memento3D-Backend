@@ -23,9 +23,19 @@ public interface StockCountRepository extends JpaRepository<StockCount, UUID> {
 
     boolean existsByCountCode(String countCode);
 
-    @Query("SELECT c FROM StockCount c WHERE " +
-            "(:warehouseId IS NULL OR c.warehouse.id = :warehouseId) AND " +
-            "(:status IS NULL OR c.status = :status)")
+    @EntityGraph(attributePaths = {"warehouse"})
+    @Query(
+        value = """
+            SELECT c FROM StockCount c WHERE
+            (:warehouseId IS NULL OR c.warehouse.id = :warehouseId) AND
+            (:status IS NULL OR c.status = :status)
+            """,
+        countQuery = """
+            SELECT COUNT(c) FROM StockCount c WHERE
+            (:warehouseId IS NULL OR c.warehouse.id = :warehouseId) AND
+            (:status IS NULL OR c.status = :status)
+            """
+    )
     Page<StockCount> findAllWithFilters(
             @Param("warehouseId") UUID warehouseId,
             @Param("status") StockCountStatus status,

@@ -7,6 +7,11 @@ import com.memento3d.orders.api.request.UpdateOrderRequest;
 import com.memento3d.orders.api.response.OrderListResponse;
 import com.memento3d.orders.api.response.OrderResponse;
 import com.memento3d.orders.application.service.OrderService;
+import com.memento3d.orders.domain.model.OrderStatus;
+import com.memento3d.payment.api.request.CreatePaymentRequest;
+import com.memento3d.payment.api.response.PaymentResponse;
+import com.memento3d.payment.application.service.PaymentService;
+import com.memento3d.payment.domain.model.PaymentMethod;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -22,21 +27,23 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
 @RequestMapping({"/api/v1/orders", "/api/orders"})
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Orders", description = "3D Print Order Management APIs")
+@Tag(name = "Orders", description = "3D Print Order & Customer Checkout Management APIs")
 @SecurityRequirement(name = "bearerAuth")
 public class OrderController {
 
     private final OrderService orderService;
+    private final PaymentService paymentService;
 
     @PostMapping
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Create print order", description = "Creates a new 3D print order in PENDING_PAYMENT status")
+    @Operation(summary = "Create order", description = "Checkout current cart or submit bespoke scan order")
     public ResponseEntity<OrderResponse> createOrder(
             @Valid @RequestBody CreateOrderRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
@@ -46,6 +53,19 @@ public class OrderController {
                 .buildAndExpand(response.getId())
                 .toUri();
         return ResponseEntity.created(location).body(response);
+    }
+
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Get my orders", description = "List orders belonging to the authenticated customer with status filter")
+    public ResponseEntity<OrderListResponse> getMyOrders(
+            @RequestParam(required = false) OrderStatus status,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int limit,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        OrderListResponse response = orderService.getMyOrders(userDetails.getId(), status, page, limit);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping
@@ -71,6 +91,33 @@ public class OrderController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/{orderId}/payments")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Initiate order payment", description = "Initiate payment for an order with MOMO, ZALOPAY, or CASH")
+    public ResponseEntity<PaymentResponse> initiateOrderPayment(
+            @PathVariable UUID orderId,
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        String methodStr = (String) body.get("paymentMethod");
+        if (methodStr == null || methodStr.isBlank()) {
+            methodStr = "MOMO";
+        }
+        PaymentMethod paymentMethod = PaymentMethod.valueOf(methodStr.toUpperCase());
+        String redirectUrl = (String) body.get("redirectUrl");
+        String orderInfo = (String) body.get("orderInfo");
+
+        CreatePaymentRequest paymentRequest = CreatePaymentRequest.builder()
+                .orderId(orderId)
+                .paymentMethod(paymentMethod)
+                .redirectUrl(redirectUrl)
+                .orderInfo(orderInfo != null ? orderInfo : "Payment for Order " + orderId)
+                .build();
+
+        PaymentResponse response = paymentService.createPayment(paymentRequest, userDetails.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
     @PatchMapping("/{orderId}")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Update order", description = "Update recipient and shipping address. Admins / Operators can update order status.")
@@ -85,7 +132,7 @@ public class OrderController {
 
     @DeleteMapping("/{orderId}")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Cancel order", description = "Cancels an order if in PENDING_PAYMENT status or if requested by Admin/Operator")
+    @Operation(summary = "Cancel order", description = "Cancels an order if in PENDING status or if requested by Admin/Operator")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public ResponseEntity<Void> cancelOrder(
             @Parameter(description = "Order UUID") @PathVariable UUID orderId,

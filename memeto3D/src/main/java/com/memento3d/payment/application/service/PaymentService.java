@@ -15,6 +15,7 @@ public interface PaymentService {
     PaymentResponse createPayment(CreatePaymentRequest request, UUID userId);
     PaymentStatusResponse getPaymentStatus(UUID paymentId, UUID userId, Role role);
     PaymentStatusResponse cancelPayment(UUID paymentId, UUID userId, Role role);
+    PaymentStatusResponse confirmCashPayment(UUID paymentId, UUID managerId, Role role);
     MomoIpnResponse processMomoIpn(MomoIpnRequest ipnRequest);
     ZaloPayCallbackResponse processZaloPayCallback(ZaloPayCallbackRequest callbackRequest);
 }
