@@ -47,7 +47,9 @@ public class PaymentController {
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         CustomUserDetails cud = getAuthenticatedUserDetails(userDetails);
-        boolean isStaff = cud.getRole() == Role.ROLE_ADMIN || cud.getRole() == Role.ROLE_OPERATOR;
+        boolean isStaff = cud.getRole() == Role.ROLE_ADMIN 
+                || cud.getRole() == Role.ROLE_MANAGER 
+                || cud.getRole() == Role.ROLE_OPERATOR;
         
         java.util.List<com.memento3d.payment.domain.model.PaymentTransaction> txs;
         if (isStaff) {

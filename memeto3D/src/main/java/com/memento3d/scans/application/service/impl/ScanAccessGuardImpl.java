@@ -28,6 +28,7 @@ public class ScanAccessGuardImpl implements ScanAccessGuard {
 
         boolean privileged =
                 currentUserRole == Role.ROLE_ADMIN
+                        || currentUserRole == Role.ROLE_MANAGER
                         || currentUserRole == Role.ROLE_OPERATOR;
 
         boolean owner =

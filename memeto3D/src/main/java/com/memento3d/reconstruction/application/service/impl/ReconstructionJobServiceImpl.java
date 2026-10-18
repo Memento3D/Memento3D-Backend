@@ -394,7 +394,9 @@ public class ReconstructionJobServiceImpl
         org.springframework.data.domain.Pageable pageable =
                 org.springframework.data.domain.PageRequest.of(pageIndex, pageSize);
 
-        boolean isStaff = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_OPERATOR;
+        boolean isStaff = currentUserRole == Role.ROLE_ADMIN 
+                || currentUserRole == Role.ROLE_MANAGER 
+                || currentUserRole == Role.ROLE_OPERATOR;
         org.springframework.data.domain.Page<ReconstructionJob> jobPage;
         if (isStaff) {
             jobPage = jobRepository.findAllByOrderByCreatedAtDesc(pageable);

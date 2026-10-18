@@ -82,7 +82,10 @@ public class OrderServiceImpl implements OrderService {
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(pageIndex, pageSize, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
 
         org.springframework.data.domain.Page<Order> orderPage;
-        if (userRole == com.memento3d.identity.domain.model.Role.ROLE_ADMIN || userRole == com.memento3d.identity.domain.model.Role.ROLE_OPERATOR) {
+        boolean isStaff = (userRole == com.memento3d.identity.domain.model.Role.ROLE_ADMIN 
+                || userRole == com.memento3d.identity.domain.model.Role.ROLE_MANAGER 
+                || userRole == com.memento3d.identity.domain.model.Role.ROLE_OPERATOR);
+        if (isStaff) {
             orderPage = orderRepository.findAll(pageable);
         } else {
             orderPage = orderRepository.findByUserId(userId, pageable);
@@ -100,7 +103,10 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     public com.memento3d.orders.api.response.OrderResponse getOrderDetail(UUID orderId, UUID userId, com.memento3d.identity.domain.model.Role userRole) {
         Order order = getOrderById(orderId);
-        if (userRole != com.memento3d.identity.domain.model.Role.ROLE_ADMIN && userRole != com.memento3d.identity.domain.model.Role.ROLE_OPERATOR && !order.getUserId().equals(userId)) {
+        boolean isStaff = (userRole == com.memento3d.identity.domain.model.Role.ROLE_ADMIN 
+                || userRole == com.memento3d.identity.domain.model.Role.ROLE_MANAGER 
+                || userRole == com.memento3d.identity.domain.model.Role.ROLE_OPERATOR);
+        if (!isStaff && !order.getUserId().equals(userId)) {
             log.warn("Access denied: User {} cannot view order {}", userId, orderId);
             throw new AccessDeniedException("User is not authorized to view this order");
         }
@@ -111,7 +117,9 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public com.memento3d.orders.api.response.OrderResponse updateOrder(UUID orderId, com.memento3d.orders.api.request.UpdateOrderRequest request, UUID userId, com.memento3d.identity.domain.model.Role userRole) {
         Order order = getOrderById(orderId);
-        boolean isStaff = (userRole == com.memento3d.identity.domain.model.Role.ROLE_ADMIN || userRole == com.memento3d.identity.domain.model.Role.ROLE_OPERATOR);
+        boolean isStaff = (userRole == com.memento3d.identity.domain.model.Role.ROLE_ADMIN 
+                || userRole == com.memento3d.identity.domain.model.Role.ROLE_MANAGER 
+                || userRole == com.memento3d.identity.domain.model.Role.ROLE_OPERATOR);
         if (!isStaff && !order.getUserId().equals(userId)) {
             throw new AccessDeniedException("User is not authorized to update this order");
         }
@@ -128,7 +136,7 @@ public class OrderServiceImpl implements OrderService {
 
         if (request.getStatus() != null) {
             if (!isStaff) {
-                throw new AccessDeniedException("Only staff (Admin / Operator) can update order status directly");
+                throw new AccessDeniedException("Only staff (Admin / Manager / Operator) can update order status directly");
             }
             order.setStatus(request.getStatus());
         }
@@ -142,7 +150,9 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public void cancelOrder(UUID orderId, UUID userId, com.memento3d.identity.domain.model.Role userRole) {
         Order order = getOrderById(orderId);
-        boolean isStaff = (userRole == com.memento3d.identity.domain.model.Role.ROLE_ADMIN || userRole == com.memento3d.identity.domain.model.Role.ROLE_OPERATOR);
+        boolean isStaff = (userRole == com.memento3d.identity.domain.model.Role.ROLE_ADMIN 
+                || userRole == com.memento3d.identity.domain.model.Role.ROLE_MANAGER 
+                || userRole == com.memento3d.identity.domain.model.Role.ROLE_OPERATOR);
         if (!isStaff && !order.getUserId().equals(userId)) {
             throw new AccessDeniedException("User is not authorized to cancel this order");
         }

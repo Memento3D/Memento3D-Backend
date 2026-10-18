@@ -29,13 +29,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Material Catalog", description = "Material definition and catalog management (F01)")
 @SecurityRequirement(name = "BearerAuth")
-@PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+@PreAuthorize("isAuthenticated()")
 public class MaterialController {
 
     private final MaterialService materialService;
 
     @PostMapping
     @Operation(summary = "Create a new material")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<MaterialResponse> create(
             @Valid @RequestBody CreateMaterialRequest request,
             @AuthenticationPrincipal CustomUserDetails currentUser
@@ -68,6 +69,7 @@ public class MaterialController {
 
     @PatchMapping("/{id}")
     @Operation(summary = "Update material details")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<MaterialResponse> update(
             @PathVariable("id") UUID id,
             @Valid @RequestBody UpdateMaterialRequest request
@@ -77,6 +79,7 @@ public class MaterialController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Deactivate material")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MaterialResponse> deactivate(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(materialService.deactivateMaterial(id));
     }

@@ -31,7 +31,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Print Jobs & Material Consumption", description = "Print Job lifecycle, reservation, issue, and consumption reconciliation (F06, F07)")
 @SecurityRequirement(name = "BearerAuth")
-@PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
+@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OPERATOR')")
 public class PrintJobController {
 
     private final PrintJobService printJobService;
