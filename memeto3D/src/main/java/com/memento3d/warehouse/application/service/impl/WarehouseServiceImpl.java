@@ -63,6 +63,9 @@ public class WarehouseServiceImpl implements WarehouseService {
     @Transactional(readOnly = true)
     public Page<WarehouseResponse> listWarehouses(WarehouseStatus status, String search, Pageable pageable) {
         String cleanSearch = (search != null && !search.isBlank()) ? search.trim() : null;
+        if (status == null && cleanSearch == null) {
+            return warehouseRepository.findAll(pageable).map(WarehouseResponse::fromEntity);
+        }
         return warehouseRepository.findAllWithFilters(status, cleanSearch, pageable)
                 .map(WarehouseResponse::fromEntity);
     }

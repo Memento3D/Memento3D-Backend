@@ -70,6 +70,9 @@ public class MaterialServiceImpl implements MaterialService {
     @Transactional(readOnly = true)
     public Page<MaterialResponse> listMaterials(MaterialStatus status, MaterialType materialType, String search, Pageable pageable) {
         String cleanSearch = (search != null && !search.isBlank()) ? search.trim() : null;
+        if (status == null && materialType == null && cleanSearch == null) {
+            return materialRepository.findAll(pageable).map(MaterialResponse::fromEntity);
+        }
         return materialRepository.findAllWithFilters(status, materialType, cleanSearch, pageable)
                 .map(MaterialResponse::fromEntity);
     }

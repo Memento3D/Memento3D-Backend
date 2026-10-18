@@ -88,6 +88,9 @@ public class PrintJobServiceImpl implements PrintJobService {
     @Override
     @Transactional(readOnly = true)
     public Page<PrintJobResponse> listPrintJobs(PrintJobStatus status, UUID printerId, UUID materialId, Pageable pageable) {
+        if (status == null && printerId == null && materialId == null) {
+            return printJobRepository.findAll(pageable).map(PrintJobResponse::fromEntity);
+        }
         return printJobRepository.findAllWithFilters(status, printerId, materialId, pageable)
                 .map(PrintJobResponse::fromEntity);
     }

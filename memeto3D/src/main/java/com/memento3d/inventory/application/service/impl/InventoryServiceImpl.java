@@ -48,6 +48,9 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional(readOnly = true)
     public Page<InventoryBalanceResponse> listBalances(UUID warehouseId, UUID materialId, Pageable pageable) {
+        if (warehouseId == null && materialId == null) {
+            return balanceRepository.findAll(pageable).map(InventoryBalanceResponse::fromEntity);
+        }
         return balanceRepository.findAllWithFilters(warehouseId, materialId, pageable)
                 .map(InventoryBalanceResponse::fromEntity);
     }
@@ -141,6 +144,9 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional(readOnly = true)
     public Page<StockReceiptResponse> listReceipts(UUID warehouseId, UUID materialId, Pageable pageable) {
+        if (warehouseId == null && materialId == null) {
+            return receiptRepository.findAll(pageable).map(StockReceiptResponse::fromEntity);
+        }
         return receiptRepository.findAllWithFilters(warehouseId, materialId, pageable)
                 .map(StockReceiptResponse::fromEntity);
     }
@@ -222,6 +228,9 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional(readOnly = true)
     public Page<StockIssueResponse> listIssues(UUID warehouseId, UUID materialId, Pageable pageable) {
+        if (warehouseId == null && materialId == null) {
+            return issueRepository.findAll(pageable).map(StockIssueResponse::fromEntity);
+        }
         return issueRepository.findAllWithFilters(warehouseId, materialId, pageable)
                 .map(StockIssueResponse::fromEntity);
     }
@@ -235,6 +244,9 @@ public class InventoryServiceImpl implements InventoryService {
             UUID printJobId,
             Pageable pageable
     ) {
+        if (warehouseId == null && materialId == null && type == null && printJobId == null) {
+            return transactionRepository.findAll(pageable).map(InventoryTransactionResponse::fromEntity);
+        }
         return transactionRepository.findAllWithFilters(warehouseId, materialId, type, printJobId, pageable)
                 .map(InventoryTransactionResponse::fromEntity);
     }
