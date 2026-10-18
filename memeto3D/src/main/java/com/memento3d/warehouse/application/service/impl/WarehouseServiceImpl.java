@@ -3,6 +3,8 @@ package com.memento3d.warehouse.application.service.impl;
 import com.memento3d.identity.domain.model.User;
 import com.memento3d.identity.infrastructure.persistence.repository.UserRepository;
 import com.memento3d.inventory.infrastructure.persistence.repository.InventoryBalanceRepository;
+import com.memento3d.inventory.infrastructure.persistence.repository.InventoryTransactionRepository;
+import com.memento3d.shared.application.service.AuditLogService;
 import com.memento3d.shared.exception.BusinessException;
 import com.memento3d.shared.exception.ResourceNotFoundException;
 import com.memento3d.warehouse.api.request.AssignMemberRequest;
@@ -40,8 +42,10 @@ public class WarehouseServiceImpl implements WarehouseService {
     private final WarehouseRepository warehouseRepository;
     private final WarehouseMembershipRepository warehouseMembershipRepository;
     private final InventoryBalanceRepository inventoryBalanceRepository;
+    private final InventoryTransactionRepository inventoryTransactionRepository;
     private final UserRepository userRepository;
     private final WarehouseSecurityService warehouseSecurityService;
+    private final AuditLogService auditLogService;
 
     @Override
     @Transactional
@@ -56,12 +60,19 @@ public class WarehouseServiceImpl implements WarehouseService {
                 .code(cleanCode)
                 .name(request.getName().trim())
                 .location(request.getLocation() != null ? request.getLocation().trim() : null)
+                .address(request.getAddress() != null ? request.getAddress().trim() : (request.getLocation() != null ? request.getLocation().trim() : null))
+                .description(request.getDescription())
+                .managerId(request.getManagerId())
                 .status(WarehouseStatus.ACTIVE)
                 .createdBy(actorId)
+                .updatedBy(actorId)
                 .build();
 
         Warehouse saved = warehouseRepository.save(warehouse);
         log.info("Created warehouse ID={}, Code={}", saved.getId(), saved.getCode());
+
+        auditLogService.log(actorId, "CREATE_WAREHOUSE", "Warehouse", saved.getId().toString(), null, "Created code: " + cleanCode);
+
         return WarehouseResponse.fromEntity(saved);
     }
 
@@ -86,18 +97,9 @@ public class WarehouseServiceImpl implements WarehouseService {
 
     @Override
     @Transactional
-    public WarehouseResponse updateWarehouse(UUID id, UpdateWarehouseRequest request) {
+    public WarehouseResponse updateWarehouse(UUID id, UpdateWarehouseRequest request, UUID actorId) {
         Warehouse warehouse = warehouseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Warehouse not found with id: " + id));
-
-        if (request.getCode() != null && !request.getCode().isBlank()) {
-            String newCode = request.getCode().trim().toUpperCase();
-            if (warehouseRepository.existsByCodeIgnoreCaseAndIdNot(newCode, id)) {
-                throw new BusinessException(HttpStatus.CONFLICT, "DUPLICATE_WAREHOUSE_CODE",
-                    "Warehouse with code '" + newCode + "' already exists");
-            }
-            warehouse.setCode(newCode);
-        }
 
         if (request.getName() != null && !request.getName().isBlank()) {
             warehouse.setName(request.getName().trim());
@@ -105,29 +107,50 @@ public class WarehouseServiceImpl implements WarehouseService {
         if (request.getLocation() != null) {
             warehouse.setLocation(request.getLocation().trim());
         }
-        if (request.getStatus() != null && request.getStatus() != warehouse.getStatus()) {
-            if (request.getStatus() == WarehouseStatus.INACTIVE) {
-                assertWarehouseCanBeDeactivated(id);
-            }
-            warehouse.setStatus(request.getStatus());
+        if (request.getAddress() != null) {
+            warehouse.setAddress(request.getAddress().trim());
         }
+        if (request.getDescription() != null) {
+            warehouse.setDescription(request.getDescription());
+        }
+        if (request.getManagerId() != null) {
+            warehouse.setManagerId(request.getManagerId());
+        }
+        warehouse.setUpdatedBy(actorId);
 
         Warehouse saved = warehouseRepository.save(warehouse);
         log.info("Updated warehouse ID={}, Code={}", saved.getId(), saved.getCode());
+
+        auditLogService.log(actorId, "UPDATE_WAREHOUSE", "Warehouse", saved.getId().toString(), null, "Updated code: " + saved.getCode());
+
+        return WarehouseResponse.fromEntity(saved);
+    }
+
+    @Override
+    @Transactional
+    public WarehouseResponse updateWarehouseStatus(UUID id, WarehouseStatus status, UUID actorId) {
+        Warehouse warehouse = warehouseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Warehouse not found with id: " + id));
+
+        if (status == WarehouseStatus.INACTIVE && warehouse.getStatus() != WarehouseStatus.INACTIVE) {
+            assertWarehouseCanBeDeactivated(id);
+        }
+
+        WarehouseStatus oldStatus = warehouse.getStatus();
+        warehouse.setStatus(status);
+        warehouse.setUpdatedBy(actorId);
+        Warehouse saved = warehouseRepository.save(warehouse);
+        log.info("Updated warehouse ID={} status from {} to {}", saved.getId(), oldStatus, status);
+
+        auditLogService.log(actorId, "UPDATE_WAREHOUSE_STATUS", "Warehouse", saved.getId().toString(), oldStatus.name(), status.name());
+
         return WarehouseResponse.fromEntity(saved);
     }
 
     @Override
     @Transactional
     public WarehouseResponse deactivateWarehouse(UUID id) {
-        Warehouse warehouse = warehouseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Warehouse not found with id: " + id));
-
-        assertWarehouseCanBeDeactivated(id);
-        warehouse.setStatus(WarehouseStatus.INACTIVE);
-        Warehouse saved = warehouseRepository.save(warehouse);
-        log.info("Deactivated warehouse ID={}, Code={}", saved.getId(), saved.getCode());
-        return WarehouseResponse.fromEntity(saved);
+        return updateWarehouseStatus(id, WarehouseStatus.INACTIVE, null);
     }
 
     @Override
@@ -151,7 +174,6 @@ public class WarehouseServiceImpl implements WarehouseService {
                 .map(WarehouseResponse::fromEntity)
                 .toList();
 
-        // If no explicit membership is assigned yet, fallback to active warehouses so staff is never locked out of operations
         if (memberships.isEmpty()) {
             return warehouseRepository.findAll().stream()
                     .filter(w -> w.getStatus() == WarehouseStatus.ACTIVE)
@@ -221,6 +243,8 @@ public class WarehouseServiceImpl implements WarehouseService {
         }
 
         WarehouseMembership saved = warehouseMembershipRepository.save(membership);
+        auditLogService.log(actorId, "ASSIGN_WAREHOUSE_MEMBER", "WarehouseMembership", saved.getId().toString(), null, "User: " + targetUser.getEmail() + ", Role: " + request.getRole());
+
         return WarehouseMembershipResponse.fromEntity(saved);
     }
 
@@ -237,6 +261,8 @@ public class WarehouseServiceImpl implements WarehouseService {
         membership.setRevokedAt(Instant.now());
         warehouseMembershipRepository.save(membership);
         log.info("Revoked membership for user {} in warehouse {}", targetUserId, warehouseId);
+
+        auditLogService.log(actorId, "REVOKE_WAREHOUSE_MEMBER", "WarehouseMembership", membership.getId().toString(), null, "User ID: " + targetUserId);
     }
 
     private void assertWarehouseCanBeDeactivated(UUID warehouseId) {

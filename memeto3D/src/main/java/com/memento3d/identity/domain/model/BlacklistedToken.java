@@ -13,10 +13,18 @@ import java.util.UUID;
 })
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 public class BlacklistedToken {
+
+    public BlacklistedToken() {
+    }
+
+    public BlacklistedToken(UUID id, String token, Instant expiryDate, Instant revokedAt) {
+        this.id = id;
+        this.token = token;
+        this.expiryDate = expiryDate;
+        this.revokedAt = revokedAt;
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

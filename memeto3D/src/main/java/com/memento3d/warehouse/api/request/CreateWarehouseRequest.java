@@ -8,6 +8,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -26,6 +28,16 @@ public class CreateWarehouseRequest {
     private String name;
 
     @Size(max = 500, message = "Location must not exceed 500 characters")
-    @Schema(description = "Physical address or location coordinates", example = "High-Tech Park, Thu Duc City, HCMC")
+    @Schema(description = "Physical location coordinates or district", example = "High-Tech Park, Thu Duc City, HCMC")
     private String location;
+
+    @Size(max = 500, message = "Address must not exceed 500 characters")
+    @Schema(description = "Full physical street address", example = "123 High Tech St, Thu Duc City")
+    private String address;
+
+    @Schema(description = "Detailed facility description")
+    private String description;
+
+    @Schema(description = "Assigned warehouse manager user ID")
+    private UUID managerId;
 }

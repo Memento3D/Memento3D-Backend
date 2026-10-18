@@ -12,7 +12,8 @@ import java.util.UUID;
 @Table(
         name = "warehouses",
         indexes = {
-                @Index(name = "idx_warehouses_status", columnList = "status")
+                @Index(name = "idx_warehouses_status", columnList = "status"),
+                @Index(name = "idx_warehouses_manager", columnList = "manager_id")
         }
 )
 @Getter
@@ -36,13 +37,25 @@ public class Warehouse {
     @Column(name = "location", length = 500)
     private String location;
 
+    @Column(name = "address", length = 500)
+    private String address;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private WarehouseStatus status = WarehouseStatus.ACTIVE;
 
+    @Column(name = "manager_id")
+    private UUID managerId;
+
     @Column(name = "created_by")
     private UUID createdBy;
+
+    @Column(name = "updated_by")
+    private UUID updatedBy;
 
     @Version
     @Column(name = "version", nullable = false)

@@ -78,6 +78,13 @@ public class SecurityConfig {
                         // Local Printer Agent gateway (authenticated by X-Agent-Token inside the service)
                         .requestMatchers(HttpMethod.POST, "/api/v1/agent/heartbeat").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
+                        // Public Storefront Catalog
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/products", "/api/v1/products/**",
+                                "/api/products", "/api/products/**",
+                                "/api/v1/product-categories", "/api/v1/product-categories/**",
+                                "/api/product-categories", "/api/product-categories/**"
+                        ).permitAll()
                         // Swagger & OpenAPI documentation
                         .requestMatchers(
                                 "/v3/api-docs",

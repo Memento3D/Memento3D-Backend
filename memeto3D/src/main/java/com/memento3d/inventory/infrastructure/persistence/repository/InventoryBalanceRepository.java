@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -33,12 +34,44 @@ public interface InventoryBalanceRepository extends JpaRepository<InventoryBalan
     boolean existsByWarehouseIdAndReservedGramGreaterThan(UUID warehouseId, BigDecimal amount);
 
     @EntityGraph(attributePaths = {"warehouse", "material"})
-    @Query("SELECT b FROM InventoryBalance b WHERE " +
-            "(:warehouseId IS NULL OR b.warehouse.id = :warehouseId) AND " +
-            "(:materialId IS NULL OR b.material.id = :materialId)")
+    List<InventoryBalance> findByWarehouseId(UUID warehouseId);
+
+    @EntityGraph(attributePaths = {"warehouse", "material"})
+    @Query(
+        value = """
+            SELECT b FROM InventoryBalance b WHERE
+            (:warehouseId IS NULL OR b.warehouse.id = :warehouseId) AND
+            (:materialId IS NULL OR b.material.id = :materialId)
+            """,
+        countQuery = """
+            SELECT COUNT(b) FROM InventoryBalance b WHERE
+            (:warehouseId IS NULL OR b.warehouse.id = :warehouseId) AND
+            (:materialId IS NULL OR b.material.id = :materialId)
+            """
+    )
     Page<InventoryBalance> findAllWithFilters(
             @Param("warehouseId") UUID warehouseId,
             @Param("materialId") UUID materialId,
             Pageable pageable
     );
+
+    @Query("SELECT COUNT(b) FROM InventoryBalance b WHERE " +
+            "(:warehouseId IS NULL OR b.warehouse.id = :warehouseId) AND " +
+            "(b.onHandGram - b.reservedGram) <= b.minimumStock AND (b.onHandGram - b.reservedGram) > 0")
+    long countLowStock(@Param("warehouseId") UUID warehouseId);
+
+    @Query("SELECT COUNT(b) FROM InventoryBalance b WHERE " +
+            "(:warehouseId IS NULL OR b.warehouse.id = :warehouseId) AND " +
+            "(b.onHandGram - b.reservedGram) <= 0")
+    long countOutOfStock(@Param("warehouseId") UUID warehouseId);
+
+    @Query("SELECT COALESCE(SUM(b.onHandGram * b.material.unitCost), 0) FROM InventoryBalance b WHERE " +
+            "(:warehouseId IS NULL OR b.warehouse.id = :warehouseId)")
+    BigDecimal calculateTotalInventoryValue(@Param("warehouseId") UUID warehouseId);
+
+    @EntityGraph(attributePaths = {"warehouse", "material"})
+    @Query("SELECT b FROM InventoryBalance b WHERE " +
+            "(:warehouseId IS NULL OR b.warehouse.id = :warehouseId) AND " +
+            "(b.onHandGram - b.reservedGram) <= b.minimumStock")
+    List<InventoryBalance> findLowStockItems(@Param("warehouseId") UUID warehouseId);
 }

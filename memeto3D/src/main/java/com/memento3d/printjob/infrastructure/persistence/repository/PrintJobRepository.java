@@ -16,14 +16,34 @@ import java.util.UUID;
 @Repository
 public interface PrintJobRepository extends JpaRepository<PrintJob, UUID> {
 
+    @EntityGraph(attributePaths = {"printer", "material"})
     Optional<PrintJob> findByJobNumber(String jobNumber);
 
     @EntityGraph(attributePaths = {"printer", "material"})
-    @Query("SELECT j FROM PrintJob j WHERE " +
-            "(:status IS NULL OR j.status = :status) AND " +
-            "(:printerId IS NULL OR j.printer.id = :printerId) AND " +
-            "(:materialId IS NULL OR j.material.id = :materialId) " +
-            "ORDER BY j.createdAt DESC")
+    @Query("SELECT j FROM PrintJob j WHERE j.id = :id")
+    Optional<PrintJob> findWithDetailsById(@Param("id") UUID id);
+
+    @Override
+    @EntityGraph(attributePaths = {"printer", "material"})
+    Page<PrintJob> findAll(Pageable pageable);
+
+    @EntityGraph(attributePaths = {"printer", "material"})
+    @Query(
+        value = """
+            SELECT j
+            FROM PrintJob j
+            WHERE (:status IS NULL OR j.status = :status)
+              AND (:printerId IS NULL OR j.printer.id = :printerId)
+              AND (:materialId IS NULL OR j.material.id = :materialId)
+            """,
+        countQuery = """
+            SELECT COUNT(j)
+            FROM PrintJob j
+            WHERE (:status IS NULL OR j.status = :status)
+              AND (:printerId IS NULL OR j.printer.id = :printerId)
+              AND (:materialId IS NULL OR j.material.id = :materialId)
+            """
+    )
     Page<PrintJob> findAllWithFilters(
             @Param("status") PrintJobStatus status,
             @Param("printerId") UUID printerId,

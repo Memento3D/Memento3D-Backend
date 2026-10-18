@@ -22,6 +22,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -53,12 +54,13 @@ public class MaterialController {
     public ResponseEntity<Page<MaterialResponse>> list(
             @RequestParam(name = "status", required = false) MaterialStatus status,
             @RequestParam(name = "type", required = false) MaterialType materialType,
+            @RequestParam(name = "category", required = false) String category,
             @RequestParam(name = "search", required = false) String search,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "limit", defaultValue = "20") int limit
     ) {
         PageRequest pageRequest = PageRequest.of(Math.max(0, page), limit, Sort.by(Sort.Direction.ASC, "name"));
-        return ResponseEntity.ok(materialService.listMaterials(status, materialType, search, pageRequest));
+        return ResponseEntity.ok(materialService.listMaterials(status, materialType, category, search, pageRequest));
     }
 
     @GetMapping("/{id}")
@@ -67,14 +69,42 @@ public class MaterialController {
         return ResponseEntity.ok(materialService.getMaterial(id));
     }
 
-    @PatchMapping("/{id}")
-    @Operation(summary = "Update material details")
+    @PutMapping("/{id}")
+    @Operation(summary = "Update material details (PUT)")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public ResponseEntity<MaterialResponse> update(
+    public ResponseEntity<MaterialResponse> updatePut(
             @PathVariable("id") UUID id,
-            @Valid @RequestBody UpdateMaterialRequest request
+            @Valid @RequestBody UpdateMaterialRequest request,
+            @AuthenticationPrincipal CustomUserDetails currentUser
     ) {
-        return ResponseEntity.ok(materialService.updateMaterial(id, request));
+        UUID actorId = currentUser != null ? currentUser.getId() : null;
+        return ResponseEntity.ok(materialService.updateMaterial(id, request, actorId));
+    }
+
+    @PatchMapping("/{id}")
+    @Operation(summary = "Update material details (PATCH)")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<MaterialResponse> updatePatch(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody UpdateMaterialRequest request,
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        UUID actorId = currentUser != null ? currentUser.getId() : null;
+        return ResponseEntity.ok(materialService.updateMaterial(id, request, actorId));
+    }
+
+    @PatchMapping("/{id}/status")
+    @Operation(summary = "Toggle or set material status (ACTIVE/INACTIVE)")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<MaterialResponse> updateStatus(
+            @PathVariable("id") UUID id,
+            @RequestBody Map<String, String> statusBody,
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        UUID actorId = currentUser != null ? currentUser.getId() : null;
+        String statusStr = statusBody.get("status");
+        MaterialStatus status = MaterialStatus.valueOf(statusStr.toUpperCase());
+        return ResponseEntity.ok(materialService.updateMaterialStatus(id, status, actorId));
     }
 
     @DeleteMapping("/{id}")

@@ -69,6 +69,9 @@ public class PaymentTransaction {
     @Column(name = "paid_at")
     private Instant paidAt;
 
+    @Column(name = "confirmed_by")
+    private UUID confirmedBy;
+
     @Column(name = "expired_at")
     private Instant expiredAt;
 
@@ -87,15 +90,24 @@ public class PaymentTransaction {
 
     public boolean isTerminal() {
         return this.status == PaymentStatus.SUCCESS
+                || this.status == PaymentStatus.PAID
                 || this.status == PaymentStatus.FAILED
                 || this.status == PaymentStatus.CANCELLED
                 || this.status == PaymentStatus.EXPIRED;
     }
 
     public void markSuccess(String providerTransactionId, Instant paidAt) {
-        this.status = PaymentStatus.SUCCESS;
+        this.status = PaymentStatus.PAID;
         this.providerTransactionId = providerTransactionId;
         this.paidAt = paidAt != null ? paidAt : Instant.now();
+        this.failureCode = null;
+        this.failureMessage = null;
+    }
+
+    public void confirmCash(UUID managerId) {
+        this.status = PaymentStatus.PAID;
+        this.confirmedBy = managerId;
+        this.paidAt = Instant.now();
         this.failureCode = null;
         this.failureMessage = null;
     }

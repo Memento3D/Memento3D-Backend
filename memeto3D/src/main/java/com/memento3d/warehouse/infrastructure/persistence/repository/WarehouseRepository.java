@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,9 +22,15 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
     boolean existsByCodeIgnoreCaseAndIdNot(String code, UUID id);
 
+    List<Warehouse> findByManagerId(UUID managerId);
+
+    List<Warehouse> findByStatus(WarehouseStatus status);
+
+    long countByStatus(WarehouseStatus status);
+
     @Query("SELECT w FROM Warehouse w WHERE " +
             "(:status IS NULL OR w.status = :status) AND " +
-            "(:search IS NULL OR LOWER(w.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(w.code) LIKE LOWER(CONCAT('%', :search, '%')))")
+            "(CAST(:search AS string) IS NULL OR LOWER(w.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(w.code) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
     Page<Warehouse> findAllWithFilters(
             @Param("status") WarehouseStatus status,
             @Param("search") String search,

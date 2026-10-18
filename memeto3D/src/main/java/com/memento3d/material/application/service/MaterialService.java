@@ -14,11 +14,25 @@ public interface MaterialService {
 
     MaterialResponse createMaterial(CreateMaterialRequest request, UUID actorId);
 
+    default MaterialResponse createMaterial(CreateMaterialRequest request) {
+        return createMaterial(request, null);
+    }
+
     MaterialResponse getMaterial(UUID id);
 
-    Page<MaterialResponse> listMaterials(MaterialStatus status, MaterialType materialType, String search, Pageable pageable);
+    Page<MaterialResponse> listMaterials(MaterialStatus status, MaterialType materialType, String category, String search, Pageable pageable);
 
-    MaterialResponse updateMaterial(UUID id, UpdateMaterialRequest request);
+    default Page<MaterialResponse> listMaterials(MaterialStatus status, MaterialType materialType, String search, Pageable pageable) {
+        return listMaterials(status, materialType, null, search, pageable);
+    }
+
+    MaterialResponse updateMaterial(UUID id, UpdateMaterialRequest request, UUID actorId);
+
+    default MaterialResponse updateMaterial(UUID id, UpdateMaterialRequest request) {
+        return updateMaterial(id, request, null);
+    }
+
+    MaterialResponse updateMaterialStatus(UUID id, MaterialStatus status, UUID actorId);
 
     MaterialResponse deactivateMaterial(UUID id);
 }

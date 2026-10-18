@@ -59,6 +59,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final SecureRandom random = new SecureRandom();
 
     @Override
+    @Transactional
     public PaymentResponse createPayment(CreatePaymentRequest request, UUID userId) {
         log.info("Initiating payment creation for orderId: {}, method: {}, userId: {}",
                 request.getOrderId(), request.getPaymentMethod(), userId);
@@ -67,8 +68,30 @@ public class PaymentServiceImpl implements PaymentService {
 
         Optional<PaymentTransaction> existingSuccess = transactionRepository.findFirstByOrderIdAndStatus(
                 order.getId(), PaymentStatus.SUCCESS);
-        if (existingSuccess.isPresent()) {
-            throw new PaymentException("Order has already been successfully paid");
+        if (existingSuccess.isEmpty()) {
+            existingSuccess = transactionRepository.findFirstByOrderIdAndStatus(order.getId(), PaymentStatus.PAID);
+        }
+        if (existingSuccess.isPresent() || order.getPaymentStatus() == PaymentStatus.PAID) {
+            throw new PaymentAlreadyPaidException("Order has already been successfully paid");
+        }
+
+        // Idempotency / Double-click check: return existing pending transaction if recently created
+        Optional<PaymentTransaction> existingPending = transactionRepository.findFirstByOrderIdAndStatus(
+                order.getId(), PaymentStatus.PENDING);
+        if (existingPending.isPresent() && existingPending.get().getPaymentMethod() == request.getPaymentMethod()) {
+            PaymentTransaction existingTx = existingPending.get();
+            log.info("Returning existing pending payment transaction ID={} to prevent duplicate", existingTx.getId());
+            return PaymentResponse.builder()
+                    .paymentId(existingTx.getId())
+                    .orderId(existingTx.getOrderId())
+                    .paymentMethod(existingTx.getPaymentMethod())
+                    .status(existingTx.getStatus())
+                    .amount(existingTx.getAmount())
+                    .currency(existingTx.getCurrency())
+                    .paymentUrl(existingTx.getPaymentUrl())
+                    .merchantTransactionId(existingTx.getMerchantTransactionId())
+                    .createdAt(existingTx.getCreatedAt())
+                    .build();
         }
 
         BigDecimal payableAmount = order.getTotalPrice();
@@ -88,6 +111,23 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
 
         transaction = transactionRepository.save(transaction);
+
+        // CASH Method: no external gateway call required
+        if (request.getPaymentMethod() == PaymentMethod.CASH) {
+            order.setPaymentMethod(PaymentMethod.CASH);
+            log.info("Created CASH payment transaction ID={} for order ID={}", transaction.getId(), order.getId());
+            return PaymentResponse.builder()
+                    .paymentId(transaction.getId())
+                    .orderId(transaction.getOrderId())
+                    .paymentMethod(PaymentMethod.CASH)
+                    .status(PaymentStatus.PENDING)
+                    .amount(transaction.getAmount())
+                    .currency(transaction.getCurrency())
+                    .paymentUrl(null)
+                    .merchantTransactionId(transaction.getMerchantTransactionId())
+                    .createdAt(transaction.getCreatedAt())
+                    .build();
+        }
 
         PaymentGateway gateway = gatewayFactory.getGateway(request.getPaymentMethod());
         GatewayPaymentRequest gatewayRequest = GatewayPaymentRequest.builder()
@@ -200,6 +240,41 @@ public class PaymentServiceImpl implements PaymentService {
         transaction.markCancelled("Cancelled by user request");
         transaction = transactionRepository.save(transaction);
         log.info("Cancelled payment transaction {} by user {}", paymentId, userId);
+
+        return PaymentStatusResponse.fromEntity(transaction);
+    }
+
+    @Override
+    @Transactional
+    public PaymentStatusResponse confirmCashPayment(UUID paymentId, UUID managerId, Role role) {
+        boolean isStaff = (role == Role.ROLE_ADMIN || role == Role.ROLE_MANAGER || role == Role.ROLE_OPERATOR);
+        if (!isStaff) {
+            log.warn("Access denied: User {} with role {} tried to confirm cash payment {}", managerId, role, paymentId);
+            throw new AccessDeniedException("Only Managers and Admins can confirm cash payments");
+        }
+
+        PaymentTransaction transaction = transactionRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment transaction not found with ID: " + paymentId));
+
+        if (transaction.getPaymentMethod() != PaymentMethod.CASH) {
+            throw new InvalidPaymentMethodException("Only CASH payment transactions can be confirmed manually. Transaction method is " + transaction.getPaymentMethod());
+        }
+
+        if (transaction.getStatus() == PaymentStatus.PAID || transaction.getStatus() == PaymentStatus.SUCCESS) {
+            log.info("Cash payment transaction {} is already confirmed", paymentId);
+            return PaymentStatusResponse.fromEntity(transaction);
+        }
+
+        if (transaction.getStatus() == PaymentStatus.CANCELLED || transaction.getStatus() == PaymentStatus.FAILED) {
+            throw new PaymentException("Cannot confirm cash payment for a " + transaction.getStatus() + " transaction");
+        }
+
+        transaction.confirmCash(managerId);
+        transaction = transactionRepository.save(transaction);
+
+        orderService.updateOrderStatusPaid(transaction.getOrderId());
+        log.info("Manager ID={} successfully confirmed CASH payment transaction ID={} for order ID={}",
+                managerId, paymentId, transaction.getOrderId());
 
         return PaymentStatusResponse.fromEntity(transaction);
     }

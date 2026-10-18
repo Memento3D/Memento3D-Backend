@@ -49,6 +49,10 @@ public class InventoryBalance {
     @Builder.Default
     private BigDecimal reservedGram = BigDecimal.ZERO;
 
+    @Column(name = "minimum_stock", nullable = false, precision = 14, scale = 2)
+    @Builder.Default
+    private BigDecimal minimumStock = new BigDecimal("500.00");
+
     @Version
     @Column(name = "version", nullable = false)
     @Builder.Default
@@ -62,5 +66,14 @@ public class InventoryBalance {
         BigDecimal onHand = onHandGram != null ? onHandGram : BigDecimal.ZERO;
         BigDecimal reserved = reservedGram != null ? reservedGram : BigDecimal.ZERO;
         return onHand.subtract(reserved);
+    }
+
+    public boolean isLowStock() {
+        BigDecimal min = minimumStock != null ? minimumStock : (material != null && material.getMinimumStock() != null ? material.getMinimumStock() : BigDecimal.ZERO);
+        return getAvailableGram().compareTo(min) <= 0 && getAvailableGram().compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    public boolean isOutOfStock() {
+        return getAvailableGram().compareTo(BigDecimal.ZERO) <= 0;
     }
 }

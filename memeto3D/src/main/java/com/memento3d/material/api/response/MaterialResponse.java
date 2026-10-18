@@ -23,6 +23,9 @@ public class MaterialResponse {
     private UUID id;
     private String sku;
     private String name;
+    private String category;
+    private String unit;
+    private String brand;
     private MaterialType materialType;
     private String color;
     private String colorHex;
@@ -33,9 +36,12 @@ public class MaterialResponse {
     private Integer bedTempMin;
     private Integer bedTempMax;
     private BigDecimal unitCost;
+    private BigDecimal minimumStock;
     private MaterialStatus status;
+    private boolean active;
     private String description;
     private UUID createdBy;
+    private UUID updatedBy;
     private Long version;
     private Instant createdAt;
     private Instant updatedAt;
@@ -46,6 +52,9 @@ public class MaterialResponse {
                 .id(entity.getId())
                 .sku(entity.getSku())
                 .name(entity.getName())
+                .category(entity.getCategory())
+                .unit(entity.getUnit() != null ? entity.getUnit() : "g")
+                .brand(entity.getBrand())
                 .materialType(entity.getMaterialType())
                 .color(entity.getColor())
                 .colorHex(entity.getColorHex())
@@ -56,9 +65,12 @@ public class MaterialResponse {
                 .bedTempMin(entity.getBedTempMin())
                 .bedTempMax(entity.getBedTempMax())
                 .unitCost(entity.getUnitCost())
+                .minimumStock(entity.getMinimumStock())
                 .status(entity.getStatus())
+                .active(entity.getStatus() == MaterialStatus.ACTIVE)
                 .description(entity.getDescription())
                 .createdBy(entity.getCreatedBy())
+                .updatedBy(entity.getUpdatedBy())
                 .version(entity.getVersion())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())

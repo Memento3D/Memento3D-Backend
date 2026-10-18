@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -140,6 +141,20 @@ public class PaymentController {
         log.info("Received request to cancel payment ID: {}, user: {}", paymentId, cud.getId());
 
         PaymentStatusResponse response = paymentService.cancelPayment(paymentId, cud.getId(), cud.getRole());
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{paymentId}/confirm-cash")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OPERATOR')")
+    @SecurityRequirement(name = "BearerAuth")
+    @Operation(summary = "Confirm cash payment", description = "Manager or Admin only. Marks pending CASH payment as PAID.")
+    public ResponseEntity<PaymentStatusResponse> confirmCashPayment(
+            @PathVariable UUID paymentId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails cud = getAuthenticatedUserDetails(userDetails);
+        log.info("Manager {} confirming cash payment transaction {}", cud.getId(), paymentId);
+        PaymentStatusResponse response = paymentService.confirmCashPayment(paymentId, cud.getId(), cud.getRole());
         return ResponseEntity.ok(response);
     }
 

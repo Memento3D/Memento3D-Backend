@@ -22,13 +22,28 @@ public interface MaterialRepository extends JpaRepository<Material, UUID> {
 
     boolean existsBySkuIgnoreCaseAndIdNot(String sku, UUID id);
 
-    @Query("SELECT m FROM Material m WHERE " +
-            "(:status IS NULL OR m.status = :status) AND " +
-            "(:materialType IS NULL OR m.materialType = :materialType) AND " +
-            "(:search IS NULL OR LOWER(m.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(m.sku) LIKE LOWER(CONCAT('%', :search, '%')))")
+    long countByStatus(MaterialStatus status);
+
+    @Query(
+        value = """
+            SELECT m FROM Material m WHERE
+            (:status IS NULL OR m.status = :status) AND
+            (:materialType IS NULL OR m.materialType = :materialType) AND
+            (CAST(:category AS string) IS NULL OR LOWER(m.category) = LOWER(CAST(:category AS string))) AND
+            (CAST(:search AS string) IS NULL OR LOWER(m.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(m.sku) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+            """,
+        countQuery = """
+            SELECT COUNT(m) FROM Material m WHERE
+            (:status IS NULL OR m.status = :status) AND
+            (:materialType IS NULL OR m.materialType = :materialType) AND
+            (CAST(:category AS string) IS NULL OR LOWER(m.category) = LOWER(CAST(:category AS string))) AND
+            (CAST(:search AS string) IS NULL OR LOWER(m.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR LOWER(m.sku) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+            """
+    )
     Page<Material> findAllWithFilters(
             @Param("status") MaterialStatus status,
             @Param("materialType") MaterialType materialType,
+            @Param("category") String category,
             @Param("search") String search,
             Pageable pageable
     );

@@ -1,6 +1,9 @@
 package com.memento3d.warehouse.api;
 
 import com.memento3d.identity.infrastructure.security.CustomUserDetails;
+import com.memento3d.inventory.api.response.InventoryBalanceResponse;
+import com.memento3d.inventory.api.response.InventoryTransactionResponse;
+import com.memento3d.inventory.application.service.InventoryService;
 import com.memento3d.warehouse.api.request.AssignMemberRequest;
 import com.memento3d.warehouse.api.request.CreateWarehouseRequest;
 import com.memento3d.warehouse.api.request.UpdateWarehouseRequest;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -37,6 +41,7 @@ public class WarehouseController {
 
     private final WarehouseService warehouseService;
     private final WarehouseSecurityService warehouseSecurityService;
+    private final InventoryService inventoryService;
 
     @PostMapping
     @Operation(summary = "Register a new warehouse facility")
@@ -86,9 +91,10 @@ public class WarehouseController {
         return ResponseEntity.ok(warehouseService.getWarehouse(id));
     }
 
-    @PatchMapping("/{id}")
-    @Operation(summary = "Update warehouse details")
-    public ResponseEntity<WarehouseResponse> update(
+    @PutMapping("/{id}")
+    @Operation(summary = "Update warehouse details (PUT)")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<WarehouseResponse> updatePut(
             @PathVariable("id") UUID id,
             @Valid @RequestBody UpdateWarehouseRequest request,
             @AuthenticationPrincipal CustomUserDetails currentUser
@@ -96,7 +102,72 @@ public class WarehouseController {
         UUID actorId = currentUser != null ? currentUser.getId() : null;
         String role = currentUser != null ? currentUser.getRole().name() : "";
         warehouseSecurityService.validateWarehouseManager(id, actorId, role);
-        return ResponseEntity.ok(warehouseService.updateWarehouse(id, request));
+        return ResponseEntity.ok(warehouseService.updateWarehouse(id, request, actorId));
+    }
+
+    @PatchMapping("/{id}")
+    @Operation(summary = "Update warehouse details (PATCH)")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<WarehouseResponse> updatePatch(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody UpdateWarehouseRequest request,
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        UUID actorId = currentUser != null ? currentUser.getId() : null;
+        String role = currentUser != null ? currentUser.getRole().name() : "";
+        warehouseSecurityService.validateWarehouseManager(id, actorId, role);
+        return ResponseEntity.ok(warehouseService.updateWarehouse(id, request, actorId));
+    }
+
+    @PatchMapping("/{id}/status")
+    @Operation(summary = "Change warehouse status (ACTIVE, INACTIVE, MAINTENANCE)")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<WarehouseResponse> updateStatus(
+            @PathVariable("id") UUID id,
+            @RequestBody Map<String, String> statusBody,
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        UUID actorId = currentUser != null ? currentUser.getId() : null;
+        String role = currentUser != null ? currentUser.getRole().name() : "";
+        warehouseSecurityService.validateWarehouseManager(id, actorId, role);
+
+        String statusStr = statusBody.get("status");
+        WarehouseStatus status = WarehouseStatus.valueOf(statusStr.toUpperCase());
+        return ResponseEntity.ok(warehouseService.updateWarehouseStatus(id, status, actorId));
+    }
+
+    @GetMapping("/{id}/inventory")
+    @Operation(summary = "Get inventory balances specifically for this warehouse")
+    public ResponseEntity<Page<InventoryBalanceResponse>> getWarehouseInventory(
+            @PathVariable("id") UUID id,
+            @RequestParam(name = "materialId", required = false) UUID materialId,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "limit", defaultValue = "20") int limit,
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        UUID actorId = currentUser != null ? currentUser.getId() : null;
+        String role = currentUser != null ? currentUser.getRole().name() : "";
+        warehouseSecurityService.validateWarehouseAccess(id, actorId, role);
+
+        PageRequest pageRequest = PageRequest.of(Math.max(0, page), limit);
+        return ResponseEntity.ok(inventoryService.listBalances(id, materialId, pageRequest));
+    }
+
+    @GetMapping("/{id}/movements")
+    @Operation(summary = "Get stock ledger movements specifically for this warehouse")
+    public ResponseEntity<Page<InventoryTransactionResponse>> getWarehouseMovements(
+            @PathVariable("id") UUID id,
+            @RequestParam(name = "materialId", required = false) UUID materialId,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "limit", defaultValue = "20") int limit,
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        UUID actorId = currentUser != null ? currentUser.getId() : null;
+        String role = currentUser != null ? currentUser.getRole().name() : "";
+        warehouseSecurityService.validateWarehouseAccess(id, actorId, role);
+
+        PageRequest pageRequest = PageRequest.of(Math.max(0, page), limit);
+        return ResponseEntity.ok(inventoryService.listTransactions(id, materialId, null, null, pageRequest));
     }
 
     @DeleteMapping("/{id}")

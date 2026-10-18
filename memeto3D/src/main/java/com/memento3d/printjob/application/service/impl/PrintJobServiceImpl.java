@@ -98,7 +98,8 @@ public class PrintJobServiceImpl implements PrintJobService {
     @Override
     @Transactional(readOnly = true)
     public PrintJobResponse getPrintJob(UUID id) {
-        PrintJob job = printJobRepository.findById(id)
+        PrintJob job = printJobRepository.findWithDetailsById(id)
+                .or(() -> printJobRepository.findById(id))
                 .orElseThrow(() -> new ResourceNotFoundException("Print Job not found with id: " + id));
         return PrintJobResponse.fromEntity(job);
     }
