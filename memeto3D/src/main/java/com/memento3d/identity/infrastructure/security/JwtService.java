@@ -64,6 +64,10 @@ public class JwtService {
         return userIdStr != null ? UUID.fromString(userIdStr) : null;
     }
 
+    public Date extractIssuedAt(String token) {
+        return extractClaim(token, Claims::getIssuedAt);
+    }
+
     public Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
     }
@@ -83,7 +87,24 @@ public class JwtService {
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
-        return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
+        if (!username.equals(userDetails.getUsername()) || isTokenExpired(token)) {
+            return false;
+        }
+
+        if (userDetails instanceof CustomUserDetails cud && cud.getUser() != null) {
+            java.time.Instant pwdChangedAt = cud.getUser().getPasswordChangedAt();
+            if (pwdChangedAt != null) {
+                Date issuedAt = extractIssuedAt(token);
+                // Allow a 1-second margin for timestamp precision between DB and JWT millis
+                if (issuedAt != null && issuedAt.toInstant().plusSeconds(1).isBefore(pwdChangedAt)) {
+                    log.warn("Token rejected for user {}: issued at {} before passwordChangedAt {}",
+                            username, issuedAt.toInstant(), pwdChangedAt);
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     public boolean isTokenExpired(String token) {

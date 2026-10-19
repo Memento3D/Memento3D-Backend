@@ -99,7 +99,15 @@ class DtoAndModelTest {
         // Test fromEntity(null)
         assertNull(UserResponse.fromEntity(null));
 
-        UserResponse response2 = new UserResponse(id, "user@example.com", "User FullName", Role.ROLE_ADMIN, AuthProvider.LOCAL, null, true, com.memento3d.identity.domain.model.UserStatus.ACTIVE, null, null, null);
+        UserResponse response2 = UserResponse.builder()
+                .id(id)
+                .email("user@example.com")
+                .fullName("User FullName")
+                .role(Role.ROLE_ADMIN)
+                .provider(AuthProvider.LOCAL)
+                .status(com.memento3d.identity.domain.model.UserStatus.ACTIVE)
+                .emailVerified(true)
+                .build();
         assertEquals(id, response2.getId());
 
         UserResponse emptyResponse = new UserResponse();
@@ -244,7 +252,20 @@ class DtoAndModelTest {
 
         assertEquals(user.getId(), user2.getId());
 
-        User userAllArgs = new User(id, "user@example.com", "password", "User Name", AuthProvider.LOCAL, null, null, Role.ROLE_USER, true, com.memento3d.identity.domain.model.UserStatus.ACTIVE, null, null, 0L, 10737418240L, now, now);
+        User userAllArgs = User.builder()
+                .id(id)
+                .email("user@example.com")
+                .password("password")
+                .fullName("User Name")
+                .provider(AuthProvider.LOCAL)
+                .role(Role.ROLE_USER)
+                .emailVerified(true)
+                .status(com.memento3d.identity.domain.model.UserStatus.ACTIVE)
+                .storageUsedBytes(0L)
+                .storageQuotaBytes(10737418240L)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
         assertEquals(id, userAllArgs.getId());
         assertEquals(0L, userAllArgs.getStorageUsedBytes());
         assertEquals(10737418240L, userAllArgs.getStorageQuotaBytes());

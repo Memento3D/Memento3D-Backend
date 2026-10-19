@@ -48,6 +48,15 @@ public class UserResponse {
     @Schema(description = "Account creation timestamp")
     private java.time.Instant createdAt;
 
+    @Schema(description = "Last profile update timestamp")
+    private java.time.Instant updatedAt;
+
+    @Schema(description = "Date of birth (optional)", example = "1995-04-20")
+    private java.time.LocalDate dateOfBirth;
+
+    @Schema(description = "True when the account has a local password (false for Google-only accounts)", example = "true")
+    private Boolean hasPassword;
+
     public static UserResponse fromEntity(User user) {
         if (user == null) {
             return null;
@@ -64,6 +73,9 @@ public class UserResponse {
                 .phone(user.getPhone())
                 .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())
+                .updatedAt(user.getUpdatedAt())
+                .dateOfBirth(user.getDateOfBirth())
+                .hasPassword(user.getPassword() != null && !user.getPassword().isBlank())
                 .build();
     }
 }

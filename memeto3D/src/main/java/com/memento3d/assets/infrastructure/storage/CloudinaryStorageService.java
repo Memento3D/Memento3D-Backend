@@ -60,4 +60,32 @@ public class CloudinaryStorageService {
 
         return cloudinary.uploader().upload(bytes, options);
     }
+
+    /**
+     * Uploads (or atomically replaces) the user's avatar. A fixed public id per user means the
+     * previous image is overwritten, so no orphan assets remain. The image is cropped to 512x512.
+     *
+     * @return Cloudinary response (use {@code secure_url}, which carries a cache-busting version)
+     */
+    public Map<String, Object> uploadAvatar(byte[] bytes, UUID userId) throws IOException {
+        Map<String, Object> options = ObjectUtils.asMap(
+                "public_id", avatarPublicId(userId),
+                "resource_type", "image",
+                "overwrite", true,
+                "invalidate", true,
+                "allowed_formats", "jpg,png,webp",
+                "transformation", new com.cloudinary.Transformation()
+                        .width(512).height(512).crop("fill").gravity("auto").quality("auto")
+        );
+        return cloudinary.uploader().upload(bytes, options);
+    }
+
+    public void deleteAvatar(UUID userId) throws IOException {
+        cloudinary.uploader().destroy(avatarPublicId(userId),
+                ObjectUtils.asMap("resource_type", "image", "invalidate", true));
+    }
+
+    private static String avatarPublicId(UUID userId) {
+        return "memento3d/users/" + userId + "/avatar";
+    }
 }
