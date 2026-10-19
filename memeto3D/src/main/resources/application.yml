@@ -91,7 +91,7 @@ cloudinary:
 app:
   frontend:
     # Used ONLY server-side to build links inside emails (never taken from the request).
-    base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+    base-url: ${FRONTEND_BASE_URL:http://localhost:5174}
   mail:
     # SMTP sender bean is created only when MAIL_HOST is set (see MailConfig).
     host: ${MAIL_HOST:}
