@@ -77,6 +77,32 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
     }
 
+    @ExceptionHandler(com.memento3d.identity.domain.exception.EmailNotVerifiedException.class)
+    public ResponseEntity<ErrorResponse> handleEmailNotVerified(com.memento3d.identity.domain.exception.EmailNotVerifiedException ex, HttpServletRequest request) {
+        log.warn("Email not verified on path {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.FORBIDDEN.value())
+                .error("EMAIL_NOT_VERIFIED")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+    }
+
+    @ExceptionHandler(com.memento3d.identity.domain.exception.TermsAgreementRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleTermsAgreementRequired(com.memento3d.identity.domain.exception.TermsAgreementRequiredException ex, HttpServletRequest request) {
+        log.warn("Terms agreement required on path {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("TERMS_AGREEMENT_REQUIRED")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
     @ExceptionHandler(FileSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleFileSizeExceeded(FileSizeExceededException ex, HttpServletRequest request) {
         log.warn("File size exceeded on path {}: {}", request.getRequestURI(), ex.getMessage());

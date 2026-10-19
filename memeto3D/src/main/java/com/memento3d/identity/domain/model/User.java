@@ -47,6 +47,15 @@ public class User {
     @Builder.Default
     private Role role = Role.ROLE_USER;
 
+    @Column(name = "email_verified", nullable = false)
+    @Builder.Default
+    private Boolean emailVerified = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 30)
+    @Builder.Default
+    private UserStatus status = UserStatus.ACTIVE;
+
     @org.hibernate.annotations.ColumnDefault("0")
     @Column(name = "storage_used_bytes", nullable = false)
     @Builder.Default

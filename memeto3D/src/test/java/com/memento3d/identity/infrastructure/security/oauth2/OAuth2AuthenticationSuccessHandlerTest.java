@@ -42,6 +42,9 @@ class OAuth2AuthenticationSuccessHandlerTest {
     private CustomOAuth2UserService customOAuth2UserService;
 
     @Mock
+    private com.memento3d.identity.infrastructure.persistence.repository.UserConsentRepository userConsentRepository;
+
+    @Mock
     private Authentication authentication;
 
     @InjectMocks
@@ -70,6 +73,7 @@ class OAuth2AuthenticationSuccessHandlerTest {
         when(authentication.getPrincipal()).thenReturn(userDetails);
         when(jwtService.generateToken(testUser)).thenReturn("mock-access-jwt");
         when(refreshTokenService.createRefreshToken(testUser)).thenReturn("mock-refresh-token");
+        when(userConsentRepository.existsByUserIdAndConsentTypeAndDocumentVersionAndAcceptedTrue(any(), any(), any())).thenReturn(true);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -80,16 +84,18 @@ class OAuth2AuthenticationSuccessHandlerTest {
         assertTrue(targetUrl.startsWith("http://localhost:3000/oauth2/redirect"));
         assertTrue(targetUrl.contains("token=mock-access-jwt"));
         assertTrue(targetUrl.contains("refreshToken=mock-refresh-token"));
+        assertFalse(targetUrl.contains("onboarding=true"));
     }
 
     @Test
-    @DisplayName("determineTargetUrl handles OAuth2User/OidcUser principal without ClassCastException")
+    @DisplayName("determineTargetUrl handles OAuth2User/OidcUser principal without ClassCastException and appends onboarding when consent missing")
     void testDetermineTargetUrlWithOAuth2User() {
         org.springframework.security.oauth2.core.user.OAuth2User genericOAuth2User = mock(org.springframework.security.oauth2.core.user.OAuth2User.class);
         when(authentication.getPrincipal()).thenReturn(genericOAuth2User);
         when(customOAuth2UserService.processUserFromOAuth2(genericOAuth2User, "google")).thenReturn(testUser);
         when(jwtService.generateToken(testUser)).thenReturn("mock-access-jwt");
         when(refreshTokenService.createRefreshToken(testUser)).thenReturn("mock-refresh-token");
+        when(userConsentRepository.existsByUserIdAndConsentTypeAndDocumentVersionAndAcceptedTrue(any(), any(), any())).thenReturn(false);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -100,6 +106,7 @@ class OAuth2AuthenticationSuccessHandlerTest {
         assertTrue(targetUrl.startsWith("http://localhost:3000/oauth2/redirect"));
         assertTrue(targetUrl.contains("token=mock-access-jwt"));
         assertTrue(targetUrl.contains("refreshToken=mock-refresh-token"));
+        assertTrue(targetUrl.contains("onboarding=true"));
         verify(customOAuth2UserService).processUserFromOAuth2(genericOAuth2User, "google");
     }
 }

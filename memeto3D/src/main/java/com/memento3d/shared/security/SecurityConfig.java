@@ -71,6 +71,12 @@ public class SecurityConfig {
                                 "/api/auth/oauth2/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST,
+                                "/api/v1/auth/email/**", "/api/auth/email/**", "/auth/email/**"
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/legal/**", "/api/legal/**", "/legal/**"
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.POST,
                                 "/api/v1/webhooks/payments/**",
                                 "/api/payments/webhooks/**",
                                 "/payments/webhooks/**"

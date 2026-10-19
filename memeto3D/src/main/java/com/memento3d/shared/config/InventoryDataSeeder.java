@@ -140,10 +140,29 @@ public class InventoryDataSeeder implements CommandLineRunner {
         createUserIfMissing("provider@memento3d.com", "Phan Xưởng In 3D Partner", Role.ROLE_PROVIDER);
         createUserIfMissing("driver@memento3d.com", "Hoàng Giao Hàng Express", Role.ROLE_DRIVER);
         createUserIfMissing("user@memento3d.com", "Đặng Khách Hàng Thân Thiết", Role.ROLE_USER);
+
+        createUserIfMissing("admin@memento3d.vn", "System Administrator", Role.ROLE_ADMIN);
+        createUserIfMissing("manager@memento3d.vn", "Operations Manager", Role.ROLE_MANAGER);
+        createUserIfMissing("warehouse@memento3d.vn", "Warehouse Specialist", Role.ROLE_WAREHOUSE);
+        createUserIfMissing("operator@memento3d.vn", "Print Farm Operator", Role.ROLE_OPERATOR);
+        createUserIfMissing("provider@memento3d.vn", "Apex 3D Manufacturing", Role.ROLE_PROVIDER);
+        createUserIfMissing("driver@memento3d.vn", "Rapid Courier Driver", Role.ROLE_DRIVER);
+        createUserIfMissing("customer@memento3d.vn", "Alex Morgan (Customer)", Role.ROLE_USER);
     }
 
     private User createUserIfMissing(String email, String fullName, Role role) {
-        return userRepository.findByEmail(email).orElseGet(() -> {
+        return userRepository.findByEmail(email).map(existingUser -> {
+            boolean updated = false;
+            if (!Boolean.TRUE.equals(existingUser.getEmailVerified())) {
+                existingUser.setEmailVerified(true);
+                updated = true;
+            }
+            if (existingUser.getStatus() != com.memento3d.identity.domain.model.UserStatus.ACTIVE) {
+                existingUser.setStatus(com.memento3d.identity.domain.model.UserStatus.ACTIVE);
+                updated = true;
+            }
+            return updated ? userRepository.save(existingUser) : existingUser;
+        }).orElseGet(() -> {
             log.info("Creating demo account: {} ({})", email, role);
             User u = User.builder()
                     .email(email)
@@ -151,6 +170,8 @@ public class InventoryDataSeeder implements CommandLineRunner {
                     .role(role)
                     .password(passwordEncoder.encode("123456"))
                     .provider(AuthProvider.LOCAL)
+                    .emailVerified(true)
+                    .status(com.memento3d.identity.domain.model.UserStatus.ACTIVE)
                     .storageQuotaBytes(10737418240L)
                     .storageUsedBytes(0L)
                     .avatarUrl("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200")

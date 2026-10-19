@@ -1,7 +1,5 @@
 package com.memento3d.identity.api.response;
 
-import com.memento3d.identity.domain.model.User;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
@@ -18,4 +16,11 @@ public class RegisterResponse {
 
     @Schema(description = "Newly registered user details")
     private UserResponse user;
+
+    @Schema(description = "Flag indicating email verification is required", example = "true")
+    @Builder.Default
+    private boolean verificationRequired = true;
+
+    @Schema(description = "Verification token (included for development / automated testing convenience)")
+    private String verificationToken;
 }

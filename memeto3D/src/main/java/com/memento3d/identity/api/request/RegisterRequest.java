@@ -1,7 +1,5 @@
 package com.memento3d.identity.api.request;
 
-import com.memento3d.identity.domain.model.User;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -30,4 +28,14 @@ public class RegisterRequest {
     @Size(max = 100, message = "Full name must not exceed 100 characters")
     @Schema(description = "User full name", example = "John Doe")
     private String fullName;
+
+    @Schema(description = "Agreement to Terms of Service and Privacy Policy", example = "true")
+    private Boolean agreeTerms;
+
+    @Schema(description = "Accepted Terms of Service version", example = "1.0")
+    private String termsVersion;
+
+    @Schema(description = "Consent to receive promotional marketing emails", example = "false")
+    @Builder.Default
+    private Boolean marketingConsent = false;
 }

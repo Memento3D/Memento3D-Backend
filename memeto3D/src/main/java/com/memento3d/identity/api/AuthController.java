@@ -1,16 +1,17 @@
 package com.memento3d.identity.api;
 
+import com.memento3d.identity.api.request.ConsentRequest;
 import com.memento3d.identity.api.request.LoginRequest;
 import com.memento3d.identity.api.request.RefreshTokenRequest;
 import com.memento3d.identity.api.request.RegisterRequest;
+import com.memento3d.identity.api.request.ResendVerificationRequest;
+import com.memento3d.identity.api.request.VerifyEmailRequest;
 import com.memento3d.identity.api.response.AuthResponse;
 import com.memento3d.identity.api.response.LogoutResponse;
 import com.memento3d.identity.api.response.RegisterResponse;
 import com.memento3d.identity.api.response.UserResponse;
-import com.memento3d.identity.domain.model.RefreshToken;
-import com.memento3d.identity.domain.model.User;
+import com.memento3d.identity.api.response.VerifyEmailResponse;
 import com.memento3d.shared.api.response.ErrorResponse;
-
 import com.memento3d.identity.application.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,6 +21,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,21 +30,24 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.util.Map;
+
 @RestController
 @RequestMapping({"/api/v1/auth", "/api/auth"})
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Authentication", description = "Authentication endpoints: Register, Login, Refresh Token, Logout, and Current User profile")
+@Tag(name = "Authentication", description = "Authentication endpoints: Register, Login, Refresh Token, Logout, Email Verification, Consents, and Profile")
 public class AuthController {
 
     private final AuthService authService;
 
     @PostMapping("/register")
-    @Operation(summary = "Register new user", description = "Creates a new user account with hashed password in PostgreSQL")
+    @Operation(summary = "Register new Customer", description = "Creates a new customer account with hashed password and sends verification email")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "User successfully registered",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = RegisterResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Validation error or invalid request payload",
+            @ApiResponse(responseCode = "400", description = "Validation error, missing terms agreement, or weak password",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Email already registered in the system",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
@@ -60,6 +66,8 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "Validation error or missing fields",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Invalid email or password",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Email not verified or account suspended",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
@@ -83,7 +91,6 @@ public class AuthController {
         AuthResponse response = authService.refreshToken(request);
         return ResponseEntity.ok(response);
     }
-
 
     @PostMapping("/logout")
     @Operation(
@@ -126,29 +133,78 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/email/verify")
+    @Operation(summary = "Verify customer email address", description = "Validates the one-time email verification token and activates customer account")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Email successfully verified",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = VerifyEmailResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid, expired, or reused token",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<VerifyEmailResponse> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        log.info("Received request to verify email token");
+        VerifyEmailResponse response = authService.verifyEmail(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/email/resend-verification")
+    @Operation(summary = "Resend verification email", description = "Resends an email verification link with rate limiting to prevent spam")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Verification email dispatched if account exists and is unverified"),
+            @ApiResponse(responseCode = "429", description = "Rate limit exceeded (less than 60 seconds since last attempt)",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<Map<String, String>> resendVerification(@Valid @RequestBody ResendVerificationRequest request) {
+        log.info("Received request to resend verification email for: {}", request.getEmail());
+        authService.resendVerificationEmail(request);
+        return ResponseEntity.ok(Map.of(
+                "message", "Nếu địa chỉ email tồn tại trong hệ thống và chưa được kích hoạt, liên kết xác thực mới đã được gửi."
+        ));
+    }
+
+    @PostMapping("/consents")
+    @Operation(
+            summary = "Complete required agreements (Google Onboarding / Consent update)",
+            description = "Accepts Terms of Service and optional marketing consent for authenticated onboarding session",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Agreements recorded and full session tokens issued",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Terms of Service agreement is mandatory",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized or invalid onboarding token",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<AuthResponse> completeConsents(
+            @Valid @RequestBody ConsentRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        String clientIp = servletRequest.getRemoteAddr();
+        String userAgent = servletRequest.getHeader("User-Agent");
+        log.info("Received complete consents request from IP: {}", clientIp);
+        AuthResponse response = authService.completeConsents(request, clientIp, userAgent);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/oauth2/google")
     @Operation(
             summary = "Login with Google (OAuth2 / OIDC)",
-            description = "Chuyển hướng đến màn hình xác thực tài khoản Google. <br/><br/>"
-                    + "⚠️ <b>LƯU Ý:</b> Không dùng nút 'Execute' màu xanh của Swagger vì đây là API chuyển hướng trình duyệt (trình duyệt sẽ chặn CORS khi fetch ngầm sang Google). <br/>"
-                    + "👉 Hãy click chuột phải mở link này trong tab mới: <a href=\"http://localhost:8080/oauth2/authorization/google\" target=\"_blank\"><b>BẤM VÀO ĐÂY ĐỂ ĐĂNG NHẬP BẰNG GOOGLE</b></a>"
+            description = "Redirects browser to Google OAuth2 authorization screen"
     )
-    @ApiResponses({
-            @ApiResponse(responseCode = "302", description = "Redirect to Google authorization screen")
-    })
-    public void loginWithGoogle(jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+    public void loginWithGoogle(HttpServletResponse response) throws IOException {
         response.sendRedirect("/oauth2/authorization/google");
     }
 
     @GetMapping("/oauth2/google/url")
     @Operation(
-            summary = "Get Google Login URL (Cho Frontend / Swagger test)",
-            description = "Trả về JSON chứa URL đăng nhập Google để Frontend hoặc Swagger có thể lấy và mở trực tiếp."
+            summary = "Get Google Login URL",
+            description = "Returns JSON containing Google OAuth2 authorization initiation URL for frontend consumption"
     )
-    public ResponseEntity<java.util.Map<String, String>> getGoogleLoginUrl() {
-        return ResponseEntity.ok(java.util.Map.of(
+    public ResponseEntity<Map<String, String>> getGoogleLoginUrl() {
+        return ResponseEntity.ok(Map.of(
                 "url", "http://localhost:8080/oauth2/authorization/google",
-                "message", "Mở URL này trên tab trình duyệt mới để đăng nhập Google"
+                "message", "Mở URL này trên tab trình duyệt để bắt đầu đăng nhập với Google"
         ));
     }
 }
