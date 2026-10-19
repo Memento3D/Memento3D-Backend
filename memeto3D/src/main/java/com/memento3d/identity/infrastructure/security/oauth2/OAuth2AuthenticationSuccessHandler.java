@@ -2,6 +2,7 @@ package com.memento3d.identity.infrastructure.security.oauth2;
 
 import com.memento3d.identity.application.service.RefreshTokenService;
 import com.memento3d.identity.domain.model.User;
+import com.memento3d.identity.infrastructure.persistence.repository.UserConsentRepository;
 import com.memento3d.identity.infrastructure.persistence.repository.UserRepository;
 import com.memento3d.identity.infrastructure.security.CustomUserDetails;
 import com.memento3d.identity.infrastructure.security.JwtService;
@@ -30,6 +31,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final UserRepository userRepository;
+    private final UserConsentRepository userConsentRepository;
     private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
     private final CustomOAuth2UserService customOAuth2UserService;
 
@@ -38,7 +40,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
-                                        Authentication authentication) throws IOException {
+                                         Authentication authentication) throws IOException {
         String targetUrl = determineTargetUrl(request, response, authentication);
 
         if (response.isCommitted()) {
@@ -80,15 +82,26 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
                     .build().toUriString();
         }
 
+        // Check if user has accepted current Terms of Service version
+        boolean hasAcceptedTerms = userConsentRepository
+                .existsByUserIdAndConsentTypeAndDocumentVersionAndAcceptedTrue(user.getId(), "TERMS", "1.0");
+
         String accessToken = jwtService.generateToken(user);
         String refreshToken = refreshTokenService.createRefreshToken(user);
 
-        log.info("OAuth2 login successful for email: {}. Redirecting to {}", user.getEmail(), targetUrl);
+        log.info("OAuth2 login successful for email: {}. Has accepted terms: {}. Redirecting to {}",
+                user.getEmail(), hasAcceptedTerms, targetUrl);
 
-        return UriComponentsBuilder.fromUriString(targetUrl)
+        UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(targetUrl)
                 .queryParam("token", accessToken)
-                .queryParam("refreshToken", refreshToken)
-                .build().toUriString();
+                .queryParam("refreshToken", refreshToken);
+
+        if (!hasAcceptedTerms) {
+            // New user must complete terms agreement before full platform onboarding
+            uriBuilder.queryParam("onboarding", "true");
+        }
+
+        return uriBuilder.build().toUriString();
     }
 
     protected void clearAuthenticationAttributes(HttpServletRequest request, HttpServletResponse response) {

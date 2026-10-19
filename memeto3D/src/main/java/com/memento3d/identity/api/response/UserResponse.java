@@ -33,6 +33,12 @@ public class UserResponse {
     @Schema(description = "User avatar image URL", example = "https://lh3.googleusercontent.com/a/...")
     private String avatarUrl;
 
+    @Schema(description = "Whether the user's email is verified", example = "true")
+    private Boolean emailVerified;
+
+    @Schema(description = "User account status", example = "ACTIVE")
+    private com.memento3d.identity.domain.model.UserStatus status;
+
     public static UserResponse fromEntity(User user) {
         if (user == null) {
             return null;
@@ -44,6 +50,8 @@ public class UserResponse {
                 .role(user.getRole())
                 .provider(user.getProvider())
                 .avatarUrl(user.getAvatarUrl())
+                .emailVerified(Boolean.TRUE.equals(user.getEmailVerified()))
+                .status(user.getStatus())
                 .build();
     }
 }

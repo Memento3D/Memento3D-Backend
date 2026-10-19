@@ -64,6 +64,8 @@ class AuthControllerTest {
                 .email("test@example.com")
                 .password("123456")
                 .fullName("Test User")
+                .agreeTerms(true)
+                .termsVersion("1.0")
                 .build();
 
         UserResponse userResponse = UserResponse.builder()
@@ -236,5 +238,76 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.message", is("Logout successfully")));
 
         verify(authService, times(1)).logout(isNull(), any());
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/email/verify - Thành công trả về 200 OK")
+    void testVerifyEmailSuccess() throws Exception {
+        com.memento3d.identity.api.request.VerifyEmailRequest request =
+                new com.memento3d.identity.api.request.VerifyEmailRequest("valid-token-123");
+
+        com.memento3d.identity.api.response.VerifyEmailResponse response =
+                com.memento3d.identity.api.response.VerifyEmailResponse.builder()
+                        .message("Email verified successfully")
+                        .email("test@example.com")
+                        .verified(true)
+                        .build();
+
+        when(authService.verifyEmail(any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/auth/email/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verified", is(true)))
+                .andExpect(jsonPath("$.email", is("test@example.com")));
+
+        verify(authService, times(1)).verifyEmail(any());
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/email/resend-verification - Thành công trả về 200 OK")
+    void testResendVerificationSuccess() throws Exception {
+        com.memento3d.identity.api.request.ResendVerificationRequest request =
+                new com.memento3d.identity.api.request.ResendVerificationRequest("test@example.com");
+
+        doNothing().when(authService).resendVerificationEmail(any());
+
+        mockMvc.perform(post("/api/auth/email/resend-verification")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").exists());
+
+        verify(authService, times(1)).resendVerificationEmail(any());
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/consents - Thành công trả về 200 OK với AuthResponse")
+    void testCompleteConsentsSuccess() throws Exception {
+        com.memento3d.identity.api.request.ConsentRequest request =
+                com.memento3d.identity.api.request.ConsentRequest.builder()
+                        .agreeTerms(true)
+                        .termsVersion("1.0")
+                        .marketingConsent(false)
+                        .build();
+
+        AuthResponse authResponse = AuthResponse.builder()
+                .accessToken("new-jwt-token")
+                .refreshToken("new-refresh-token")
+                .tokenType("Bearer")
+                .expiresIn(3600)
+                .build();
+
+        when(authService.completeConsents(any(), any(), any())).thenReturn(authResponse);
+
+        mockMvc.perform(post("/api/auth/consents")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken", is("new-jwt-token")))
+                .andExpect(jsonPath("$.refreshToken", is("new-refresh-token")));
+
+        verify(authService, times(1)).completeConsents(any(), any(), any());
     }
 }

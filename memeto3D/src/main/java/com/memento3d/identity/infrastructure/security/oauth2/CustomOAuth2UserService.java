@@ -3,6 +3,9 @@ package com.memento3d.identity.infrastructure.security.oauth2;
 import com.memento3d.identity.domain.model.AuthProvider;
 import com.memento3d.identity.domain.model.Role;
 import com.memento3d.identity.domain.model.User;
+import com.memento3d.identity.domain.model.UserIdentity;
+import com.memento3d.identity.domain.model.UserStatus;
+import com.memento3d.identity.infrastructure.persistence.repository.UserIdentityRepository;
 import com.memento3d.identity.infrastructure.persistence.repository.UserRepository;
 import com.memento3d.identity.infrastructure.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +27,7 @@ import java.util.Optional;
 public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
     private final UserRepository userRepository;
+    private final UserIdentityRepository userIdentityRepository;
 
     @Override
     @Transactional
@@ -53,14 +57,43 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             );
         }
 
+        // Verify that the email is verified by Google
+        Object emailVerifiedClaim = oAuth2User.getAttributes().get("email_verified");
+        if (emailVerifiedClaim instanceof Boolean verified && !verified) {
+            log.error("Google account email is not verified by Google");
+            throw new OAuth2AuthenticationException(
+                    new OAuth2Error("email_not_verified", "Google email is not verified by identity provider", null)
+            );
+        }
+
         String email = oAuth2UserInfo.getEmail().trim().toLowerCase();
-        Optional<User> userOptional = userRepository.findByEmail(email);
+        String sub = oAuth2UserInfo.getId();
+        AuthProvider provider = AuthProvider.valueOf(regId.toUpperCase());
+
+        // 1. Look for linked identity by provider and providerSubject (Google sub)
+        Optional<UserIdentity> identityOptional = userIdentityRepository.findByProviderAndProviderSubject(provider, sub);
 
         User user;
-        if (userOptional.isPresent()) {
-            user = updateExistingUser(userOptional.get(), oAuth2UserInfo, regId);
+        if (identityOptional.isPresent()) {
+            // Existing linked Google user
+            user = updateExistingUser(identityOptional.get().getUser(), oAuth2UserInfo);
         } else {
-            user = registerNewUser(oAuth2UserInfo, regId);
+            // Identity not yet linked. Check if user with this email already exists
+            Optional<User> existingEmailUser = userRepository.findByEmail(email);
+
+            if (existingEmailUser.isPresent()) {
+                // Rule: Do NOT automatically link Google account to existing local password account
+                // User must log in with existing credentials to link accounts securely
+                log.warn("OAuth2 login failed: Account with email {} already exists with password. Manual link required.", email);
+                throw new OAuth2AuthenticationException(
+                        new OAuth2Error("account_exists_link_required",
+                                "Tài khoản với email này đã tồn tại bằng mật khẩu. Vui lòng đăng nhập bằng mật khẩu trước để liên kết tài khoản Google.",
+                                null)
+                );
+            } else {
+                // Brand new user registration via Google
+                user = registerNewUser(oAuth2UserInfo, provider, sub);
+            }
         }
 
         return user;
@@ -72,31 +105,41 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         return new CustomUserDetails(user, oAuth2User.getAttributes());
     }
 
-    private User registerNewUser(OAuth2UserInfo oAuth2UserInfo, String registrationId) {
-        log.info("Registering new OAuth2 user with email: {} via provider: {}", oAuth2UserInfo.getEmail(), registrationId);
+    private User registerNewUser(OAuth2UserInfo oAuth2UserInfo, AuthProvider provider, String sub) {
+        log.info("Registering new Google OAuth2 customer with email: {}", oAuth2UserInfo.getEmail());
 
-        String fullName = StringUtils.hasText(oAuth2UserInfo.getName()) 
-                ? oAuth2UserInfo.getName().trim() 
+        String fullName = StringUtils.hasText(oAuth2UserInfo.getName())
+                ? oAuth2UserInfo.getName().trim()
                 : oAuth2UserInfo.getEmail().split("@")[0];
-
-        AuthProvider provider = AuthProvider.valueOf(registrationId.toUpperCase());
 
         User user = User.builder()
                 .email(oAuth2UserInfo.getEmail().trim().toLowerCase())
                 .fullName(fullName)
                 .provider(provider)
-                .providerId(oAuth2UserInfo.getId())
+                .providerId(sub)
                 .avatarUrl(oAuth2UserInfo.getImageUrl())
                 .role(Role.ROLE_USER)
+                .emailVerified(true) // Google verified
+                .status(UserStatus.ACTIVE)
                 .storageUsedBytes(0L)
                 .storageQuotaBytes(10737418240L) // 10 GB default
                 .build();
 
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+
+        // Record UserIdentity
+        UserIdentity identity = UserIdentity.builder()
+                .user(savedUser)
+                .provider(provider)
+                .providerSubject(sub)
+                .build();
+        userIdentityRepository.save(identity);
+
+        return savedUser;
     }
 
-    private User updateExistingUser(User existingUser, OAuth2UserInfo oAuth2UserInfo, String registrationId) {
-        log.info("Updating existing user profile for email: {} with provider: {}", existingUser.getEmail(), registrationId);
+    private User updateExistingUser(User existingUser, OAuth2UserInfo oAuth2UserInfo) {
+        log.info("Updating profile for returning Google user: {}", existingUser.getEmail());
 
         boolean updated = false;
 
@@ -110,12 +153,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             updated = true;
         }
 
-        // Link OAuth2 provider information if previously local or providerId missing
-        if (existingUser.getProviderId() == null || existingUser.getProviderId().isBlank()) {
-            existingUser.setProviderId(oAuth2UserInfo.getId());
-            if (existingUser.getProvider() == AuthProvider.LOCAL) {
-                existingUser.setProvider(AuthProvider.valueOf(registrationId.toUpperCase()));
-            }
+        if (Boolean.FALSE.equals(existingUser.getEmailVerified())) {
+            existingUser.setEmailVerified(true);
             updated = true;
         }
 

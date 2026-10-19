@@ -55,7 +55,7 @@ class DtoAndModelTest {
         assertEquals(req1.getPassword(), req2.getPassword());
         assertEquals(req1.getFullName(), req2.getFullName());
 
-        RegisterRequest req3 = new RegisterRequest("test@example.com", "password123", "Full Name");
+        RegisterRequest req3 = new RegisterRequest("test@example.com", "password123", "Full Name", true, "1.0", false);
         assertEquals("test@example.com", req3.getEmail());
     }
 
@@ -99,7 +99,7 @@ class DtoAndModelTest {
         // Test fromEntity(null)
         assertNull(UserResponse.fromEntity(null));
 
-        UserResponse response2 = new UserResponse(id, "user@example.com", "User FullName", Role.ROLE_ADMIN, AuthProvider.LOCAL, null);
+        UserResponse response2 = new UserResponse(id, "user@example.com", "User FullName", Role.ROLE_ADMIN, AuthProvider.LOCAL, null, true, com.memento3d.identity.domain.model.UserStatus.ACTIVE);
         assertEquals(id, response2.getId());
 
         UserResponse emptyResponse = new UserResponse();
@@ -129,7 +129,7 @@ class DtoAndModelTest {
         assertEquals(res1.getMessage(), res2.getMessage());
         assertEquals(res1.getUser(), res2.getUser());
 
-        RegisterResponse res3 = new RegisterResponse("Register successfully", userResponse);
+        RegisterResponse res3 = new RegisterResponse("Register successfully", userResponse, true, "mock-token");
         assertEquals("Register successfully", res3.getMessage());
     }
 
@@ -244,10 +244,11 @@ class DtoAndModelTest {
 
         assertEquals(user.getId(), user2.getId());
 
-        User userAllArgs = new User(id, "user@example.com", "password", "User Name", AuthProvider.LOCAL, null, null, Role.ROLE_USER, 0L, 10737418240L, now, now);
+        User userAllArgs = new User(id, "user@example.com", "password", "User Name", AuthProvider.LOCAL, null, null, Role.ROLE_USER, true, com.memento3d.identity.domain.model.UserStatus.ACTIVE, 0L, 10737418240L, now, now);
         assertEquals(id, userAllArgs.getId());
         assertEquals(0L, userAllArgs.getStorageUsedBytes());
         assertEquals(10737418240L, userAllArgs.getStorageQuotaBytes());
+        assertTrue(userAllArgs.getEmailVerified());
     }
 
     @Test
