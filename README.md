@@ -14,30 +14,50 @@
 
 ## 🚀 Các Tính Năng Chính (Key Features)
 
-### 1. 🔐 Authenticate & Authorization
+### 1. 🔐 Authenticate & Multi-Role RBAC (7 Actors)
 - **JWT Security**: Xác thực token không lưu vết (stateless JWT access token) cùng với cơ chế xoay vòng và thu hồi refresh token.
 - **Token Blacklist**: Lưu danh sách đen JWT đã thu hồi/đăng xuất trong Redis và database.
-- **Phân quyền người dùng (RBAC)**: Hỗ trợ các vai trò `user`, `admin`, và `operator`.
+- **Phân quyền người dùng (RBAC 7 Roles)**: Quản lý và phân quyền chặt chẽ cho toàn bộ 7 nhóm tác nhân:
+  - `ROLE_CUSTOMER`: Khách hàng mua sắm, đặt in 3D, quản lý phiên scan.
+  - `ROLE_ADMIN`: Quản trị viên tối cao hệ thống.
+  - `ROLE_MANAGER`: Quản lý xưởng in, điều phối sản xuất và vật tư.
+  - `ROLE_WAREHOUSE`: Thủ kho, quản lý nhập/xuất/tồn kho.
+  - `ROLE_OPERATOR`: Kỹ thuật viên vận hành máy in 3D.
+  - `ROLE_PROVIDER`: Nhà cung ứng vật tư filament/resin.
+  - `ROLE_DRIVER`: Đối tác giao vận, vận chuyển đơn in 3D.
+- **Tài khoản kiểm thử chuẩn**: Toàn bộ tài khoản mẫu được kích hoạt sẵn (`email_verified = true`, `status = ACTIVE`) với mật khẩu chung `123456` cho cả 2 tên miền `@memento3d.vn` và `@memento3d.com`:
+  - `customer@memento3d.vn` / `123456`
+  - `admin@memento3d.vn` / `123456`
+  - `manager@memento3d.vn` / `123456`
+  - `warehouse@memento3d.vn` / `123456`
+  - `operator@memento3d.vn` / `123456`
+  - `provider@memento3d.vn` / `123456`
+  - `driver@memento3d.vn` / `123456`
 
-### 2. 📸 Scan Session & Upload Management
+### 2. 🧱 Quản Lý Vật Liệu & Kho Bãi (Materials & Warehouses)
+- **Material Catalog (F01)**: Quản lý danh mục vật liệu in (PLA, ABS, PETG, Resin...), thông số nhiệt độ đầu đùn, bàn in, mật độ và giá vốn theo gram ($VND/g$).
+- **Warehouse Management (F02)**: Quản lý cơ sở kho vật lý, địa chỉ, trạng thái hoạt động với cơ chế bảo vệ (Deactivate Guard - chặn xóa/vô hiệu hóa khi còn tồn kho hoặc đang giữ hàng cho lệnh in).
+- **Inventory Ledger (F03 - F08)**: Quản lý biến động xuất/nhập kho nguyên tử, tính toán tồn khả dụng và khóa giữ nguyên liệu cho lệnh in.
+
+### 3. 📸 Scan Session & Upload Management
 - **Quản lý phiên Scan**: Tạo, cập nhật, phân trang và truy vấn danh sách scan của người dùng.
 - **Tải lên từng phần (Chunked Multipart Upload)**: Hỗ trợ Resume/Retry cho các file dung lượng lớn thông qua `/api/v1/uploads`.
 - **Cloud Storage Integration**: Tích hợp với Cloudinary API cho việc lưu trữ và quản lý tài nguyên phương tiện.
 
-### 3. 🔬 Engine Kiểm Tra Chất Lượng Ảnh (Quality Check Engine)
+### 4. 🔬 Engine Kiểm Tra Chất Lượng Ảnh (Quality Check Engine)
 - **Phân tích kỹ thuật chi tiết**: Đánh giá độ sắc nét (sharpness/blur), độ sáng/phơi sáng (brightness/exposure), số lượng đặc trưng (feature count), độ chồng lấp (overlap ratio).
 - **Phát hiện ảnh trùng lặp & nhiễu**: Nhận diện ảnh trùng lặp tuyệt đối/tương đối (hash MD5/perceptual) và phân tích nhiễu (SNR score).
 - **Quality Runs**: Lưu vết và cung cấp API truy vấn kết quả kiểm định kỹ thuật chi tiết theo từng ảnh.
 
-### 4. ⚙️ Tiến Trình Tái Tạo 3D (3D Reconstruction Pipeline)
+### 5. ⚙️ Tiến Trình Tái Tạo 3D (3D Reconstruction Pipeline)
 - **Hàng chờ và Trạng thái**: Theo dõi trạng thái từng giai đoạn (`queued`, `extracting`, `detecting`, `matching`, `sfm`, `mvs`, `meshing`, `texturing`, `repairing`, `exporting`, `done`).
 - **Đánh giá khả năng in 3D (Printability Check)**: Kiểm tra lưới 3D, watertight status, lỗ hổng và cạnh phi manifold.
 
-### 5. ⭐ Đánh Giá Mô Hình (Model Rating System)
-- **Model Quality Feedback**: Cho phép người dùng và khách xem trước gửi đánh giá (1 - 5 sao) và bình luận cho mô hình 3D đã khởi tạo.
-- **Upsert Rating Logic**: Tự động cập nhật đánh giá nếu người dùng đã đánh giá phiên scan đó trước đó.
+### 6. ⭐ Đánh Giá Mô Hình & Thương Mại (Model Rating & Commercial)
+- **Model Quality Feedback**: Cho phép người dùng gửi đánh giá (1 - 5 sao) và bình luận cho mô hình 3D đã khởi tạo.
+- **Product Catalog & Categories**: Cung cấp danh mục sản phẩm in 3D và danh mục ngành hàng cho khách mua sắm.
 
-### 6. 🔄 Transactional Outbox & Kafka Event Streaming
+### 7. 🔄 Transactional Outbox & Event Streaming
 - **Outbox Pattern**: Ghi nhận các sự kiện hệ thống (`scan.events`, `qc.events`, `reconstruction.events`, `order.events`) đảm bảo tính toàn vẹn dữ liệu.
 - **Dead Letter Queue (DLQ)**: Quản lý và retry các sự kiện xử lý thất bại.
 
@@ -175,8 +195,12 @@ Mở file `target/site/jacoco/index.html` trên trình duyệt để kiểm tra 
 
 | Nhóm Endpoint | Đường dẫn (Path) | Phương thức | Mô tả |
 |---|---|---|---|
-| **Auth** | `/api/auth/register` | `POST` | Đăng ký tài khoản người dùng mới |
-| **Auth** | `/api/auth/login` | `POST` | Đăng nhập và nhận JWT Token |
+| **Auth** | `/api/v1/auth/register` | `POST` | Đăng ký tài khoản người dùng mới |
+| **Auth** | `/api/v1/auth/login` | `POST` | Đăng nhập và nhận JWT Token (Customer & All Portals) |
+| **Materials** | `/api/v1/materials` | `GET`, `POST` | Quản lý danh mục vật liệu in 3D (F01) |
+| **Warehouses** | `/api/v1/warehouses` | `GET`, `POST` | Quản lý cơ sở kho & bảo vệ hủy kho (F02) |
+| **Categories** | `/api/v1/product-categories` | `GET` | Danh mục ngành hàng sản phẩm 3D thực tế |
+| **Products** | `/api/v1/products` | `GET`, `POST` | Danh mục sản phẩm in 3D thương phẩm |
 | **Scans** | `/api/v1/scans` | `GET` | Lấy danh sách phiên scan (có phân trang & lọc) |
 | **Scans** | `/api/v1/scans` | `POST` | Khởi tạo phiên scan 3D mới |
 | **Scans** | `/api/v1/scans/{id}/upload-images` | `POST` | Upload ảnh cho phiên scan |

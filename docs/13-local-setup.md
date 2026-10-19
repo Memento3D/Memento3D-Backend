@@ -92,25 +92,26 @@ npm run dev
 
 ## 3. Pre-seeded Test Accounts & Passwords
 
-Hệ thống cung cấp sẵn các tài khoản demo cho từng phân hệ:
+Hệ thống cung cấp sẵn các tài khoản demo đã được kích hoạt sẵn (`email_verified = true`, `status = ACTIVE`) với mật khẩu chung: **`123456`**.
 
-| Role | Email | Password | Mục đích kiểm thử |
-|---|---|---|---|
-| `ROLE_ADMIN` | `admin@memento3d.vn` | `Admin@123` | Quản trị toàn hệ thống, cấu hình máy in, phân quyền |
-| `ROLE_MANAGER` | `manager@memento3d.vn` | `Manager@123` | Phê duyệt đơn hàng, quản lý kho & máy in |
-| `ROLE_OPERATOR` | `operator@memento3d.vn` | `Operator@123` | Duyệt QC ảnh scan, điều phối in 3D, cắt file G-code |
-| `ROLE_WAREHOUSE`| `warehouse@memento3d.vn`| `Warehouse@123`| Nhập xuất kho vật liệu, kiểm kê tồn kho theo lô |
-| `ROLE_CUSTOMER` | `customer@memento3d.vn` | `Customer@123` | Upload ảnh scan, xem model 3D, thanh toán MoMo/ZaloPay |
-| `ROLE_PROVIDER` | `provider@memento3d.vn` | `Provider@123` | Đối tác in gia công 3D |
-| `ROLE_DRIVER` | `driver@memento3d.vn` | `Driver@123` | Đối tác giao nhận kiện hàng mô hình |
+| Phân hệ (Actor) | Role Code | Cổng đăng nhập | Email chính thức | Email phụ | Mật khẩu | Trang đích (Home) |
+|---|---|---|---|---|---|---|
+| **Khách hàng** | `ROLE_USER` | `/login` | `customer@memento3d.vn` | `user@memento3d.com` | `123456` | `/customer/home` |
+| **Quản trị viên** | `ROLE_ADMIN` | `/admin/login` | `admin@memento3d.vn` | `admin@memento3d.com` | `123456` | `/admin/home` |
+| **Quản lý Vận hành** | `ROLE_MANAGER` | `/manager/login` | `manager@memento3d.vn` | `manager@memento3d.com` | `123456` | `/manager/home` |
+| **Thủ kho WMS** | `ROLE_WAREHOUSE` | `/warehouse/login` | `warehouse@memento3d.vn` | `warehouse@memento3d.com` | `123456` | `/warehouse/home` |
+| **Kỹ thuật viên In** | `ROLE_OPERATOR` | `/operator/login` | `operator@memento3d.vn` | `operator@memento3d.com` | `123456` | `/operator/home` |
+| **Đối tác Xưởng in** | `ROLE_PROVIDER` | `/provider/login` | `provider@memento3d.vn` | `provider@memento3d.com` | `123456` | `/provider/home` |
+| **Tài xế Giao vận** | `ROLE_DRIVER` | `/driver/login` | `driver@memento3d.vn` | `driver@memento3d.com` | `123456` | `/driver/home` |
 
 ---
 
 ## 4. Verification & Smoke Test Checklist
 
 1. Mở trình duyệt truy cập `http://localhost:5173/login`.
-2. Đăng nhập với tài khoản `customer@memento3d.vn` / `Customer@123`.
-3. Kiểm tra xem dashboard của Customer có hiển thị danh sách các bản scan mẫu không.
-4. Đăng xuất, đăng nhập lại với `operator@memento3d.vn` / `Operator@123`.
-5. Truy cập `http://localhost:5173/wms`, xác nhận danh sách 4 kho hàng hiển thị đầy đủ và không có banner lỗi phân quyền.
-6. Mở `http://localhost:8080/swagger-ui/index.html`, bấm "Authorize", dán JWT token và gửi test thử request `GET /api/v1/auth/me`.
+2. Đăng nhập với tài khoản `customer@memento3d.vn` / `123456`.
+3. Kiểm tra chuyển hướng thành công đến `/customer/home` với danh sách danh mục sản phẩm từ CSDL.
+4. Đăng xuất, truy cập `http://localhost:5173/manager/login` và đăng nhập với `manager@memento3d.vn` / `123456`.
+5. Xác nhận hệ thống chuyển hướng vào `/manager/home` hiển thị các chỉ số vận hành và hàng đợi in 3D.
+6. Truy cập `http://localhost:5173/warehouse/login` với `warehouse@memento3d.vn` / `123456` để kiểm tra Không gian làm việc Thủ kho WMS.
+7. Mở `http://localhost:8080/swagger-ui/index.html`, bấm "Authorize", dán JWT token và gửi test thử request `GET /api/v1/auth/me`.
