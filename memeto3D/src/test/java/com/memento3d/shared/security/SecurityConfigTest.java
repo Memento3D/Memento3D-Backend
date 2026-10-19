@@ -37,6 +37,9 @@ class SecurityConfigTest {
     private com.memento3d.identity.infrastructure.security.oauth2.CustomOAuth2UserService customOAuth2UserService;
 
     @Mock
+    private com.memento3d.identity.infrastructure.security.oauth2.CustomOidcUserService customOidcUserService;
+
+    @Mock
     private com.memento3d.identity.infrastructure.security.oauth2.OAuth2AuthenticationSuccessHandler oauth2AuthenticationSuccessHandler;
 
     @Mock
@@ -54,6 +57,7 @@ class SecurityConfigTest {
                 jwtAuthenticationEntryPoint,
                 userDetailsService,
                 customOAuth2UserService,
+                customOidcUserService,
                 oauth2AuthenticationSuccessHandler,
                 oauth2AuthenticationFailureHandler,
                 httpCookieOAuth2AuthorizationRequestRepository

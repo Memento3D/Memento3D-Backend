@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -30,6 +31,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     private final RefreshTokenService refreshTokenService;
     private final UserRepository userRepository;
     private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
+    private final CustomOAuth2UserService customOAuth2UserService;
 
     @Value("${app.oauth2.authorized-redirect-uri:http://localhost:3000/oauth2/redirect}")
     private String defaultRedirectUri;
@@ -55,14 +57,24 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
         String targetUrl = redirectUri.orElse(defaultRedirectUri);
 
-        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
-        User user = userDetails.getUser();
-        if (user == null && userDetails.getId() != null) {
-            user = userRepository.findById(userDetails.getId()).orElse(null);
+        User user = null;
+        Object principal = authentication.getPrincipal();
+
+        if (principal instanceof CustomUserDetails userDetails) {
+            user = userDetails.getUser();
+            if (user == null && userDetails.getId() != null) {
+                user = userRepository.findById(userDetails.getId()).orElse(null);
+            }
+        } else if (principal instanceof OAuth2User oauth2User) {
+            try {
+                user = customOAuth2UserService.processUserFromOAuth2(oauth2User, "google");
+            } catch (Exception ex) {
+                log.error("Failed to process user from OAuth2 principal", ex);
+            }
         }
 
         if (user == null) {
-            log.error("Unable to find user for principal email: {}", userDetails.getEmail());
+            log.error("Unable to find or register user for principal: {}", principal);
             return UriComponentsBuilder.fromUriString(targetUrl)
                     .queryParam("error", "user_not_found")
                     .build().toUriString();
