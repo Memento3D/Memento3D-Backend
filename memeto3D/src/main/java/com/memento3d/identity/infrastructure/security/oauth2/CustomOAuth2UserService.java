@@ -42,12 +42,12 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         }
     }
 
-    private OAuth2User processOAuth2User(OAuth2UserRequest oAuth2UserRequest, OAuth2User oAuth2User) {
-        String registrationId = oAuth2UserRequest.getClientRegistration().getRegistrationId();
-        OAuth2UserInfo oAuth2UserInfo = OAuth2UserInfoFactory.getOAuth2UserInfo(registrationId, oAuth2User.getAttributes());
+    public User processUserFromOAuth2(OAuth2User oAuth2User, String registrationId) {
+        String regId = registrationId != null ? registrationId : "google";
+        OAuth2UserInfo oAuth2UserInfo = OAuth2UserInfoFactory.getOAuth2UserInfo(regId, oAuth2User.getAttributes());
 
         if (!StringUtils.hasText(oAuth2UserInfo.getEmail())) {
-            log.error("Email not found in OAuth2 provider response for registrationId: {}", registrationId);
+            log.error("Email not found in OAuth2 provider response for registrationId: {}", regId);
             throw new OAuth2AuthenticationException(
                     new OAuth2Error("email_not_found", "Email not found from OAuth2 provider", null)
             );
@@ -58,11 +58,17 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
         User user;
         if (userOptional.isPresent()) {
-            user = updateExistingUser(userOptional.get(), oAuth2UserInfo, registrationId);
+            user = updateExistingUser(userOptional.get(), oAuth2UserInfo, regId);
         } else {
-            user = registerNewUser(oAuth2UserInfo, registrationId);
+            user = registerNewUser(oAuth2UserInfo, regId);
         }
 
+        return user;
+    }
+
+    private OAuth2User processOAuth2User(OAuth2UserRequest oAuth2UserRequest, OAuth2User oAuth2User) {
+        String registrationId = oAuth2UserRequest.getClientRegistration().getRegistrationId();
+        User user = processUserFromOAuth2(oAuth2User, registrationId);
         return new CustomUserDetails(user, oAuth2User.getAttributes());
     }
 

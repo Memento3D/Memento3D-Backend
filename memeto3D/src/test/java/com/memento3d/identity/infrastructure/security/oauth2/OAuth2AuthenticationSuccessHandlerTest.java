@@ -39,6 +39,9 @@ class OAuth2AuthenticationSuccessHandlerTest {
     private HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
 
     @Mock
+    private CustomOAuth2UserService customOAuth2UserService;
+
+    @Mock
     private Authentication authentication;
 
     @InjectMocks
@@ -77,5 +80,26 @@ class OAuth2AuthenticationSuccessHandlerTest {
         assertTrue(targetUrl.startsWith("http://localhost:3000/oauth2/redirect"));
         assertTrue(targetUrl.contains("token=mock-access-jwt"));
         assertTrue(targetUrl.contains("refreshToken=mock-refresh-token"));
+    }
+
+    @Test
+    @DisplayName("determineTargetUrl handles OAuth2User/OidcUser principal without ClassCastException")
+    void testDetermineTargetUrlWithOAuth2User() {
+        org.springframework.security.oauth2.core.user.OAuth2User genericOAuth2User = mock(org.springframework.security.oauth2.core.user.OAuth2User.class);
+        when(authentication.getPrincipal()).thenReturn(genericOAuth2User);
+        when(customOAuth2UserService.processUserFromOAuth2(genericOAuth2User, "google")).thenReturn(testUser);
+        when(jwtService.generateToken(testUser)).thenReturn("mock-access-jwt");
+        when(refreshTokenService.createRefreshToken(testUser)).thenReturn("mock-refresh-token");
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        String targetUrl = successHandler.determineTargetUrl(request, response, authentication);
+
+        assertNotNull(targetUrl);
+        assertTrue(targetUrl.startsWith("http://localhost:3000/oauth2/redirect"));
+        assertTrue(targetUrl.contains("token=mock-access-jwt"));
+        assertTrue(targetUrl.contains("refreshToken=mock-refresh-token"));
+        verify(customOAuth2UserService).processUserFromOAuth2(genericOAuth2User, "google");
     }
 }
