@@ -57,9 +57,78 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
               OR LOWER(o.phone) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')))
             """
     )
+    long countByStatus(OrderStatus status);
+    long countByCreatedAtAfter(java.time.Instant after);
+    long countByUserId(UUID userId);
+    long countByUserIdAndStatus(UUID userId, OrderStatus status);
+
+    @Query("SELECT COALESCE(SUM(o.totalPrice), 0) FROM Order o WHERE o.userId = :userId AND o.status != 'CANCELLED'")
+    java.math.BigDecimal calculateTotalSpendingByUserId(@Param("userId") UUID userId);
+
+    @Query("SELECT COALESCE(SUM(o.totalPrice), 0) FROM Order o WHERE o.status != 'CANCELLED'")
+    java.math.BigDecimal calculateTotalRevenue();
+
+    @Query("SELECT COALESCE(SUM(o.totalPrice), 0) FROM Order o WHERE o.status != 'CANCELLED' AND o.createdAt >= :after")
+    java.math.BigDecimal calculateRevenueAfter(@Param("after") java.time.Instant after);
+
+    @Query("SELECT COALESCE(SUM(o.totalPrice), 0) FROM Order o WHERE o.status != 'CANCELLED' AND o.createdAt BETWEEN :start AND :end")
+    java.math.BigDecimal calculateRevenueBetween(@Param("start") java.time.Instant start, @Param("end") java.time.Instant end);
+
+    @Query("SELECT o.status, COUNT(o) FROM Order o GROUP BY o.status")
+    List<Object[]> countOrdersGroupedByStatus();
+
+    @Query("SELECT o.paymentMethod, COUNT(o) FROM Order o WHERE o.paymentMethod IS NOT NULL GROUP BY o.paymentMethod")
+    List<Object[]> countOrdersGroupedByPaymentMethod();
+
+    @Query(
+        value = """
+            SELECT o FROM Order o WHERE
+            (:status IS NULL OR o.status = :status) AND
+            (CAST(:query AS string) IS NULL OR LOWER(o.orderCode) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))
+              OR LOWER(o.recipientName) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))
+              OR LOWER(o.phone) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')))
+            """,
+        countQuery = """
+            SELECT COUNT(o) FROM Order o WHERE
+            (:status IS NULL OR o.status = :status) AND
+            (CAST(:query AS string) IS NULL OR LOWER(o.orderCode) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))
+              OR LOWER(o.recipientName) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))
+              OR LOWER(o.phone) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')))
+            """
+    )
     Page<Order> searchManagerOrders(
             @Param("query") String query,
             @Param("status") OrderStatus status,
+            Pageable pageable
+    );
+
+    @Query(
+        value = """
+            SELECT o FROM Order o WHERE
+            (:status IS NULL OR o.status = :status) AND
+            (:paymentStatus IS NULL OR o.paymentStatus = :paymentStatus) AND
+            (:userId IS NULL OR o.userId = :userId) AND
+            (CAST(:query AS string) IS NULL OR
+             LOWER(o.orderCode) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')) OR
+             LOWER(o.recipientName) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')) OR
+             (o.phone IS NOT NULL AND LOWER(o.phone) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))))
+            """,
+        countQuery = """
+            SELECT COUNT(o) FROM Order o WHERE
+            (:status IS NULL OR o.status = :status) AND
+            (:paymentStatus IS NULL OR o.paymentStatus = :paymentStatus) AND
+            (:userId IS NULL OR o.userId = :userId) AND
+            (CAST(:query AS string) IS NULL OR
+             LOWER(o.orderCode) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')) OR
+             LOWER(o.recipientName) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')) OR
+             (o.phone IS NOT NULL AND LOWER(o.phone) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))))
+            """
+    )
+    Page<Order> searchAdminOrders(
+            @Param("query") String query,
+            @Param("status") OrderStatus status,
+            @Param("paymentStatus") com.memento3d.payment.domain.model.PaymentStatus paymentStatus,
+            @Param("userId") UUID userId,
             Pageable pageable
     );
 }

@@ -17,4 +17,25 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     List<PaymentTransaction> findByOrderIdOrderByCreatedAtDesc(UUID orderId);
     List<PaymentTransaction> findByUserIdOrderByCreatedAtDesc(UUID userId);
     Optional<PaymentTransaction> findFirstByOrderIdAndStatus(UUID orderId, PaymentStatus status);
+
+    long countByStatus(PaymentStatus status);
+    long countByUserId(UUID userId);
+
+    @org.springframework.data.jpa.repository.Query(
+        value = """
+            SELECT pt FROM PaymentTransaction pt WHERE
+            (:status IS NULL OR pt.status = :status) AND
+            (:paymentMethod IS NULL OR pt.paymentMethod = :paymentMethod)
+            """,
+        countQuery = """
+            SELECT COUNT(pt) FROM PaymentTransaction pt WHERE
+            (:status IS NULL OR pt.status = :status) AND
+            (:paymentMethod IS NULL OR pt.paymentMethod = :paymentMethod)
+            """
+    )
+    org.springframework.data.domain.Page<PaymentTransaction> findAllWithFilters(
+            @org.springframework.data.repository.query.Param("status") PaymentStatus status,
+            @org.springframework.data.repository.query.Param("paymentMethod") com.memento3d.payment.domain.model.PaymentMethod paymentMethod,
+            org.springframework.data.domain.Pageable pageable
+    );
 }

@@ -32,21 +32,30 @@
 
 ## 2. CÁC ACTOR & MA TRẬN PHÂN QUYỀN
 
-Hệ thống định nghĩa 4 Actor chính tương ứng với các Role trong cơ sở dữ liệu (`Role` enum):
+Hệ thống định nghĩa 7 Actor chuyên biệt tương ứng với các Role trong cơ sở dữ liệu (`Role` enum):
 
-| Actor | Role Code | Quyền hạn & Trách nhiệm chính | Giao diện truy cập |
-|---|---|---|---|
-| **CUSTOMER** | `ROLE_CUSTOMER` | Khách hàng mua sắm: duyệt danh mục/sản phẩm, quản lý giỏ hàng, đặt hàng, thanh toán (ZaloPay/CASH), tải lên ảnh/video scan 3D, theo dõi tiến độ in và vận chuyển đơn hàng. | `http://localhost:5175/` |
-| **OPERATOR** | `ROLE_OPERATOR` | Kỹ thuật viên xưởng: giám sát máy in 3D, vận hành Print Jobs, ghi nhận lượng tiêu hao sợi nhựa/resin, thực hiện kiểm kê kho và bàn giao vận chuyển. | `http://localhost:5175/manager/print-jobs`, `/manager/inventory` |
-| **MANAGER** | `ROLE_MANAGER` | Quản lý vận hành xưởng & bán hàng: quản lý danh mục & sản phẩm, duyệt đơn hàng, xác nhận đã nhận tiền mặt (CASH), điều phối máy in, quản lý kho vật tư và nhập/xuất kho. | `http://localhost:5175/manager/**` |
-| **ADMIN** | `ROLE_ADMIN` | Quản trị viên cấp cao nhất: toàn quyền hệ thống, quản lý tài khoản người dùng, phân quyền kho (`WarehouseMembership`), xem toàn bộ audit logs, tài chính và cấu hình hệ thống. | `http://localhost:5175/admin/**`, `/manager/**` |
+| Actor | Role Code | Cổng đăng nhập | Không gian làm việc (Home) | Quyền hạn & Trách nhiệm chính |
+|---|---|---|---|---|
+| **CUSTOMER** | `ROLE_USER` | `/login` | `/customer/home` | Khách hàng mua sắm: duyệt 10 danh mục, đặt hàng, thanh toán ZaloPay/CASH, tải ảnh/video scan 3D, theo dõi tiến độ in và vận chuyển đơn hàng. |
+| **MANAGER** | `ROLE_MANAGER` | `/manager/login` | `/manager/home` | Quản lý vận hành xưởng & bán hàng: quản lý danh mục & sản phẩm, duyệt đơn hàng, xác nhận tiền mặt (CASH), điều phối máy in, quản lý kho vật tư và nhập/xuất kho. |
+| **ADMIN** | `ROLE_ADMIN` | `/admin/login` | `/admin/home` | Quản trị viên cấp cao nhất: toàn quyền hệ thống, quản lý tài khoản người dùng, phân quyền kho (`WarehouseMembership`), xem toàn bộ audit logs, tài chính và cấu hình hệ thống. |
+| **WAREHOUSE**| `ROLE_WAREHOUSE`| `/warehouse/login`| `/warehouse/home` | Thủ kho WMS: nhập kho theo số lô (Goods Receipts), xuất kho sản xuất (Stock Issues), kiểm kê sổ cái tồn kho, cấp phát cuộn sợi nhựa in 3D. |
+| **OPERATOR** | `ROLE_OPERATOR` | `/operator/login` | `/operator/home` | Kỹ thuật viên xưởng: kiểm định ảnh scan (QC Gate), giám sát máy in 3D, vận hành Print Jobs, quyết toán tiêu hao vật tư sau khi in xong. |
+| **PROVIDER** | `ROLE_PROVIDER` | `/provider/login` | `/provider/home` | Đối tác xưởng in 3D: tiếp nhận và sản xuất các đơn hàng gia công ngoài theo hợp đồng hợp tác B2B. |
+| **DRIVER** | `ROLE_DRIVER` | `/driver/login` | `/driver/home` | Đội ngũ giao vận: nhận kiện hàng thành phẩm tại kho, điều phối lộ trình giao hàng hỏa tốc, chụp ảnh xác nhận giao hàng thành công. |
 
 ### Bảng tài khoản Demo Seeder sẵn trong hệ thống:
-*Tất cả tài khoản đều có mật khẩu mặc định:* **`password123`**
-- **Admin**: `admin@memento3d.com`
-- **Manager**: `manager@memento3d.com`
-- **Operator**: `operator@memento3d.com`
-- **Customer**: `customer@memento3d.com`
+*Tất cả tài khoản đều đã kích hoạt email (`email_verified = true`, `status = ACTIVE`) với mật khẩu mặc định:* **`123456`**
+
+| Phân hệ / Actor | Email chính thức | Email phụ | Mật khẩu | Cổng đăng nhập |
+|---|---|---|---|---|
+| **Khách hàng** | `customer@memento3d.vn` | `user@memento3d.com` | `123456` | `http://localhost:5173/login` |
+| **Quản trị viên** | `admin@memento3d.vn` | `admin@memento3d.com` | `123456` | `http://localhost:5173/admin/login` |
+| **Quản lý Vận hành** | `manager@memento3d.vn` | `manager@memento3d.com` | `123456` | `http://localhost:5173/manager/login` |
+| **Thủ kho WMS** | `warehouse@memento3d.vn` | `warehouse@memento3d.com` | `123456` | `http://localhost:5173/warehouse/login` |
+| **Kỹ thuật viên In** | `operator@memento3d.vn` | `operator@memento3d.com` | `123456` | `http://localhost:5173/operator/login` |
+| **Đối tác Xưởng in** | `provider@memento3d.vn` | `provider@memento3d.com` | `123456` | `http://localhost:5173/provider/login` |
+| **Tài xế Giao vận** | `driver@memento3d.vn` | `driver@memento3d.com` | `123456` | `http://localhost:5173/driver/login` |
 
 ---
 
@@ -229,9 +238,11 @@ DELIVERED (Giao hàng thành công)
    - Bấm **"Xác nhận Đặt hàng"** -> Đơn hàng tạo thành công với mã dạng `#ORD-XXXXXXXX`.
 
 2. **Bước 2: Quản lý đăng nhập & Quản lý đơn hàng**
-   - Đăng xuất tài khoản Customer (nếu có) và đăng nhập bằng tài khoản Quản lý:
-     - Email: `manager@memento3d.com`
-     - Mật khẩu: `password123`
+   - Đăng xuất tài khoản Customer (nếu có) và truy cập cổng Quản lý:
+     - URL Cổng: `http://localhost:5173/manager/login`
+     - Email: `manager@memento3d.vn` (hoặc `manager@memento3d.com`)
+     - Mật khẩu: `123456`
+   - Hệ thống tự động chuyển hướng vào Không gian Quản lý (`/manager/home`).
    - Vào menu bên trái chọn **"Quản lý Đơn hàng"** (`/manager/orders`).
    - Bấm vào đơn hàng vừa tạo để xem chi tiết.
    - Tại hộp thoại *"Thông tin thanh toán"*, thấy trạng thái `PENDING (CASH)`.

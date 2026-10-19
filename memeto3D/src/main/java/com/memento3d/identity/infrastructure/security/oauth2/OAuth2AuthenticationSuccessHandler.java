@@ -86,6 +86,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         boolean hasAcceptedTerms = userConsentRepository
                 .existsByUserIdAndConsentTypeAndDocumentVersionAndAcceptedTrue(user.getId(), "TERMS", "1.0");
 
+        user.setLastLoginAt(java.time.Instant.now());
+        userRepository.save(user);
+
         String accessToken = jwtService.generateToken(user);
         String refreshToken = refreshTokenService.createRefreshToken(user);
 

@@ -56,6 +56,12 @@ public class User {
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
 
+    @Column(name = "phone", length = 30)
+    private String phone;
+
+    @Column(name = "last_login_at")
+    private Instant lastLoginAt;
+
     @org.hibernate.annotations.ColumnDefault("0")
     @Column(name = "storage_used_bytes", nullable = false)
     @Builder.Default

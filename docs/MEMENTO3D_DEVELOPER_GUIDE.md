@@ -370,15 +370,17 @@ npm run dev
 
 ## 10. CHIẾN LƯỢC KIỂM THỬ & TÀI KHOẢN TEST CÓ SẴN
 
-| Role | Email Đăng nhập | Mật khẩu | Phân hệ kiểm thử |
-|---|---|---|---|
-| `ROLE_ADMIN` | `admin@memento3d.vn` | `Admin@123` | Quản trị toàn hệ thống |
-| `ROLE_MANAGER` | `manager@memento3d.vn` | `Manager@123` | Phê duyệt đơn hàng & quản lý xưởng |
-| `ROLE_OPERATOR` | `operator@memento3d.vn` | `Operator@123` | Duyệt QC ảnh scan & điều phối in 3D |
-| `ROLE_WAREHOUSE`| `warehouse@memento3d.vn`| `Warehouse@123`| Nhập xuất kho vật liệu WMS |
-| `ROLE_CUSTOMER` | `customer@memento3d.vn` | `Customer@123` | Tải ảnh scan & đặt in đơn hàng |
-| `ROLE_PROVIDER` | `provider@memento3d.vn` | `Provider@123` | Đối tác gia công xưởng in |
-| `ROLE_DRIVER` | `driver@memento3d.vn` | `Driver@123` | Giao nhận kiện hàng mô hình |
+Hệ thống đã kích hoạt sẵn tài khoản demo (`email_verified = true`, `status = ACTIVE`) với mật khẩu chung: **`123456`**.
+
+| Actor (Tác nhân) | Role Code | Cổng đăng nhập | Email chính thức | Email phụ | Mật khẩu | Không gian đích |
+|---|---|---|---|---|---|---|
+| **Khách hàng** | `ROLE_USER` | `/login` | `customer@memento3d.vn` | `user@memento3d.com` | `123456` | `/customer/home` |
+| **Quản trị viên** | `ROLE_ADMIN` | `/admin/login` | `admin@memento3d.vn` | `admin@memento3d.com` | `123456` | `/admin/home` |
+| **Quản lý Vận hành** | `ROLE_MANAGER` | `/manager/login` | `manager@memento3d.vn` | `manager@memento3d.com` | `123456` | `/manager/home` |
+| **Thủ kho WMS** | `ROLE_WAREHOUSE` | `/warehouse/login` | `warehouse@memento3d.vn` | `warehouse@memento3d.com` | `123456` | `/warehouse/home` |
+| **Kỹ thuật viên In** | `ROLE_OPERATOR` | `/operator/login` | `operator@memento3d.vn` | `operator@memento3d.com` | `123456` | `/operator/home` |
+| **Đối tác Xưởng in** | `ROLE_PROVIDER` | `/provider/login` | `provider@memento3d.vn` | `provider@memento3d.com` | `123456` | `/provider/home` |
+| **Tài xế Giao vận** | `ROLE_DRIVER` | `/driver/login` | `driver@memento3d.vn` | `driver@memento3d.com` | `123456` | `/driver/home` |
 
 ---
 

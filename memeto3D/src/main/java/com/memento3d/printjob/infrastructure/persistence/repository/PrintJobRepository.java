@@ -54,4 +54,6 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, UUID> {
             @Param("materialId") UUID materialId,
             Pageable pageable
     );
+
+    long countByStatus(PrintJobStatus status);
 }

@@ -171,9 +171,17 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + normalizedEmail));
 
         // Check account status
-        if (user.getStatus() == UserStatus.SUSPENDED) {
-            log.warn("Login attempt for suspended account: {}", normalizedEmail);
-            throw new AccessDeniedException("Tài khoản đã bị khóa. Vui lòng liên hệ bộ phận hỗ trợ.");
+        if (user.getStatus() == UserStatus.SUSPENDED || user.getStatus() == UserStatus.LOCKED) {
+            log.warn("Login attempt for locked/suspended account: {}", normalizedEmail);
+            throw new AccessDeniedException("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.");
+        }
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            log.warn("Login attempt for inactive account: {}", normalizedEmail);
+            throw new AccessDeniedException("Tài khoản đang tạm ngưng hoạt động. Vui lòng liên hệ quản trị viên.");
+        }
+        if (user.getStatus() == UserStatus.DELETED) {
+            log.warn("Login attempt for deleted account: {}", normalizedEmail);
+            throw new AccessDeniedException("Tài khoản đã bị vô hiệu hóa.");
         }
 
         // Check email verification
@@ -181,6 +189,9 @@ public class AuthServiceImpl implements AuthService {
             log.warn("Login attempt for unverified email: {}", normalizedEmail);
             throw new EmailNotVerifiedException("Tài khoản chưa được xác thực email. Vui lòng kiểm tra hộp thư hoặc yêu cầu gửi lại liên kết xác thực.", normalizedEmail);
         }
+
+        user.setLastLoginAt(java.time.Instant.now());
+        userRepository.save(user);
 
         String token = jwtService.generateToken(user);
         String refreshToken = refreshTokenService.createRefreshToken(user);
