@@ -38,6 +38,22 @@ public class PrintJob {
     @Column(name = "order_id")
     private UUID orderId;
 
+    @Column(name = "order_item_id")
+    private UUID orderItemId;
+
+    @Column(name = "model_version_id")
+    private UUID modelVersionId;
+
+    @Column(name = "is_outsource", nullable = false)
+    @Builder.Default
+    private boolean isOutsource = false;
+
+    @Column(name = "partner_name", length = 255)
+    private String partnerName;
+
+    @Column(name = "reprint_of_job_id")
+    private UUID reprintOfJobId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "printer_id")
     private Printer printer;

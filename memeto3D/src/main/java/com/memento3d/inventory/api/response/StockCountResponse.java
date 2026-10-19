@@ -21,6 +21,7 @@ public class StockCountResponse {
     private String warehouseCode;
     private StockCountStatus status;
     private String note;
+    private Integer itemCount;
     private List<StockCountItemResponse> items;
     private Instant startedAt;
     private Instant completedAt;

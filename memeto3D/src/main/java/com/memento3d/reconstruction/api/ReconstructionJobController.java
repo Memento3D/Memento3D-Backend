@@ -18,6 +18,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -108,9 +109,9 @@ public class ReconstructionJobController {
     }
 
     // -------------------------------------------------------------------------
-    // GET /api/v1/reconstruction-jobs/{jobId} (Get Job Details by ID)
+    // GET /api/v1/reconstructions/{jobId} & /api/v1/reconstruction-jobs/{jobId} (Get Job Details by ID)
     // -------------------------------------------------------------------------
-    @GetMapping("/api/v1/reconstruction-jobs/{jobId}")
+    @GetMapping({"/api/v1/reconstructions/{jobId}", "/api/v1/reconstruction-jobs/{jobId}"})
     @Operation(summary = "Get reconstruction job by Job ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Job details retrieved successfully",
@@ -213,6 +214,91 @@ public class ReconstructionJobController {
         );
 
         return ResponseEntity.ok(response);
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/v1/reconstructions/previews (BE-03)
+    // -------------------------------------------------------------------------
+    @PostMapping("/api/v1/reconstructions/previews")
+    @Operation(summary = "Submit a free 3D preview reconstruction job")
+    public ResponseEntity<ReconstructionJobResponse> submitPreview(
+            @Valid @RequestBody com.memento3d.reconstruction.api.request.CreatePreviewJobRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = requireAuthenticatedUser(userDetails);
+        log.info("Submitting preview job for scan {} by user {}", request.getScanId(), currentUser.getId());
+
+        ReconstructionJobResponse response = reconstructionJobService.submitPreviewJob(
+                request,
+                currentUser.getId(),
+                currentUser.getRole()
+        );
+
+        return ResponseEntity.accepted()
+                .location(URI.create("/api/v1/reconstructions/" + response.getJobId()))
+                .body(response);
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/v1/reconstructions/quotas/me (BE-03)
+    // -------------------------------------------------------------------------
+    @GetMapping("/api/v1/reconstructions/quotas/me")
+    @Operation(summary = "Get user preview quota", description = "Checks remaining free 3D preview reconstruction quota")
+    public ResponseEntity<com.memento3d.reconstruction.api.response.QuotaResponse> getMyQuota(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = requireAuthenticatedUser(userDetails);
+        return ResponseEntity.ok(reconstructionJobService.getMyQuota(currentUser.getId()));
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/v1/reconstructions/{jobId}/preview (BE-03)
+    // -------------------------------------------------------------------------
+    @GetMapping("/api/v1/reconstructions/{jobId}/preview")
+    @Operation(summary = "Get 3D preview details", description = "Returns watermark/viewer URL for preview job; hides high-resolution direct download")
+    public ResponseEntity<com.memento3d.reconstruction.api.response.PreviewJobDetailsResponse> getPreview(
+            @PathVariable("jobId") UUID jobId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = requireAuthenticatedUser(userDetails);
+        return ResponseEntity.ok(reconstructionJobService.getPreviewDetails(jobId, currentUser.getId(), currentUser.getRole()));
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/v1/orders/{orderId}/reconstructions (BE-04)
+    // -------------------------------------------------------------------------
+    @PostMapping("/api/v1/orders/{orderId}/reconstructions")
+    @Operation(summary = "Trigger high quality reconstruction for paid order")
+    public ResponseEntity<ReconstructionJobResponse> submitPremiumReconstruction(
+            @PathVariable("orderId") UUID orderId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = requireAuthenticatedUser(userDetails);
+        log.info("Triggering premium reconstruction for order {} by user {}", orderId, currentUser.getId());
+
+        ReconstructionJobResponse response = reconstructionJobService.submitPremiumJob(
+                orderId,
+                currentUser.getId(),
+                currentUser.getRole()
+        );
+
+        return ResponseEntity.accepted()
+                .location(URI.create("/api/v1/reconstructions/" + response.getJobId()))
+                .body(response);
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/v1/admin/reconstructions/{jobId}/retry (BE-04)
+    // -------------------------------------------------------------------------
+    @PostMapping("/api/v1/admin/reconstructions/{jobId}/retry")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'OPERATOR')")
+    @Operation(summary = "Admin retry failed reconstruction job")
+    public ResponseEntity<ReconstructionJobResponse> retryJob(
+            @PathVariable("jobId") UUID jobId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = requireAuthenticatedUser(userDetails);
+        return ResponseEntity.ok(reconstructionJobService.retryJob(jobId, currentUser.getId(), currentUser.getRole()));
     }
 
     private CustomUserDetails requireAuthenticatedUser(CustomUserDetails userDetails) {

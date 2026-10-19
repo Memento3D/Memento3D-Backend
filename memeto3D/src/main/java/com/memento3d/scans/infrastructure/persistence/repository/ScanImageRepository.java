@@ -35,4 +35,8 @@ public interface ScanImageRepository extends JpaRepository<ScanImage, UUID> {
             UUID imageId,
             UUID scanId
     );
+
+    Optional<ScanImage> findFirstByScan_IdAndDeletedAtIsNullOrderByCreatedAtDesc(
+            UUID scanId
+    );
 }

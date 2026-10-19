@@ -38,14 +38,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
 
+        String jwt = null;
         final String authHeader = request.getHeader("Authorization");
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            jwt = authHeader.substring(7).trim();
+        } else if (request.getParameter("token") != null && !request.getParameter("token").isBlank()) {
+            jwt = request.getParameter("token").trim();
+        }
+
+        if (jwt == null) {
             filterChain.doFilter(request, response);
             return;
         }
-
-        final String jwt = authHeader.substring(7).trim();
 
         // 1. Check if the token has been blacklisted (e.g. via logout)
         if (tokenBlacklistService.isBlacklisted(jwt)) {

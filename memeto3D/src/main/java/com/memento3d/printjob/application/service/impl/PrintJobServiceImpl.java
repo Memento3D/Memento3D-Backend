@@ -55,6 +55,9 @@ public class PrintJobServiceImpl implements PrintJobService {
     private final WarehouseRepository warehouseRepository;
     private final MaterialRepository materialRepository;
     private final PrinterRepository printerRepository;
+    private final com.memento3d.orders.infrastructure.persistence.repository.OrderRepository orderRepository;
+    private final com.memento3d.modelreview.infrastructure.persistence.repository.ModelVersionRepository modelVersionRepository;
+    private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
 
     @Override
     @Transactional
@@ -63,15 +66,48 @@ public class PrintJobServiceImpl implements PrintJobService {
                 .orElseThrow(() -> new ResourceNotFoundException("Material not found with id: " + request.getMaterialId()));
 
         Printer printer = null;
-        if (request.getPrinterId() != null) {
+        if (!request.isOutsource() && request.getPrinterId() != null) {
             printer = printerRepository.findById(request.getPrinterId())
                     .orElseThrow(() -> new ResourceNotFoundException("Printer not found with id: " + request.getPrinterId()));
+        }
+
+        // Validate order linkage and model approval if order is attached
+        if (request.getOrderId() != null) {
+            com.memento3d.orders.domain.model.Order order = orderRepository.findById(request.getOrderId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + request.getOrderId()));
+
+            if (request.getOrderItemId() != null) {
+                if (printJobRepository.existsByOrderItemIdAndStatusNot(request.getOrderItemId(), PrintJobStatus.CANCELLED)) {
+                    throw new BusinessException(HttpStatus.CONFLICT, "DUPLICATE_PRINT_JOB", "A print job already exists for this order item.");
+                }
+            }
+
+            // Verify Model Approval
+            if (request.getModelVersionId() != null) {
+                com.memento3d.modelreview.domain.model.ModelVersion version = modelVersionRepository.findById(request.getModelVersionId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Model version not found: " + request.getModelVersionId()));
+                if (!version.isApproved()) {
+                    throw new BusinessException(HttpStatus.BAD_REQUEST, "MODEL_NOT_APPROVED",
+                            "Model version " + version.getVersionNumber() + " must be APPROVED before physical printing.");
+                }
+            } else if (order.getScanId() != null) {
+                java.util.Optional<com.memento3d.modelreview.domain.model.ModelVersion> latestApproved =
+                        modelVersionRepository.findFirstByScan_IdOrderByVersionNumberDesc(order.getScanId());
+                if (latestApproved.isEmpty() || !latestApproved.get().isApproved()) {
+                    throw new BusinessException(HttpStatus.BAD_REQUEST, "MODEL_NOT_APPROVED",
+                            "Cannot create PrintJob: 3D model version must be APPROVED by customer before physical manufacturing.");
+                }
+            }
         }
 
         String jobNumber = "JOB-" + Instant.now().toEpochMilli();
         PrintJob job = PrintJob.builder()
                 .jobNumber(jobNumber)
                 .orderId(request.getOrderId())
+                .orderItemId(request.getOrderItemId())
+                .modelVersionId(request.getModelVersionId())
+                .isOutsource(request.isOutsource())
+                .partnerName(request.getPartnerName())
                 .printer(printer)
                 .material(material)
                 .estimatedGram(request.getEstimatedGram())
@@ -81,7 +117,20 @@ public class PrintJobServiceImpl implements PrintJobService {
                 .build();
 
         PrintJob saved = printJobRepository.save(job);
-        log.info("Created Print Job ID={}, JobNumber={}", saved.getId(), saved.getJobNumber());
+        log.info("Created Print Job ID={}, JobNumber={}, Outsource={}", saved.getId(), saved.getJobNumber(), saved.isOutsource());
+
+        outboxPublisher.publish(
+                "PRINT_JOB",
+                saved.getId().toString(),
+                "PRINT_JOB_CREATED",
+                java.util.Map.of(
+                        "jobId", saved.getId(),
+                        "jobNumber", saved.getJobNumber(),
+                        "orderId", saved.getOrderId() != null ? saved.getOrderId() : "",
+                        "isOutsource", saved.isOutsource()
+                )
+        );
+
         return PrintJobResponse.fromEntity(saved);
     }
 
@@ -155,7 +204,8 @@ public class PrintJobServiceImpl implements PrintJobService {
         StockReservation savedReservation = reservationRepository.save(reservation);
 
         job.setStatus(PrintJobStatus.RESERVED);
-        printJobRepository.save(job);
+        PrintJob savedJob = printJobRepository.save(job);
+        publishPrintJobEvent(savedJob != null ? savedJob : job, "PRINT_JOB_UPDATED", java.util.Map.of("action", "RESERVED"));
 
         // Immutable transaction
         InventoryTransaction tx = InventoryTransaction.builder()
@@ -291,7 +341,8 @@ public class PrintJobServiceImpl implements PrintJobService {
         PrintJobConsumption savedConsumption = consumptionRepository.save(consumption);
 
         job.setStatus(PrintJobStatus.ISSUED);
-        printJobRepository.save(job);
+        PrintJob savedJob = printJobRepository.save(job);
+        publishPrintJobEvent(savedJob != null ? savedJob : job, "PRINT_JOB_UPDATED", java.util.Map.of("action", "ISSUED"));
 
         // Immutable transaction
         InventoryTransaction tx = InventoryTransaction.builder()
@@ -340,6 +391,7 @@ public class PrintJobServiceImpl implements PrintJobService {
         job.setStatus(PrintJobStatus.PRINTING);
         job.setStartedAt(Instant.now());
         PrintJob saved = printJobRepository.save(job);
+        publishPrintJobEvent(saved != null ? saved : job, "PRINT_JOB_STARTED", java.util.Map.of("progress", 0));
         log.info("Print Job started ID={}, JobNumber={}", saved.getId(), saved.getJobNumber());
         return PrintJobResponse.fromEntity(saved);
     }
@@ -424,7 +476,8 @@ public class PrintJobServiceImpl implements PrintJobService {
                 job.getPrinter().setStatus(PrinterStatus.IDLE);
                 printerRepository.save(job.getPrinter());
             }
-            printJobRepository.save(job);
+            PrintJob savedJob = printJobRepository.save(job);
+            publishPrintJobEvent(savedJob != null ? savedJob : job, "PRINT_JOB_COMPLETED", java.util.Map.of("progress", 100));
         }
 
         log.info("Consumption reconciled for Job {}: Used={}g, Waste={}g, Returned={}g",
@@ -439,5 +492,29 @@ public class PrintJobServiceImpl implements PrintJobService {
         PrintJobConsumption consumption = consumptionRepository.findByPrintJobId(printJobId)
                 .orElseThrow(() -> new ResourceNotFoundException("Consumption record not found for job id: " + printJobId));
         return PrintJobConsumptionResponse.fromEntity(consumption);
+    }
+
+    private void publishPrintJobEvent(PrintJob job, String eventType, java.util.Map<String, Object> extra) {
+        if (job == null || job.getId() == null) {
+            return;
+        }
+        try {
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("jobId", job.getId());
+            payload.put("jobNumber", job.getJobNumber());
+            payload.put("orderId", job.getOrderId() != null ? job.getOrderId() : "");
+            payload.put("status", job.getStatus().name());
+            payload.put("isOutsource", job.isOutsource());
+            if (job.getPrinter() != null) {
+                payload.put("printerId", job.getPrinter().getId());
+                payload.put("printerName", job.getPrinter().getName());
+            }
+            if (extra != null) {
+                payload.putAll(extra);
+            }
+            outboxPublisher.publish("PRINT_JOB", job.getId().toString(), eventType, payload);
+        } catch (Exception e) {
+            log.warn("Failed to publish outbox event for print job {}: {}", job.getId(), e.getMessage());
+        }
     }
 }

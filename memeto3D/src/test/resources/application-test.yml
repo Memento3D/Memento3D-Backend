@@ -22,6 +22,9 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       timeout: 2000ms
+  kafka:
+    listener:
+      auto-startup: false
 
 app:
   jwt:
@@ -29,3 +32,5 @@ app:
     expiration-ms: 3600000
   cors:
     allowed-origins: http://localhost:3000,http://localhost:8080
+  kafka:
+    enabled: false

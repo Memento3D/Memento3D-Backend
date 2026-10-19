@@ -182,19 +182,21 @@ public class StockCountServiceImpl implements StockCountService {
     }
 
     private StockCountResponse mapToResponse(StockCount count) {
+        boolean itemsInitialized = count.getItems() != null && org.hibernate.Hibernate.isInitialized(count.getItems());
         return StockCountResponse.builder()
                 .id(count.getId())
                 .countCode(count.getCountCode())
-                .warehouseId(count.getWarehouse().getId())
-                .warehouseName(count.getWarehouse().getName())
-                .warehouseCode(count.getWarehouse().getCode())
+                .warehouseId(count.getWarehouse() != null ? count.getWarehouse().getId() : null)
+                .warehouseName(count.getWarehouse() != null ? count.getWarehouse().getName() : null)
+                .warehouseCode(count.getWarehouse() != null ? count.getWarehouse().getCode() : null)
                 .status(count.getStatus())
                 .note(count.getNote())
-                .items(count.getItems() != null ? count.getItems().stream().map(i -> StockCountResponse.StockCountItemResponse.builder()
+                .itemCount(itemsInitialized ? count.getItems().size() : null)
+                .items(itemsInitialized ? count.getItems().stream().map(i -> StockCountResponse.StockCountItemResponse.builder()
                         .id(i.getId())
-                        .materialId(i.getMaterial().getId())
-                        .materialName(i.getMaterial().getName())
-                        .materialSku(i.getMaterial().getSku())
+                        .materialId(i.getMaterial() != null ? i.getMaterial().getId() : null)
+                        .materialName(i.getMaterial() != null ? i.getMaterial().getName() : null)
+                        .materialSku(i.getMaterial() != null ? i.getMaterial().getSku() : null)
                         .systemQuantity(i.getSystemQuantity())
                         .countedQuantity(i.getCountedQuantity())
                         .variance(i.getVariance())

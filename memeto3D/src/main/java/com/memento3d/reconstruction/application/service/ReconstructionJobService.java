@@ -45,4 +45,30 @@ public interface ReconstructionJobService {
             int page,
             int limit
     );
+
+    ReconstructionJobResponse submitPreviewJob(
+            com.memento3d.reconstruction.api.request.CreatePreviewJobRequest request,
+            UUID currentUserId,
+            Role currentUserRole
+    );
+
+    ReconstructionJobResponse submitPremiumJob(
+            UUID orderId,
+            UUID currentUserId,
+            Role currentUserRole
+    );
+
+    com.memento3d.reconstruction.api.response.PreviewJobDetailsResponse getPreviewDetails(
+            UUID jobId,
+            UUID currentUserId,
+            Role currentUserRole
+    );
+
+    com.memento3d.reconstruction.api.response.QuotaResponse getMyQuota(UUID currentUserId);
+
+    ReconstructionJobResponse retryJob(
+            UUID jobId,
+            UUID currentUserId,
+            Role currentUserRole
+    );
 }

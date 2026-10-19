@@ -23,6 +23,10 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, UUID> {
     @Query("SELECT j FROM PrintJob j WHERE j.id = :id")
     Optional<PrintJob> findWithDetailsById(@Param("id") UUID id);
 
+    Optional<PrintJob> findByOrderItemId(UUID orderItemId);
+
+    boolean existsByOrderItemIdAndStatusNot(UUID orderItemId, PrintJobStatus status);
+
     @Override
     @EntityGraph(attributePaths = {"printer", "material"})
     Page<PrintJob> findAll(Pageable pageable);

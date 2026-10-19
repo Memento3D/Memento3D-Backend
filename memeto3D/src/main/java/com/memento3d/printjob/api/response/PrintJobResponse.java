@@ -22,6 +22,10 @@ public class PrintJobResponse {
     private UUID id;
     private String jobNumber;
     private UUID orderId;
+    private UUID orderItemId;
+    private UUID modelVersionId;
+    private boolean isOutsource;
+    private String partnerName;
     private UUID printerId;
     private String printerName;
     private String printerModel;
@@ -44,6 +48,10 @@ public class PrintJobResponse {
                 .id(entity.getId())
                 .jobNumber(entity.getJobNumber())
                 .orderId(entity.getOrderId())
+                .orderItemId(entity.getOrderItemId())
+                .modelVersionId(entity.getModelVersionId())
+                .isOutsource(entity.isOutsource())
+                .partnerName(entity.getPartnerName())
                 .printerId(entity.getPrinter() != null ? entity.getPrinter().getId() : null)
                 .printerName(entity.getPrinter() != null ? entity.getPrinter().getName() : null)
                 .printerModel(entity.getPrinter() != null ? entity.getPrinter().getModel() : null)

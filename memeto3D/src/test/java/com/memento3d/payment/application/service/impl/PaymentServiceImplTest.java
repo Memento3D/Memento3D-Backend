@@ -77,6 +77,9 @@ class PaymentServiceImplTest {
     @Mock
     private PaymentGateway zaloPayGateway;
 
+    @Mock
+    private com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
+
     @InjectMocks
     private PaymentServiceImpl paymentService;
 

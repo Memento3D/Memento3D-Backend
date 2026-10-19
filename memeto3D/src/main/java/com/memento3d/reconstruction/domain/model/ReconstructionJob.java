@@ -62,6 +62,17 @@ public class ReconstructionJob {
     private Map<String, Object> inputSnapshot;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "tier", nullable = false, length = 30)
+    @Builder.Default
+    private ReconstructionTier tier = ReconstructionTier.PREVIEW;
+
+    @Column(name = "order_id")
+    private UUID orderId;
+
+    @Column(name = "order_item_id")
+    private UUID orderItemId;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private ReconstructionJobStatus status =

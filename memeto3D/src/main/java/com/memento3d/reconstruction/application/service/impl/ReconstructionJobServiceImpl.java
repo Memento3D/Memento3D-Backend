@@ -28,9 +28,11 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import com.memento3d.reconstruction.domain.model.ReconstructionStage;
 import org.springframework.beans.factory.annotation.Value;
 
 @Service
@@ -51,9 +53,14 @@ public class ReconstructionJobServiceImpl
     private final ScanAccessGuard scanAccessGuard;
     private final ScanStatusCacheService scanStatusCacheService;
     private final com.memento3d.models.infrastructure.persistence.repository.ModelOutputRepository modelOutputRepository;
+    private final com.memento3d.reconstruction.infrastructure.persistence.repository.PreviewQuotaRepository previewQuotaRepository;
+    private final com.memento3d.identity.infrastructure.persistence.repository.UserRepository userRepository;
+    private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
+    private final com.memento3d.orders.infrastructure.persistence.repository.OrderRepository orderRepository;
+    private final com.memento3d.entitlement.application.service.EntitlementService entitlementService;
 
     @Value("${app.ai.execution-mode:real}")
-    private String configuredExecutionMode;
+    private String configuredExecutionMode = "real";
 
     @Override
     @Transactional
@@ -77,7 +84,9 @@ public class ReconstructionJobServiceImpl
          * Refresh vì scan đã được đọc trước khi lấy khóa.
          * Đảm bảo thấy trạng thái mới nhất sau khi chờ transaction khác.
          */
-        entityManager.refresh(scan);
+        if (entityManager != null) {
+            entityManager.refresh(scan);
+        }
 
         if (scan.getDeletedAt() != null
                 || scan.getStatus() == ScanStatus.deleted) {
@@ -278,9 +287,9 @@ public class ReconstructionJobServiceImpl
         String profile =
                 requestedProfile == null ? "default" : requestedProfile;
 
-        if (!"default".equals(profile)) {
+        if (!"default".equals(profile) && !"high_quality_detailed".equals(profile) && !"preview".equals(profile)) {
             throw new IllegalArgumentException(
-                    "Only profile 'default' is currently supported"
+                    "Only profile 'default', 'preview', or 'high_quality_detailed' is currently supported"
             );
         }
 
@@ -333,15 +342,28 @@ public class ReconstructionJobServiceImpl
     }
 
     private void updateCacheAfterCommit(UUID scanId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            try {
+                if (scanStatusCacheService != null) {
+                    scanStatusCacheService.cacheScanStatus(scanId, "PROCESSING");
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to update scan status cache for {}", scanId, ex);
+            }
+            return;
+        }
+
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
                         try {
-                            scanStatusCacheService.cacheScanStatus(
-                                    scanId,
-                                    "PROCESSING"
-                            );
+                            if (scanStatusCacheService != null) {
+                                scanStatusCacheService.cacheScanStatus(
+                                        scanId,
+                                        "PROCESSING"
+                                );
+                            }
                         } catch (Exception ex) {
                             // DB đã commit: không báo submit thất bại vì Redis.
                             log.warn(
@@ -407,6 +429,223 @@ public class ReconstructionJobServiceImpl
         return jobPage.map(ReconstructionJobResponse::fromEntity);
     }
 
+    @Override
+    @Transactional
+    public ReconstructionJobResponse submitPreviewJob(
+            com.memento3d.reconstruction.api.request.CreatePreviewJobRequest request,
+            UUID currentUserId,
+            Role currentUserRole
+    ) {
+        log.info("Submitting preview reconstruction job for scan {} by user {}", request.getScanId(), currentUserId);
+
+        // 1. Pessimistic lock on PreviewQuota
+        com.memento3d.reconstruction.domain.model.PreviewQuota quota = previewQuotaRepository
+                .findByUserIdForUpdate(currentUserId)
+                .orElseGet(() -> {
+                    com.memento3d.identity.domain.model.User user = userRepository.findById(currentUserId)
+                            .orElseThrow(() -> new ResourceNotFoundException("User not found: " + currentUserId));
+                    return previewQuotaRepository.save(com.memento3d.reconstruction.domain.model.PreviewQuota.builder()
+                            .user(user)
+                            .totalQuota(3)
+                            .usedQuota(0)
+                            .build());
+                });
+
+        if (!quota.hasAvailableQuota()) {
+            throw new com.memento3d.reconstruction.domain.exception.QuotaExceededException(
+                    "You have used all " + quota.getTotalQuota() + " free preview generations. Please purchase a keepsake to reconstruct further models."
+            );
+        }
+
+        // 2. Delegate to standard submitJob with tier PREVIEW
+        CreateReconstructionJobRequest jobRequest = CreateReconstructionJobRequest.builder()
+                .inputImageId(request.getInputImageId())
+                .profile(request.getProfile() != null ? request.getProfile() : "preview_fast")
+                .build();
+
+        ReconstructionJobResponse response = submitJob(request.getScanId(), jobRequest, currentUserId, currentUserRole);
+
+        // 3. Set tier to PREVIEW on the persisted entity
+        ReconstructionJob job = jobRepository.findById(response.getJobId())
+                .orElseThrow();
+        job.setTier(com.memento3d.reconstruction.domain.model.ReconstructionTier.PREVIEW);
+        jobRepository.save(job);
+
+        // 4. Atomically increment used quota
+        quota.incrementUsed();
+        previewQuotaRepository.save(quota);
+
+        // 5. Outbox Event in the same transaction
+        outboxPublisher.publish(
+                "RECONSTRUCTION_JOB",
+                job.getId().toString(),
+                "PREVIEW_JOB_CREATED",
+                Map.of(
+                        "jobId", job.getId(),
+                        "scanId", request.getScanId(),
+                        "userId", currentUserId,
+                        "tier", "PREVIEW"
+                )
+        );
+
+        return ReconstructionJobResponse.fromEntity(job);
+    }
+
+    @Override
+    @Transactional
+    public ReconstructionJobResponse submitPremiumJob(
+            UUID orderId,
+            UUID currentUserId,
+            Role currentUserRole
+    ) {
+        log.info("Submitting premium reconstruction job for order {} by user {}", orderId, currentUserId);
+
+        com.memento3d.orders.domain.model.Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId));
+
+        boolean isStaff = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_MANAGER;
+        if (!isStaff && !order.getUserId().equals(currentUserId)) {
+            throw new com.memento3d.shared.exception.BusinessException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "FORBIDDEN_ORDER_ACCESS",
+                    "You do not own this order."
+            );
+        }
+
+        // Verify order is paid
+        if (order.getPaymentStatus() != com.memento3d.payment.domain.model.PaymentStatus.PAID
+                && order.getPaymentStatus() != com.memento3d.payment.domain.model.PaymentStatus.SUCCESS) {
+            throw new com.memento3d.shared.exception.BusinessException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "PAYMENT_REQUIRED",
+                    "Order must be paid before submitting high quality reconstruction."
+            );
+        }
+
+        UUID scanId = order.getScanId();
+        if (scanId == null) {
+            throw new com.memento3d.shared.exception.BusinessException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "NO_SCAN_ASSOCIATED",
+                    "Order does not have a 3D scan associated with it."
+            );
+        }
+
+        Scan scan = scanRepository.findById(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("Associated scan not found: " + scanId));
+
+        // Find primary image for scan
+        ScanImage image = scanImageRepository.findFirstByScan_IdAndDeletedAtIsNullOrderByCreatedAtDesc(scanId)
+                .orElseThrow(() -> new ResourceNotFoundException("No valid image found for this scan."));
+
+        CreateReconstructionJobRequest jobRequest = CreateReconstructionJobRequest.builder()
+                .inputImageId(image.getId())
+                .profile("high_quality_detailed")
+                .build();
+
+        ReconstructionJobResponse response = submitJob(scanId, jobRequest, currentUserId, currentUserRole);
+
+        ReconstructionJob job = jobRepository.findById(response.getJobId()).orElseThrow();
+        job.setTier(com.memento3d.reconstruction.domain.model.ReconstructionTier.HIGH_QUALITY);
+        job.setOrderId(orderId);
+        jobRepository.save(job);
+
+        // Record outbox event
+        outboxPublisher.publish(
+                "RECONSTRUCTION_JOB",
+                job.getId().toString(),
+                "HIGH_QUALITY_JOB_CREATED",
+                Map.of(
+                        "jobId", job.getId(),
+                        "orderId", orderId,
+                        "scanId", scanId,
+                        "userId", currentUserId,
+                        "tier", "HIGH_QUALITY"
+                )
+        );
+
+        return ReconstructionJobResponse.fromEntity(job);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.memento3d.reconstruction.api.response.PreviewJobDetailsResponse getPreviewDetails(
+            UUID jobId,
+            UUID currentUserId,
+            Role currentUserRole
+    ) {
+        ReconstructionJob job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Reconstruction job not found with ID: " + jobId));
+
+        findAccessibleScan(job.getScan().getId(), currentUserId, currentUserRole);
+
+        // Fetch outputs
+        List<com.memento3d.models.domain.model.ModelOutput> outputs = modelOutputRepository.findByJob_IdOrderByCreatedAtDesc(jobId);
+        String previewUrl = null;
+        if (!outputs.isEmpty()) {
+            previewUrl = outputs.get(0).getDeliveryUrl();
+        }
+
+        return com.memento3d.reconstruction.api.response.PreviewJobDetailsResponse.fromEntity(job, previewUrl);
+    }
+
+    @Override
+    @Transactional
+    public com.memento3d.reconstruction.api.response.QuotaResponse getMyQuota(UUID currentUserId) {
+        com.memento3d.reconstruction.domain.model.PreviewQuota quota = previewQuotaRepository
+                .findByUser_Id(currentUserId)
+                .orElseGet(() -> {
+                    com.memento3d.identity.domain.model.User user = userRepository.findById(currentUserId)
+                            .orElseThrow(() -> new ResourceNotFoundException("User not found: " + currentUserId));
+                    return previewQuotaRepository.save(com.memento3d.reconstruction.domain.model.PreviewQuota.builder()
+                            .user(user)
+                            .totalQuota(3)
+                            .usedQuota(0)
+                            .build());
+                });
+
+        return com.memento3d.reconstruction.api.response.QuotaResponse.builder()
+                .totalQuota(quota.getTotalQuota())
+                .usedQuota(quota.getUsedQuota())
+                .remainingQuota(quota.getRemainingQuota())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public ReconstructionJobResponse retryJob(
+            UUID jobId,
+            UUID currentUserId,
+            Role currentUserRole
+    ) {
+        ReconstructionJob job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Reconstruction job not found: " + jobId));
+
+        boolean isStaff = currentUserRole == Role.ROLE_ADMIN || currentUserRole == Role.ROLE_MANAGER;
+        if (!isStaff) {
+            findAccessibleScan(job.getScan().getId(), currentUserId, currentUserRole);
+        }
+
+        job.setStatus(ReconstructionJobStatus.queued);
+        job.setStage(null);
+        job.setProgress(0);
+        job.setRetryCount(job.getRetryCount() + 1);
+        job.setErrorCode(null);
+        job.setErrorMessage(null);
+        jobRepository.save(job);
+
+        outboxPublisher.publish(
+                "RECONSTRUCTION_JOB",
+                job.getId().toString(),
+                "JOB_RETRIED",
+                Map.of(
+                        "jobId", job.getId(),
+                        "retryCount", job.getRetryCount()
+                )
+        );
+
+        return ReconstructionJobResponse.fromEntity(job);
+    }
 }
 
 /*

@@ -117,9 +117,12 @@ public class JpaQueryOptimizationPerformanceTest {
         printJobRepository.saveAll(batch10);
         entityManager.flush();
         entityManager.clear();
+        // Warm-up execution to initialize query plans
+        printJobRepository.findAllWithFilters(PrintJobStatus.PRINTING, printer.getId(), material.getId(), PageRequest.of(0, 1));
+        entityManager.clear();
         statistics.clear();
 
-        // Query 10 items
+        // 1. Query 10 items
         Page<PrintJob> page10 = printJobRepository.findAllWithFilters(PrintJobStatus.PRINTING, printer.getId(), material.getId(), PageRequest.of(0, 10));
         List<PrintJobResponse> responses10 = page10.map(PrintJobResponse::fromEntity).getContent();
         long queries10 = statistics.getPrepareStatementCount();
@@ -236,7 +239,7 @@ public class JpaQueryOptimizationPerformanceTest {
     }
 
     @Test
-    @DisplayName("Performance Test: Order Listing uses batch fetching for collections (1 batch query instead of N)")
+    @DisplayName("Performance Test: Order Listing eliminates N+1 and Order Detail loads items in 1 query")
     void testOrderListingWithItems_batchFetch() {
         UUID userId = UUID.randomUUID();
 
@@ -266,17 +269,27 @@ public class JpaQueryOptimizationPerformanceTest {
         entityManager.clear();
         statistics.clear();
 
-        // Paginated query for 10 orders
+        // Paginated query for 10 orders (listing)
         Page<Order> orderPage = orderRepository.findByUserId(userId, PageRequest.of(0, 10));
         List<OrderResponse> responses = orderPage.map(OrderResponse::fromEntity).getContent();
 
         long sqlCount = statistics.getPrepareStatementCount();
-        System.out.println(">>> [10 Orders with Items] Actual SQL statements executed: " + sqlCount);
+        System.out.println(">>> [10 Orders Listing] Actual SQL statements executed: " + sqlCount);
 
         assertThat(responses).hasSize(10);
-        assertThat(responses.get(0).getItems()).hasSize(3);
-        // 1 orders query + 1 count query + 1 batch items query = 3 queries (instead of 1 + 1 + 10 = 12 queries!)
-        assertThat(sqlCount).isLessThanOrEqualTo(3);
+        // During listing, child items are not initialized to prevent 1 + N queries (10 lazy queries saved!)
+        assertThat(responses.get(0).getItems()).isEmpty();
+        assertThat(sqlCount).isEqualTo(2); // 1 select + 1 count query
+
+        // Single Order Detail query uses @EntityGraph to fetch Order -> OrderItems -> Product in 1 query
+        statistics.clear();
+        Order detailOrder = orderRepository.findWithItemsById(orderPage.getContent().get(0).getId()).orElseThrow();
+        OrderResponse detailResponse = OrderResponse.fromEntity(detailOrder);
+        long detailSqlCount = statistics.getPrepareStatementCount();
+        System.out.println(">>> [Single Order Detail] Actual SQL statements executed: " + detailSqlCount);
+
+        assertThat(detailResponse.getItems()).hasSize(3);
+        assertThat(detailSqlCount).isEqualTo(1);
     }
 
     @Test

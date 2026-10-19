@@ -51,6 +51,9 @@ class PrintJobServiceTest {
     @Mock private WarehouseRepository warehouseRepository;
     @Mock private MaterialRepository materialRepository;
     @Mock private PrinterRepository printerRepository;
+    @Mock private com.memento3d.orders.infrastructure.persistence.repository.OrderRepository orderRepository;
+    @Mock private com.memento3d.modelreview.infrastructure.persistence.repository.ModelVersionRepository modelVersionRepository;
+    @Mock private com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
 
     @InjectMocks
     private PrintJobServiceImpl printJobService;

@@ -48,14 +48,26 @@ class AuthControllerIntegrationTest {
     private BlacklistedTokenRepository blacklistedTokenRepository;
 
     @Autowired(required = false)
+    private com.memento3d.assets.infrastructure.persistence.repository.UploadChunkRepository uploadChunkRepository;
+
+    @Autowired(required = false)
     private com.memento3d.scans.infrastructure.persistence.repository.ScanRepository scanRepository;
+
+    @Autowired(required = false)
+    private com.memento3d.warehouse.infrastructure.persistence.repository.WarehouseMembershipRepository warehouseMembershipRepository;
 
     @BeforeEach
     void cleanDatabase() {
         blacklistedTokenRepository.deleteAll();
         refreshTokenRepository.deleteAll();
+        if (uploadChunkRepository != null) {
+            uploadChunkRepository.deleteAll();
+        }
         if (scanRepository != null) {
             scanRepository.deleteAll();
+        }
+        if (warehouseMembershipRepository != null) {
+            warehouseMembershipRepository.deleteAll();
         }
         userRepository.deleteAll();
     }
