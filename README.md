@@ -24,15 +24,7 @@
   - `ROLE_WAREHOUSE`: Thủ kho, quản lý nhập/xuất/tồn kho.
   - `ROLE_OPERATOR`: Kỹ thuật viên vận hành máy in 3D.
   - `ROLE_PROVIDER`: Nhà cung ứng vật tư filament/resin.
-  - `ROLE_DRIVER`: Đối tác giao vận, vận chuyển đơn in 3D.
-- **Tài khoản kiểm thử chuẩn**: Toàn bộ tài khoản mẫu được kích hoạt sẵn (`email_verified = true`, `status = ACTIVE`) với mật khẩu chung `123456` cho cả 2 tên miền `@memento3d.vn` và `@memento3d.com`:
-  - `customer@memento3d.vn` / `123456`
-  - `admin@memento3d.vn` / `123456`
-  - `manager@memento3d.vn` / `123456`
-  - `warehouse@memento3d.vn` / `123456`
-  - `operator@memento3d.vn` / `123456`
-  - `provider@memento3d.vn` / `123456`
-  - `driver@memento3d.vn` / `123456`
+- **Quản lý phiên & Xác thực an toàn**: Người dùng vãng lai tự đăng ký tài khoản khách hàng qua API `/api/v1/auth/register`. Tài khoản quản trị và nhân viên nội bộ được phân quyền tập trung qua hệ thống quản trị hoặc cấu hình an toàn, hỗ trợ đặt lại mật khẩu bảo mật qua email SMTP (NIST SP 800-63B).
 
 ### 2. 🧱 Quản Lý Vật Liệu & Kho Bãi (Materials & Warehouses)
 - **Material Catalog (F01)**: Quản lý danh mục vật liệu in (PLA, ABS, PETG, Resin...), thông số nhiệt độ đầu đùn, bàn in, mật độ và giá vốn theo gram ($VND/g$).
@@ -217,3 +209,9 @@ Tất cả thành viên trong nhóm phát triển Backend phải đọc và làm
 2. Không viết SQL nối chuỗi (phải dùng Parameterized Query / ORM Binding).
 3. Tuyệt đối không để xảy ra lỗi N+1 Query (dùng `JOIN FETCH`, `@EntityGraph` hoặc Batching).
 4. Phân trang tất cả các API trả về danh sách, giới hạn `limit` tối đa.
+ 
+---
+
+## 👥 Đội Ngũ Phát Triển & Bản Quyền
+- **Technical Lead & Architect:** Lê Tuấn Kiệt ([KietLT33](https://github.com/KietLT33))
+- Dự án được bảo hộ quyền sở hữu trí tuệ bởi **Memento3D Engineering Team**.

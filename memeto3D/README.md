@@ -144,3 +144,9 @@ Sau khi ứng dụng khởi chạy thành công:
 ## 📖 Tài Liệu Tham Khảo
 - [Tài liệu Cấu trúc & Kiến trúc Chi tiết (STRUCTURE.md)](../STRUCTURE.md)
 - [Quy chuẩn Phát triển Backend (BE_GUIDELINES.md)](doc/BE_GUIDELINES.md)
+
+---
+
+## 👥 Đội Ngũ Phát Triển & Bản Quyền
+- **Technical Lead & Architect:** Lê Tuấn Kiệt ([KietLT33](https://github.com/KietLT33))
+- Dự án được bảo hộ quyền sở hữu trí tuệ bởi **Memento3D Engineering Team**.
