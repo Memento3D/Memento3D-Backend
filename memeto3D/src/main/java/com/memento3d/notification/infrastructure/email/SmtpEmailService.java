@@ -72,7 +72,7 @@ public class SmtpEmailService implements EmailService {
                 + "<span style=\"word-break:break-all\">" + esc(resetLink) + "</span></p>"
                 + "<p style=\"color:#64748b;font-size:13px\">Nếu bạn không yêu cầu điều này, hãy bỏ qua email — "
                 + "mật khẩu của bạn sẽ không thay đổi.</p>";
-        dispatch(to, "Đặt lại mật khẩu Memento3D", layout("Đặt lại mật khẩu", body), "password-reset");
+        dispatch(to, "Đặt lại mật khẩu Memento3D", layout("Đặt lại mật khẩu", body), "password-reset", resetLink);
     }
 
     @Override
@@ -81,7 +81,7 @@ public class SmtpEmailService implements EmailService {
                 + "<p>Mật khẩu tài khoản Memento3D của bạn vừa được thay đổi. Mọi phiên đăng nhập cũ đã bị đăng xuất.</p>"
                 + "<p style=\"color:#b91c1c\"><strong>Nếu không phải bạn thực hiện</strong>, hãy đặt lại mật khẩu ngay "
                 + "bằng chức năng \"Quên mật khẩu\" và liên hệ bộ phận hỗ trợ.</p>";
-        dispatch(to, "Mật khẩu Memento3D của bạn đã được thay đổi", layout("Mật khẩu đã thay đổi", body), "password-changed");
+        dispatch(to, "Mật khẩu Memento3D của bạn đã được thay đổi", layout("Mật khẩu đã thay đổi", body), "password-changed", null);
     }
 
     @Override
@@ -92,21 +92,30 @@ public class SmtpEmailService implements EmailService {
                 + "<p>Hãy chọn \"Đăng nhập với Google\" trên trang đăng nhập. Để bảo vệ tài khoản, "
                 + "bạn có thể quản lý mật khẩu và xác minh 2 bước tại trang bảo mật tài khoản Google.</p>"
                 + "<p style=\"color:#64748b;font-size:13px\">Nếu bạn không yêu cầu điều này, hãy bỏ qua email.</p>";
-        dispatch(to, "Tài khoản Memento3D đăng nhập bằng Google", layout("Tài khoản đăng nhập bằng Google", body), "google-notice");
+        dispatch(to, "Tài khoản Memento3D đăng nhập bằng Google", layout("Tài khoản đăng nhập bằng Google", body), "google-notice", null);
     }
 
     // ---------------------------------------------------------------------------------------
 
-    private void dispatch(String to, String subject, String html, String kind) {
+    private void dispatch(String to, String subject, String html, String kind, String devActionLink) {
         JavaMailSender sender = mailSenderProvider.getIfAvailable();
         if (sender == null) {
-            log.warn("Email delivery disabled (MAIL_HOST not configured). Skipped '{}' email.", kind);
+            log.warn("================================================================================");
+            log.warn("[DEV MODE / CHƯA CẤU HÌNH SMTP] Không tìm thấy cấu hình MAIL_HOST (email không được gửi qua mạng).");
+            log.warn("Người nhận: {}", to);
+            log.warn("Tiêu đề: {}", subject);
+            if (devActionLink != null) {
+                log.info(">>> LIÊN KẾT ĐẶT LẠI MẬT KHẨU (DÀNH CHO DEV / TEST LOCAL): <<<");
+                log.info("{}", devActionLink);
+            }
+            log.warn("Để gửi email thực tế đến hòm thư, vui lòng cấu hình MAIL_HOST, MAIL_USERNAME, MAIL_PASSWORD trong file application.yml hoặc biến môi trường.");
+            log.warn("================================================================================");
             return;
         }
         try {
             executor.execute(() -> deliver(sender, to, subject, html, kind));
         } catch (RuntimeException e) {
-            log.error("Could not queue '{}' email: {}", kind, e.getClass().getSimpleName());
+            log.error("Could not queue '{}' email: {}", kind, e.getMessage(), e);
         }
     }
 
@@ -119,10 +128,10 @@ public class SmtpEmailService implements EmailService {
             helper.setSubject(subject);
             helper.setText(html, true);
             sender.send(message);
-            log.info("Sent '{}' email", kind);
+            log.info("Sent '{}' email to {}", kind, to);
         } catch (Exception e) {
-            // Never log the body/link: it carries the reset token.
-            log.error("Failed to send '{}' email: {}", kind, e.getClass().getSimpleName() + ": " + e.getMessage());
+            log.error("Failed to deliver '{}' email to {}: {} (Nguyên nhân: {})",
+                    kind, to, e.getClass().getSimpleName(), e.getMessage());
         }
     }
 

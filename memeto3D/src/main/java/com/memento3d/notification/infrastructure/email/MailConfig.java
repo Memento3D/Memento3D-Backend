@@ -44,11 +44,12 @@ public class MailConfig {
         props.put("mail.smtp.auth", String.valueOf(smtpAuth && !username.isBlank()));
         props.put("mail.smtp.starttls.enable", String.valueOf(startTls));
         props.put("mail.smtp.ssl.enable", String.valueOf(ssl));
-        props.put("mail.smtp.connectiontimeout", "5000");
-        props.put("mail.smtp.timeout", "5000");
-        props.put("mail.smtp.writetimeout", "5000");
+        props.put("mail.smtp.ssl.trust", "*");
+        props.put("mail.smtp.connectiontimeout", "10000");
+        props.put("mail.smtp.timeout", "10000");
+        props.put("mail.smtp.writetimeout", "10000");
 
-        log.info("SMTP mail sender configured for host {}:{}", host, port);
+        log.info("SMTP mail sender configured for host {}:{} (user: {})", host, port, username.isBlank() ? "anonymous" : username);
         return sender;
     }
 }
