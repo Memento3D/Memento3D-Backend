@@ -88,20 +88,21 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         Optional<User> maybeUser = userRepository.findByEmail(normalizedEmail);
         if (maybeUser.isEmpty()) {
-            log.debug("Password reset requested for unknown email (silently ignored)");
+            log.warn("⚠️ Password reset requested for email '{}' but account does not exist in DB.", normalizedEmail);
             return;
         }
 
         User user = maybeUser.get();
         if (user.getStatus() != UserStatus.ACTIVE || Boolean.FALSE.equals(user.getEmailVerified())) {
-            log.info("Password reset ignored for user {}: status={}, emailVerified={}",
-                    user.getId(), user.getStatus(), user.getEmailVerified());
+            log.warn("⚠️ Password reset ignored for user '{}': status={}, emailVerified={}. (Account must be ACTIVE and emailVerified=true)",
+                    user.getEmail(), user.getStatus(), user.getEmailVerified());
             return;
         }
 
         try {
             if (user.getPassword() == null || user.getPassword().isBlank()) {
                 // Google-only account: never mint a password through this flow.
+                log.info("User {} has Google provider only. Sending Google notice email.", user.getEmail());
                 emailService.sendGoogleAccountNotice(user.getEmail(), user.getFullName());
                 return;
             }
@@ -113,7 +114,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             log.info("Password reset email queued for user {}", user.getId());
         } catch (Exception e) {
             // Must not alter the HTTP response (would reveal that the account exists).
-            log.error("Password reset request failed for user {}: {}", user.getId(), e.getClass().getSimpleName());
+            log.error("Password reset request failed for user {}: {}", user.getId(), e.getMessage(), e);
         }
     }
 

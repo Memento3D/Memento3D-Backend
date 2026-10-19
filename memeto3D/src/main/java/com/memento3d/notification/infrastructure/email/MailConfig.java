@@ -35,8 +35,14 @@ public class MailConfig {
         sender.setPort(port);
         sender.setDefaultEncoding("UTF-8");
         if (!username.isBlank()) {
-            sender.setUsername(username);
-            sender.setPassword(password);
+            sender.setUsername(username.trim());
+            String cleanedPassword = password == null ? "" : password.trim().replaceAll("\\s+", "");
+            sender.setPassword(cleanedPassword);
+
+            if (host.toLowerCase().contains("gmail") && cleanedPassword.length() != 16) {
+                log.warn("⚠️ CẢNH BÁO GMAIL SMTP: Mật khẩu ứng dụng Google (App Password) phải có ĐÚNG 16 ký tự. Hiện tại cấu hình có {} ký tự (mật khẩu đang dùng: '{}'). Vui lòng kiểm tra lại Google Account!",
+                        cleanedPassword.length(), cleanedPassword);
+            }
         }
 
         Properties props = sender.getJavaMailProperties();
