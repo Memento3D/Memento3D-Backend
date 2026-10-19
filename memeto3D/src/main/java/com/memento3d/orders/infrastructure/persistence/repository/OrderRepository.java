@@ -23,15 +23,17 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     Optional<Order> findByOrderCode(String orderCode);
 
-    @EntityGraph(attributePaths = {"items"})
+    Optional<Order> findByIdempotencyKey(String idempotencyKey);
+
+    @EntityGraph(attributePaths = {"items", "items.product"})
     @Query("SELECT o FROM Order o WHERE o.id = :id")
     Optional<Order> findWithItemsById(@Param("id") UUID id);
 
-    @EntityGraph(attributePaths = {"items"})
+    @EntityGraph(attributePaths = {"items", "items.product"})
     @Query("SELECT o FROM Order o WHERE o.id = :id AND o.userId = :userId")
     Optional<Order> findWithItemsByIdAndUserId(@Param("id") UUID id, @Param("userId") UUID userId);
 
-    @EntityGraph(attributePaths = {"items"})
+    @EntityGraph(attributePaths = {"items", "items.product"})
     @Query("SELECT o FROM Order o WHERE o.orderCode = :orderCode")
     Optional<Order> findWithItemsByOrderCode(@Param("orderCode") String orderCode);
 

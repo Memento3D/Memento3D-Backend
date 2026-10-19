@@ -87,7 +87,8 @@ class ScanControllerIntegrationTest {
         scanRepository.deleteAll();
         blacklistedTokenRepository.deleteAll();
         refreshTokenRepository.deleteAll();
-        userRepository.deleteAll();
+        userRepository.findByEmail("scan_user@example.com").ifPresent(userRepository::delete);
+        userRepository.findByEmail("user_b@example.com").ifPresent(userRepository::delete);
 
         // 1. Register a test user
         RegisterRequest registerRequest = RegisterRequest.builder()

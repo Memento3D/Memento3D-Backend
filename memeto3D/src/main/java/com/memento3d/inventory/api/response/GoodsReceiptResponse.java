@@ -22,6 +22,7 @@ public class GoodsReceiptResponse {
     private String supplier;
     private GoodsReceiptStatus status;
     private String note;
+    private Integer itemCount;
     private List<GoodsReceiptItemResponse> items;
     private UUID createdBy;
     private UUID approvedBy;

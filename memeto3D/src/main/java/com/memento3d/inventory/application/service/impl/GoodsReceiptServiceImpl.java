@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -259,6 +260,21 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
     }
 
     private GoodsReceiptResponse mapToResponse(GoodsReceipt receipt) {
+        boolean initialized = receipt.getItems() != null && org.hibernate.Hibernate.isInitialized(receipt.getItems());
+        int count = initialized ? receipt.getItems().size() : 0;
+        List<GoodsReceiptResponse.GoodsReceiptItemResponse> itemResponses = initialized
+                ? receipt.getItems().stream().map(i -> GoodsReceiptResponse.GoodsReceiptItemResponse.builder()
+                        .id(i.getId())
+                        .materialId(i.getMaterial() != null ? i.getMaterial().getId() : null)
+                        .materialName(i.getMaterial() != null ? i.getMaterial().getName() : null)
+                        .materialSku(i.getMaterial() != null ? i.getMaterial().getSku() : null)
+                        .quantity(i.getQuantity())
+                        .unitCost(i.getUnitCost())
+                        .batchNumber(i.getBatchNumber())
+                        .note(i.getNote())
+                        .build()).toList()
+                : null;
+
         return GoodsReceiptResponse.builder()
                 .id(receipt.getId())
                 .receiptCode(receipt.getReceiptCode())
@@ -268,16 +284,8 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                 .supplier(receipt.getSupplier())
                 .status(receipt.getStatus())
                 .note(receipt.getNote())
-                .items(receipt.getItems() != null ? receipt.getItems().stream().map(i -> GoodsReceiptResponse.GoodsReceiptItemResponse.builder()
-                        .id(i.getId())
-                        .materialId(i.getMaterial().getId())
-                        .materialName(i.getMaterial().getName())
-                        .materialSku(i.getMaterial().getSku())
-                        .quantity(i.getQuantity())
-                        .unitCost(i.getUnitCost())
-                        .batchNumber(i.getBatchNumber())
-                        .note(i.getNote())
-                        .build()).toList() : null)
+                .itemCount(count)
+                .items(itemResponses)
                 .createdBy(receipt.getCreatedBy())
                 .approvedBy(receipt.getApprovedBy())
                 .completedAt(receipt.getCompletedAt())

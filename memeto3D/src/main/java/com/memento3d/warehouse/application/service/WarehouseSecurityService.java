@@ -42,11 +42,6 @@ public class WarehouseSecurityService {
                 .existsByWarehouseIdAndUserIdAndStatus(warehouseId, userId, MembershipStatus.ACTIVE);
 
         if (!hasActiveMembership) {
-            // If the user has a staff role (WAREHOUSE, OPERATOR), allow access if they are not explicitly restricted
-            if ("ROLE_WAREHOUSE".equalsIgnoreCase(systemRole) || "WAREHOUSE".equalsIgnoreCase(systemRole)
-                    || "ROLE_OPERATOR".equalsIgnoreCase(systemRole) || "OPERATOR".equalsIgnoreCase(systemRole)) {
-                return;
-            }
             log.warn("Access denied: User {} has no active membership in warehouse {}", userId, warehouseId);
             throw new BusinessException(HttpStatus.FORBIDDEN, "WAREHOUSE_ACCESS_DENIED",
                     "Access denied: You do not have active membership in this warehouse");

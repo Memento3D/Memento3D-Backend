@@ -36,7 +36,10 @@ public class ReconstructionJobFinalizerImpl
     private final AiGenerationClient aiClient;
     private final CloudinaryStorageService storageService;
     private final ScanStatusCacheService cacheService;
+    private final PlatformTransactionManager transactionManager;
     private final TransactionTemplate transaction;
+    private final com.memento3d.assets.infrastructure.persistence.repository.DigitalAssetRepository digitalAssetRepository;
+    private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
 
     public ReconstructionJobFinalizerImpl(
             ReconstructionJobRepository jobRepository,
@@ -44,14 +47,19 @@ public class ReconstructionJobFinalizerImpl
             AiGenerationClient aiClient,
             CloudinaryStorageService storageService,
             ScanStatusCacheService cacheService,
-            PlatformTransactionManager transactionManager
+            PlatformTransactionManager transactionManager,
+            com.memento3d.assets.infrastructure.persistence.repository.DigitalAssetRepository digitalAssetRepository,
+            com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher
     ) {
         this.jobRepository = jobRepository;
         this.outputRepository = outputRepository;
         this.aiClient = aiClient;
         this.storageService = storageService;
         this.cacheService = cacheService;
+        this.transactionManager = transactionManager;
         this.transaction = new TransactionTemplate(transactionManager);
+        this.digitalAssetRepository = digitalAssetRepository;
+        this.outboxPublisher = outboxPublisher;
     }
 
     private record Context(UUID userId, UUID scanId) {
@@ -175,6 +183,50 @@ public class ReconstructionJobFinalizerImpl
             // Output và trạng thái job/scan commit cùng nhau.
             jobRepository.saveAndFlush(job);
             outputRepository.flush();
+
+            if (job.getTier() == com.memento3d.reconstruction.domain.model.ReconstructionTier.HIGH_QUALITY) {
+                digitalAssetRepository.save(
+                        com.memento3d.assets.domain.model.DigitalAsset.builder()
+                                .userId(job.getScan().getUser().getId())
+                                .orderItemId(job.getOrderItemId())
+                                .job(job)
+                                .fileFormat("GLB")
+                                .storageProvider("CLOUDINARY")
+                                .storagePath(publicId)
+                                .deliveryUrl(url)
+                                .fileSizeBytes((long) bytes.length)
+                                .sha256(hash)
+                                .status("READY")
+                                .downloadCount(0)
+                                .build()
+                );
+
+                outboxPublisher.publish(
+                        "MODEL_REVIEW",
+                        job.getId().toString(),
+                        "MODEL_APPROVAL_REQUIRED",
+                        Map.of(
+                                "jobId", job.getId(),
+                                "orderItemId", job.getOrderItemId() != null ? job.getOrderItemId() : "",
+                                "userId", job.getScan().getUser().getId(),
+                                "modelUrl", url,
+                                "sha256", hash
+                        )
+                );
+            } else {
+                outboxPublisher.publish(
+                        "RECONSTRUCTION",
+                        job.getId().toString(),
+                        "PREVIEW_READY",
+                        Map.of(
+                                "jobId", job.getId(),
+                                "scanId", job.getScan().getId(),
+                                "userId", job.getScan().getUser().getId(),
+                                "previewUrl", url,
+                                "tier", "PREVIEW"
+                        )
+                );
+            }
 
             return job.getScan().getId();
         });

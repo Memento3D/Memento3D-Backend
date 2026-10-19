@@ -141,4 +141,15 @@ public class OrderController {
         orderService.cancelOrder(orderId, userDetails.getId(), role);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{orderId}/cancel")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Cancel order (POST)", description = "Cancels an order and returns updated status")
+    public ResponseEntity<OrderResponse> cancelOrderPost(
+            @Parameter(description = "Order UUID") @PathVariable UUID orderId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        Role role = userDetails.getRole();
+        orderService.cancelOrder(orderId, userDetails.getId(), role);
+        return ResponseEntity.ok(orderService.getOrderDetail(orderId, userDetails.getId(), role));
+    }
 }

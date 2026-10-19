@@ -83,7 +83,7 @@ public class OrderResponse {
         if (order == null) return null;
 
         List<OrderItemResponse> itemResponses = new ArrayList<>();
-        if (order.getItems() != null) {
+        if (order.getItems() != null && org.hibernate.Hibernate.isInitialized(order.getItems())) {
             itemResponses = order.getItems().stream()
                     .map(OrderItemResponse::fromEntity)
                     .toList();

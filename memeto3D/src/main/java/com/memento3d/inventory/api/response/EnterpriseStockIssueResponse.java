@@ -24,6 +24,7 @@ public class EnterpriseStockIssueResponse {
     private String reason;
     private EnterpriseStockIssueStatus status;
     private String note;
+    private Integer itemCount;
     private List<EnterpriseStockIssueItemResponse> items;
     private UUID createdBy;
     private UUID approvedBy;

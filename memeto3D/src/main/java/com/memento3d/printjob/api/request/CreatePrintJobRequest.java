@@ -21,7 +21,20 @@ public class CreatePrintJobRequest {
     @Schema(description = "Optional customer print order ID")
     private UUID orderId;
 
-    @Schema(description = "Assigned printer ID (optional at creation)")
+    @Schema(description = "Associated order item ID")
+    private UUID orderItemId;
+
+    @Schema(description = "Approved model version ID")
+    private UUID modelVersionId;
+
+    @Schema(description = "Flag whether job is outsourced")
+    @Builder.Default
+    private boolean isOutsource = false;
+
+    @Schema(description = "Outsource partner name")
+    private String partnerName;
+
+    @Schema(description = "Assigned printer ID (optional if outsource)")
     private UUID printerId;
 
     @NotNull(message = "Material ID is required")

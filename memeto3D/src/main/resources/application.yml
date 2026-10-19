@@ -49,6 +49,22 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       timeout: ${REDIS_TIMEOUT:2000ms}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:memento3d-backend-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
+      missing-topics-fatal: false
 
   security:
     oauth2:
@@ -119,6 +135,24 @@ app:
     mock-enabled: ${AI_MOCK_ENABLED:false}
     mock-output-id: ${AI_MOCK_OUTPUT_ID:}
     mock-delay-ms: ${AI_MOCK_DELAY_MS:2000}
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
+    topics:
+      reconstruction: ${KAFKA_TOPIC_RECONSTRUCTION:memento3d.reconstruction}
+      orders: ${KAFKA_TOPIC_ORDERS:memento3d.orders}
+      payments: ${KAFKA_TOPIC_PAYMENTS:memento3d.payments}
+      printjobs: ${KAFKA_TOPIC_PRINTJOBS:memento3d.printjobs}
+      quality: ${KAFKA_TOPIC_QUALITY:memento3d.quality}
+      notifications: ${KAFKA_TOPIC_NOTIFICATIONS:memento3d.notifications}
+      dlt: ${KAFKA_TOPIC_DLT:memento3d.dlt}
+    outbox:
+      poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:1000}
+      batch-size: ${OUTBOX_BATCH_SIZE:50}
+      max-retries: 5
+  realtime:
+    sse:
+      timeout-ms: ${SSE_TIMEOUT_MS:300000}
+      heartbeat-interval-ms: ${SSE_HEARTBEAT_INTERVAL_MS:15000}
 springdoc:
   api-docs:
     path: /v3/api-docs

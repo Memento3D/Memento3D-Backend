@@ -60,6 +60,21 @@ public class Order {
     @Builder.Default
     private OrderStatus status = OrderStatus.PENDING;
 
+    @Column(name = "fulfillment_type", nullable = false, length = 30)
+    @Builder.Default
+    private String fulfillmentType = "PHYSICAL"; // PHYSICAL, DIGITAL
+
+    @Column(name = "payment_type", nullable = false, length = 30)
+    @Builder.Default
+    private String paymentType = "FULL_PAYMENT"; // FULL_PAYMENT, DEPOSIT, COD
+
+    @Column(name = "deposit_amount", precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal depositAmount = BigDecimal.ZERO;
+
+    @Column(name = "idempotency_key", length = 100)
+    private String idempotencyKey;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", length = 30)
     private PaymentMethod paymentMethod;

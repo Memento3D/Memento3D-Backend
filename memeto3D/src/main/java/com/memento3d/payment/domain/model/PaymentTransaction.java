@@ -97,7 +97,7 @@ public class PaymentTransaction {
     }
 
     public void markSuccess(String providerTransactionId, Instant paidAt) {
-        this.status = PaymentStatus.PAID;
+        this.status = PaymentStatus.SUCCESS;
         this.providerTransactionId = providerTransactionId;
         this.paidAt = paidAt != null ? paidAt : Instant.now();
         this.failureCode = null;

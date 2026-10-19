@@ -57,6 +57,9 @@ public class OrderServiceImpl implements OrderService {
     private final CartItemRepository cartItemRepository;
     private final ProductRepository productRepository;
     private final PaymentTransactionRepository paymentTransactionRepository;
+    private final com.memento3d.pricing.application.service.PricingEngineService pricingEngineService;
+    private final com.memento3d.entitlement.application.service.EntitlementService entitlementService;
+    private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
 
     private final SecureRandom random = new SecureRandom();
 
@@ -86,7 +89,8 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public void updateOrderStatusPaid(UUID orderId) {
-        Order order = getOrderById(orderId);
+        Order order = orderRepository.findWithItemsById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException("Order not found with ID: " + orderId));
         if (order.getPaymentStatus() == PaymentStatus.PAID || order.getPaymentStatus() == PaymentStatus.SUCCESS) {
             log.info("Order {} is already paid", orderId);
             return;
@@ -94,6 +98,63 @@ public class OrderServiceImpl implements OrderService {
         order.markAsPaid();
         orderRepository.save(order);
         log.info("Order {} payment confirmed, status updated to {}", orderId, order.getStatus());
+
+        // Automatically grant entitlements on successful payment
+        UUID scanId = order.getScanId();
+        if (scanId != null) {
+            entitlementService.grantEntitlement(
+                    order.getUserId(),
+                    null,
+                    scanId,
+                    "SCAN",
+                    com.memento3d.entitlement.domain.model.EntitlementType.VIEW_HIGH_QUALITY,
+                    null
+            );
+            entitlementService.grantEntitlement(
+                    order.getUserId(),
+                    null,
+                    scanId,
+                    "SCAN",
+                    com.memento3d.entitlement.domain.model.EntitlementType.DOWNLOAD_DIGITAL_MODEL,
+                    null
+            );
+        }
+
+        if (order.getItems() != null) {
+            for (OrderItem item : order.getItems()) {
+                UUID resourceId = scanId != null ? scanId : item.getId();
+                entitlementService.grantEntitlement(
+                        order.getUserId(),
+                        item.getId(),
+                        resourceId,
+                        "ORDER_ITEM",
+                        com.memento3d.entitlement.domain.model.EntitlementType.VIEW_HIGH_QUALITY,
+                        null
+                );
+                entitlementService.grantEntitlement(
+                        order.getUserId(),
+                        item.getId(),
+                        resourceId,
+                        "ORDER_ITEM",
+                        com.memento3d.entitlement.domain.model.EntitlementType.DOWNLOAD_DIGITAL_MODEL,
+                        null
+                );
+            }
+        }
+
+        // Publish Outbox Event for Notification & Analytics
+        outboxPublisher.publish(
+                "ORDER",
+                order.getId().toString(),
+                "PAYMENT_SUCCEEDED",
+                java.util.Map.of(
+                        "orderId", order.getId(),
+                        "userId", order.getUserId(),
+                        "totalPrice", order.getTotalPrice(),
+                        "paymentMethod", order.getPaymentMethod() != null ? order.getPaymentMethod().name() : "UNKNOWN",
+                        "fulfillmentType", order.getFulfillmentType() != null ? order.getFulfillmentType() : "PHYSICAL"
+                )
+        );
     }
 
     @Override
@@ -101,8 +162,22 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse createOrder(CreateOrderRequest request, UUID userId) {
         log.info("Creating order for user ID={}", userId);
 
-        // 1. Check if user has an active cart
-        Optional<Cart> cartOpt = cartRepository.findByCustomerId(userId);
+        // Idempotency check: if request has idempotencyKey and order already exists, return it
+        if (request.getIdempotencyKey() != null && !request.getIdempotencyKey().isBlank()) {
+            Optional<Order> existingOrder = orderRepository.findByIdempotencyKey(request.getIdempotencyKey());
+            if (existingOrder.isPresent()) {
+                log.info("Returning existing order for idempotencyKey: {}", request.getIdempotencyKey());
+                return OrderResponse.fromEntity(existingOrder.get());
+            }
+        }
+
+        // Quote validation: if quoteId is provided, verify and lock it with server-side pricing engine
+        if (request.getQuoteId() != null) {
+            pricingEngineService.validateAndLockQuote(request.getQuoteId(), request.getTotalPrice(), userId);
+        }
+
+        // 1. Check if user has an active cart with eager loaded items & products
+        Optional<Cart> cartOpt = cartRepository.findWithItemsByCustomerId(userId);
         Cart cart = cartOpt.orElse(null);
 
         boolean hasCartItems = cart != null && cart.getItems() != null && !cart.getItems().isEmpty();
@@ -116,8 +191,11 @@ public class OrderServiceImpl implements OrderService {
             BigDecimal subtotal = BigDecimal.ZERO;
 
             for (CartItem cartItem : cart.getItems()) {
-                Product product = productRepository.findById(cartItem.getProduct().getId())
-                        .orElseThrow(() -> new ProductNotFoundException("Product not found: " + cartItem.getProduct().getId()));
+                Product product = cartItem.getProduct();
+                if (product == null) {
+                    product = productRepository.findById(cartItem.getProduct().getId())
+                            .orElseThrow(() -> new ProductNotFoundException("Product not found: " + cartItem.getProduct().getId()));
+                }
 
                 if (!product.isPurchasable()) {
                     throw new ProductInactiveException("Product '" + product.getName() + "' is no longer active or in stock");
@@ -153,6 +231,9 @@ public class OrderServiceImpl implements OrderService {
                     .totalPrice(totalAmount)
                     .currency(request.getCurrency() != null ? request.getCurrency() : "VND")
                     .status(OrderStatus.PENDING)
+                    .fulfillmentType(request.getFulfillmentType() != null ? request.getFulfillmentType() : "PHYSICAL")
+                    .paymentType(request.getPaymentType() != null ? request.getPaymentType() : "FULL_PAYMENT")
+                    .idempotencyKey(request.getIdempotencyKey())
                     .paymentMethod(request.getPaymentMethod())
                     .paymentStatus(PaymentStatus.PENDING)
                     .recipientName(request.getRecipientName())
@@ -185,6 +266,9 @@ public class OrderServiceImpl implements OrderService {
                     .totalPrice(request.getTotalPrice())
                     .currency(request.getCurrency() != null ? request.getCurrency() : "VND")
                     .status(OrderStatus.PENDING)
+                    .fulfillmentType(request.getFulfillmentType() != null ? request.getFulfillmentType() : "PHYSICAL")
+                    .paymentType(request.getPaymentType() != null ? request.getPaymentType() : "FULL_PAYMENT")
+                    .idempotencyKey(request.getIdempotencyKey())
                     .paymentMethod(request.getPaymentMethod())
                     .paymentStatus(PaymentStatus.PENDING)
                     .recipientName(request.getRecipientName())
@@ -302,6 +386,19 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(nextStatus);
         Order saved = orderRepository.save(order);
         log.info("Manager ID={} updated order ID={} status to {}", managerId, orderId, nextStatus);
+
+        outboxPublisher.publish(
+                "ORDER",
+                saved.getId().toString(),
+                "ORDER_STATUS_CHANGED",
+                java.util.Map.of(
+                        "orderId", saved.getId(),
+                        "userId", saved.getUserId(),
+                        "status", saved.getStatus().name(),
+                        "paymentStatus", saved.getPaymentStatus() != null ? saved.getPaymentStatus().name() : "PENDING"
+                )
+        );
+
         return OrderResponse.fromEntity(saved);
     }
 
@@ -354,6 +451,19 @@ public class OrderServiceImpl implements OrderService {
 
         Order updated = orderRepository.save(order);
         log.info("Order {} updated successfully", orderId);
+
+        outboxPublisher.publish(
+                "ORDER",
+                updated.getId().toString(),
+                "ORDER_STATUS_CHANGED",
+                java.util.Map.of(
+                        "orderId", updated.getId(),
+                        "userId", updated.getUserId(),
+                        "status", updated.getStatus().name(),
+                        "paymentStatus", updated.getPaymentStatus() != null ? updated.getPaymentStatus().name() : "PENDING"
+                )
+        );
+
         return OrderResponse.fromEntity(updated);
     }
 
@@ -373,8 +483,20 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.cancel();
-        orderRepository.save(order);
+        Order saved = orderRepository.save(order);
         log.info("Order {} cancelled by user {} (role: {})", orderId, userId, userRole);
+
+        outboxPublisher.publish(
+                "ORDER",
+                saved.getId().toString(),
+                "ORDER_STATUS_CHANGED",
+                java.util.Map.of(
+                        "orderId", saved.getId(),
+                        "userId", saved.getUserId(),
+                        "status", saved.getStatus().name(),
+                        "paymentStatus", saved.getPaymentStatus() != null ? saved.getPaymentStatus().name() : "CANCELLED"
+                )
+        );
     }
 
     private String generateOrderCode() {

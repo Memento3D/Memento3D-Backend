@@ -24,6 +24,7 @@ public class WarehouseTransferResponse {
     private String destinationWarehouseCode;
     private WarehouseTransferStatus status;
     private String note;
+    private Integer itemCount;
     private List<TransferItemResponse> items;
     private UUID createdBy;
     private UUID approvedBy;

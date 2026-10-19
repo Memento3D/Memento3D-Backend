@@ -49,6 +49,19 @@ public class PrintJobController {
                 .body(response);
     }
 
+    @PostMapping("/api/v1/orders/{orderId}/print-jobs")
+    @Operation(summary = "Create Print Job for an Order", description = "Dispatches manufacturing for an approved model order")
+    public ResponseEntity<PrintJobResponse> createJobForOrder(
+            @PathVariable UUID orderId,
+            @Valid @RequestBody CreatePrintJobRequest request,
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        request.setOrderId(orderId);
+        UUID actorId = currentUser != null ? currentUser.getId() : null;
+        PrintJobResponse response = printJobService.createPrintJob(request, actorId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
     @GetMapping
     @Operation(summary = "List Print Jobs with pagination")
     public ResponseEntity<Page<PrintJobResponse>> listJobs(

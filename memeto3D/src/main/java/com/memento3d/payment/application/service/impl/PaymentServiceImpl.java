@@ -39,6 +39,8 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -54,9 +56,10 @@ public class PaymentServiceImpl implements PaymentService {
     private final MomoProperties momoProperties;
     private final ZaloPaySignatureService zaloPaySignatureService;
     private final ZaloPayProperties zaloPayProperties;
-    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
+    private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
-    private final SecureRandom random = new SecureRandom();
+    private SecureRandom random = new SecureRandom();
 
     @Override
     @Transactional
@@ -116,6 +119,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (request.getPaymentMethod() == PaymentMethod.CASH) {
             order.setPaymentMethod(PaymentMethod.CASH);
             log.info("Created CASH payment transaction ID={} for order ID={}", transaction.getId(), order.getId());
+            publishPaymentStatusEvent(transaction);
             return PaymentResponse.builder()
                     .paymentId(transaction.getId())
                     .orderId(transaction.getOrderId())
@@ -151,6 +155,7 @@ public class PaymentServiceImpl implements PaymentService {
                 transaction.setProviderTransactionId(gatewayResponse.getProviderTransactionId());
             }
             transactionRepository.save(transaction);
+            publishPaymentStatusEvent(transaction);
 
             return PaymentResponse.builder()
                     .paymentId(transaction.getId())
@@ -168,6 +173,7 @@ public class PaymentServiceImpl implements PaymentService {
         } else {
             transaction.markFailed(gatewayResponse.getResponseCode(), gatewayResponse.getMessage());
             transactionRepository.save(transaction);
+            publishPaymentStatusEvent(transaction);
             throw new PaymentGatewayException("Gateway rejected payment creation: " + gatewayResponse.getMessage());
         }
     }
@@ -198,6 +204,7 @@ public class PaymentServiceImpl implements PaymentService {
                         transaction.markFailed(queryResponse.getResponseCode(), queryResponse.getMessage());
                     }
                     transaction = transactionRepository.save(transaction);
+                    publishPaymentStatusEvent(transaction);
                 }
             } catch (Exception e) {
                 log.warn("Could not reconcile payment status with provider: {}", e.getMessage());
@@ -239,6 +246,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         transaction.markCancelled("Cancelled by user request");
         transaction = transactionRepository.save(transaction);
+        publishPaymentStatusEvent(transaction);
         log.info("Cancelled payment transaction {} by user {}", paymentId, userId);
 
         return PaymentStatusResponse.fromEntity(transaction);
@@ -271,6 +279,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         transaction.confirmCash(managerId);
         transaction = transactionRepository.save(transaction);
+        publishPaymentStatusEvent(transaction);
 
         orderService.updateOrderStatusPaid(transaction.getOrderId());
         log.info("Manager ID={} successfully confirmed CASH payment transaction ID={} for order ID={}",
@@ -329,6 +338,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         transactionRepository.save(transaction);
+        publishPaymentStatusEvent(transaction);
         return MomoIpnResponse.success(ipnRequest.getPartnerCode(), ipnRequest.getOrderId(), ipnRequest.getRequestId());
     }
 
@@ -382,11 +392,39 @@ public class PaymentServiceImpl implements PaymentService {
         transaction.markSuccess(String.valueOf(data.getZpTransId()), Instant.now());
         orderService.updateOrderStatusPaid(transaction.getOrderId());
         transactionRepository.save(transaction);
+        publishPaymentStatusEvent(transaction);
 
         log.info("Successfully marked transaction {} as SUCCESS and confirmed order {}",
                 transaction.getId(), transaction.getOrderId());
 
         return ZaloPayCallbackResponse.success();
+    }
+
+    private void publishPaymentStatusEvent(PaymentTransaction transaction) {
+        if (transaction == null || transaction.getId() == null) {
+            return;
+        }
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("paymentId", transaction.getId());
+            payload.put("orderId", transaction.getOrderId());
+            payload.put("userId", transaction.getUserId());
+            payload.put("paymentMethod", transaction.getPaymentMethod() != null ? transaction.getPaymentMethod().name() : null);
+            payload.put("status", transaction.getStatus() != null ? transaction.getStatus().name() : null);
+            payload.put("amount", transaction.getAmount());
+            payload.put("currency", transaction.getCurrency());
+            payload.put("paidAt", transaction.getPaidAt());
+            payload.put("failureReason", transaction.getFailureMessage());
+
+            outboxPublisher.publish(
+                    "PAYMENT",
+                    transaction.getId().toString(),
+                    "PAYMENT_STATUS_CHANGED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.warn("Failed to publish payment status event for transaction {}: {}", transaction.getId(), e.getMessage());
+        }
     }
 
     private String generateMerchantTransactionId(PaymentMethod method) {

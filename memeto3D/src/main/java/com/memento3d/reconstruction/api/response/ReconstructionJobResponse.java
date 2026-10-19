@@ -24,6 +24,12 @@ public class ReconstructionJobResponse {
     @JsonProperty("input_image_id")
     private UUID inputImageId;
 
+    @JsonProperty("tier")
+    private com.memento3d.reconstruction.domain.model.ReconstructionTier tier;
+
+    @JsonProperty("order_id")
+    private UUID orderId;
+
     private ReconstructionJobStatus status;
 
     private ReconstructionStage stage;
@@ -66,6 +72,8 @@ public class ReconstructionJobResponse {
                 .jobId(job.getId())
                 .scanId(job.getScan().getId())
                 .inputImageId(job.getInputImageId())
+                .tier(job.getTier())
+                .orderId(job.getOrderId())
                 .status(job.getStatus())
                 .stage(job.getStage())
                 .progress(job.getProgress())

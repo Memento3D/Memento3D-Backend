@@ -45,6 +45,20 @@ public class CreateOrderRequest {
     @Schema(description = "Selected payment method: MOMO, ZALOPAY, or CASH", example = "CASH")
     private PaymentMethod paymentMethod;
 
+    @Schema(description = "Payment type: FULL_PAYMENT, DEPOSIT, COD", example = "FULL_PAYMENT")
+    @Builder.Default
+    private String paymentType = "FULL_PAYMENT";
+
+    @Schema(description = "Fulfillment type: PHYSICAL, DIGITAL", example = "PHYSICAL")
+    @Builder.Default
+    private String fulfillmentType = "PHYSICAL";
+
+    @Schema(description = "Optional idempotency key to prevent double checkout", example = "checkout-user123-session456")
+    private String idempotencyKey;
+
+    @Schema(description = "Optional pre-calculated quote ID to verify pricing snapshot")
+    private UUID quoteId;
+
     @Schema(description = "Order note or delivery instructions", example = "Deliver in the afternoon")
     private String note;
 }

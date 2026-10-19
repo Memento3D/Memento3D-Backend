@@ -61,6 +61,7 @@ class UploadStatusIntegrationTest {
     @Autowired private UploadChunkRepository uploadChunkRepository;
     @Autowired private BlacklistedTokenRepository blacklistedTokenRepository;
     @Autowired private com.memento3d.identity.infrastructure.persistence.repository.RefreshTokenRepository refreshTokenRepository;
+    @Autowired(required = false) private com.memento3d.warehouse.infrastructure.persistence.repository.WarehouseMembershipRepository warehouseMembershipRepository;
 
     // ─── shared state (set up once per test class) ───────────────────────────
     private static String ownerToken;
@@ -74,6 +75,9 @@ class UploadStatusIntegrationTest {
         scanRepository.deleteAll();
         blacklistedTokenRepository.deleteAll();
         refreshTokenRepository.deleteAll();
+        if (warehouseMembershipRepository != null) {
+            warehouseMembershipRepository.deleteAll();
+        }
         userRepository.deleteAll();
     }
 

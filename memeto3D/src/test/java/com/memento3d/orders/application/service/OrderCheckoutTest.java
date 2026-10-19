@@ -100,8 +100,7 @@ class OrderCheckoutTest {
     @Test
     @DisplayName("Should successfully checkout cart, recalculate price strictly from DB and clear cart")
     void testCheckoutSuccess() {
-        when(cartRepository.findByCustomerId(customerId)).thenReturn(Optional.of(cart));
-        when(productRepository.findById(product.getId())).thenReturn(Optional.of(product));
+        when(cartRepository.findWithItemsByCustomerId(customerId)).thenReturn(Optional.of(cart));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);
             o.setId(UUID.randomUUID());
@@ -144,7 +143,7 @@ class OrderCheckoutTest {
                 .items(new ArrayList<>())
                 .build();
 
-        when(cartRepository.findByCustomerId(customerId)).thenReturn(Optional.of(emptyCart));
+        when(cartRepository.findWithItemsByCustomerId(customerId)).thenReturn(Optional.of(emptyCart));
 
         CreateOrderRequest request = CreateOrderRequest.builder()
                 .recipientName("Nguyen Van A")

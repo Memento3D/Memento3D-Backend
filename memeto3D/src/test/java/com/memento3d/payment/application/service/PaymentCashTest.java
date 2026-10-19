@@ -42,6 +42,9 @@ class PaymentCashTest {
     @Mock
     private PaymentGatewayFactory gatewayFactory;
 
+    @Mock
+    private com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
+
     @InjectMocks
     private PaymentServiceImpl paymentService;
 
