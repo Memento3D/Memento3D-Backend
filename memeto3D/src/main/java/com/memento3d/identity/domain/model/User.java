@@ -62,6 +62,16 @@ public class User {
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
+    @Column(name = "date_of_birth")
+    private java.time.LocalDate dateOfBirth;
+
+    /**
+     * JWT revocation marker: access tokens issued before this instant are rejected.
+     * Updated whenever the password is reset or changed.
+     */
+    @Column(name = "password_changed_at")
+    private Instant passwordChangedAt;
+
     @org.hibernate.annotations.ColumnDefault("0")
     @Column(name = "storage_used_bytes", nullable = false)
     @Builder.Default

@@ -62,7 +62,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register", "/api/auth/register", "/auth/register",
                                 "/api/v1/auth/login", "/api/auth/login", "/auth/login",
-                                "/api/v1/auth/refresh", "/api/auth/refresh", "/auth/refresh"
+                                "/api/v1/auth/refresh", "/api/auth/refresh", "/auth/refresh",
+                                "/api/v1/auth/forgot-password", "/api/auth/forgot-password", "/auth/forgot-password",
+                                "/api/v1/auth/reset-password", "/api/auth/reset-password", "/auth/reset-password"
                         ).permitAll()
                         .requestMatchers(
                                 "/oauth2/**",
@@ -102,11 +104,8 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/webjars/**"
                         ).permitAll()
-                        // Protected authentication endpoints
-                        .requestMatchers(HttpMethod.GET, "/api/v1/users/me", "/api/v1/auth/me", "/api/auth/me", "/auth/me", "/api/me", "/users/me", "/api/users/me").authenticated()
-                        .requestMatchers(HttpMethod.PATCH, "/api/v1/users/me", "/api/me", "/api/auth/me").authenticated()
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/users/me", "/api/me").authenticated()
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me", "/api/me").authenticated()
+                        // Protected authentication and profile endpoints
+                        .requestMatchers("/api/v1/users/me/**", "/api/v1/users/me", "/api/v1/auth/me", "/api/auth/me", "/auth/me", "/api/me", "/users/me", "/api/users/me").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout", "/api/auth/logout", "/auth/logout").authenticated()
                         // Admin Endpoints strictly restricted to ROLE_ADMIN
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

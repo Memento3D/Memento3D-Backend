@@ -81,12 +81,33 @@ spring:
               - email
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
 
+
+
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME}
   api-key: ${CLOUDINARY_API_KEY}
   api-secret: ${CLOUDINARY_API_SECRET}
 
 app:
+  frontend:
+    # Used ONLY server-side to build links inside emails (never taken from the request).
+    base-url: ${FRONTEND_BASE_URL:http://localhost:5174}
+  mail:
+    # SMTP sender bean is created only when MAIL_HOST is set (see MailConfig).
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    smtp-auth: ${MAIL_SMTP_AUTH:true}
+    starttls: ${MAIL_SMTP_STARTTLS:true}
+    ssl: ${MAIL_SMTP_SSL:false}
+    from: ${MAIL_FROM:no-reply@memento3d.local}
+    from-name: ${MAIL_FROM_NAME:Memento3D}
+  security:
+    # Set to true only behind a trusted reverse proxy that overwrites X-Forwarded-For.
+    trust-forwarded-headers: ${TRUST_FORWARDED_HEADERS:false}
+    password-reset:
+      token-ttl-minutes: 15
   cache:
     user-ttl-hours: ${USER_CACHE_TTL_HOURS:1}
     scan-status-ttl-hours: ${SCAN_STATUS_CACHE_TTL_HOURS:6}

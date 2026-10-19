@@ -22,6 +22,9 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserCacheService userCacheService;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final com.memento3d.shared.application.service.AuditLogService auditLogService;
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper AUDIT_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
     @Override
     @Transactional(readOnly = true)
@@ -55,20 +58,82 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
 
-        if (request.getFullName() != null && !request.getFullName().isBlank()) {
-            user.setFullName(request.getFullName().trim());
-        }
-        if (request.getAvatarUrl() != null) {
-            user.setAvatarUrl(request.getAvatarUrl().trim());
+        java.util.Map<String, Object> before = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Object> after = new java.util.LinkedHashMap<>();
+
+        if (request.getFullName() != null) {
+            String normalizedName = request.getFullName().trim().replaceAll("\\s+", " ");
+            if (normalizedName.length() < 2) {
+                throw new com.memento3d.shared.exception.BusinessException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "INVALID_FULL_NAME",
+                        "Họ tên không được để trống và phải có ít nhất 2 ký tự.");
+            }
+            if (!normalizedName.equals(user.getFullName())) {
+                before.put("fullName", user.getFullName());
+                after.put("fullName", normalizedName);
+                user.setFullName(normalizedName);
+            }
         }
 
-        User savedUser = userRepository.save(user);
+        if (request.getPhone() != null) {
+            String phone = com.memento3d.shared.util.PhoneNumbers.normalizeOrNull(request.getPhone());
+            if (!java.util.Objects.equals(phone, user.getPhone())) {
+                before.put("phone", maskPhone(user.getPhone()));
+                after.put("phone", maskPhone(phone));
+                user.setPhone(phone);
+            }
+        }
+
+        if (request.getDateOfBirth() != null) {
+            if (request.getDateOfBirth().isBefore(java.time.LocalDate.of(1900, 1, 1))) {
+                throw new com.memento3d.shared.exception.BusinessException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "INVALID_DATE_OF_BIRTH",
+                        "Ngày sinh không hợp lệ.");
+            }
+            if (!request.getDateOfBirth().equals(user.getDateOfBirth())) {
+                before.put("dateOfBirth", user.getDateOfBirth() != null ? user.getDateOfBirth().toString() : null);
+                after.put("dateOfBirth", request.getDateOfBirth().toString());
+                user.setDateOfBirth(request.getDateOfBirth());
+            }
+        }
+
+        if (request.getAvatarUrl() != null) {
+            String avatar = request.getAvatarUrl().trim();
+            String newAvatar = avatar.isEmpty() ? null : avatar;
+            if (!java.util.Objects.equals(newAvatar, user.getAvatarUrl())) {
+                before.put("avatarUrl", user.getAvatarUrl() != null ? "set" : null);
+                after.put("avatarUrl", newAvatar != null ? "set" : null);
+                user.setAvatarUrl(newAvatar);
+            }
+        }
+
+        User savedUser = before.isEmpty() && after.isEmpty() ? user : userRepository.save(user);
         UserResponse response = UserResponse.fromEntity(savedUser);
 
         userCacheService.evictUser(userId);
         userCacheService.cacheUser(userId, response);
+
+        if (!after.isEmpty() && auditLogService != null) {
+            auditLogService.log(userId, "PROFILE_UPDATED", "USER", userId.toString(), toJson(before), toJson(after));
+        }
         return response;
     }
+
+    private static String maskPhone(String phone) {
+        if (phone == null || phone.length() < 4) {
+            return phone;
+        }
+        return "*".repeat(phone.length() - 3) + phone.substring(phone.length() - 3);
+    }
+
+    private static String toJson(java.util.Map<String, Object> data) {
+        try {
+            return AUDIT_MAPPER.writeValueAsString(data);
+        } catch (Exception e) {
+            return String.valueOf(data.keySet());
+        }
+    }
+
 
     @Override
     @Transactional(readOnly = true)
