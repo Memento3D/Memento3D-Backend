@@ -44,4 +44,12 @@ public interface PrinterRepository extends JpaRepository<Printer, UUID> {
     boolean existsBySerialNumberIgnoreCase(String serialNumber);
 
     boolean existsByAgentIdAndOctoprintPrinterId(UUID agentId, String octoprintPrinterId);
+
+    @Query("SELECT COUNT(p) FROM Printer p WHERE p.status <> com.memento3d.printers.domain.model.PrinterStatus.OFFLINE")
+    long countByOnlineTrue();
+
+    @Query("SELECT COUNT(p) FROM Printer p WHERE p.status = com.memento3d.printers.domain.model.PrinterStatus.OFFLINE")
+    long countByOnlineFalse();
+
+    long countByStatus(PrinterStatus status);
 }

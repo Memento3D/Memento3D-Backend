@@ -65,4 +65,30 @@ public interface ReconstructionJobRepository
             Pageable pageable
     );
 
+    long countByStatus(ReconstructionJobStatus status);
+    long countByTier(com.memento3d.reconstruction.domain.model.ReconstructionTier tier);
+    long countByScan_User_Id(UUID userId);
+
+    @Query("SELECT j.tier, j.status, COUNT(j) FROM ReconstructionJob j GROUP BY j.tier, j.status")
+    List<Object[]> countGroupedByTierAndStatus();
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"scan"})
+    @Query(
+        value = """
+            SELECT j FROM ReconstructionJob j WHERE
+            (:status IS NULL OR j.status = :status) AND
+            (:tier IS NULL OR j.tier = :tier)
+            """,
+        countQuery = """
+            SELECT COUNT(j) FROM ReconstructionJob j WHERE
+            (:status IS NULL OR j.status = :status) AND
+            (:tier IS NULL OR j.tier = :tier)
+            """
+    )
+    org.springframework.data.domain.Page<ReconstructionJob> findAllWithFilters(
+            @Param("status") ReconstructionJobStatus status,
+            @Param("tier") com.memento3d.reconstruction.domain.model.ReconstructionTier tier,
+            Pageable pageable
+    );
+
 }

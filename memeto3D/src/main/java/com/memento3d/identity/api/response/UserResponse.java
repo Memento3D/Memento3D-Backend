@@ -39,6 +39,15 @@ public class UserResponse {
     @Schema(description = "User account status", example = "ACTIVE")
     private com.memento3d.identity.domain.model.UserStatus status;
 
+    @Schema(description = "User phone number", example = "0912345678")
+    private String phone;
+
+    @Schema(description = "Last login timestamp")
+    private java.time.Instant lastLoginAt;
+
+    @Schema(description = "Account creation timestamp")
+    private java.time.Instant createdAt;
+
     public static UserResponse fromEntity(User user) {
         if (user == null) {
             return null;
@@ -52,6 +61,9 @@ public class UserResponse {
                 .avatarUrl(user.getAvatarUrl())
                 .emailVerified(Boolean.TRUE.equals(user.getEmailVerified()))
                 .status(user.getStatus())
+                .phone(user.getPhone())
+                .lastLoginAt(user.getLastLoginAt())
+                .createdAt(user.getCreatedAt())
                 .build();
     }
 }

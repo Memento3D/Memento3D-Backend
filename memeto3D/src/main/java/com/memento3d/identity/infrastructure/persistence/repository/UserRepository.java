@@ -20,6 +20,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByProviderAndProviderId(AuthProvider provider, String providerId);
     Page<User> findByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(String email, String fullName, Pageable pageable);
     long countByRole(Role role);
+    long countByStatus(com.memento3d.identity.domain.model.UserStatus status);
+    long countByCreatedAtAfter(java.time.Instant after);
+    long countByCreatedAtBetween(java.time.Instant start, java.time.Instant end);
 
     @Query(
         value = """
@@ -34,4 +37,34 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             """
     )
     Page<User> findAllWithFilters(@Param("role") Role role, @Param("search") String search, Pageable pageable);
+
+    @Query(
+        value = """
+            SELECT u FROM User u WHERE
+            (:role IS NULL OR u.role = :role) AND
+            (:status IS NULL OR u.status = :status) AND
+            (:provider IS NULL OR u.provider = :provider) AND
+            (CAST(:search AS string) IS NULL OR
+             LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR
+             LOWER(u.fullName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR
+             (u.phone IS NOT NULL AND LOWER(u.phone) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))))
+            """,
+        countQuery = """
+            SELECT COUNT(u) FROM User u WHERE
+            (:role IS NULL OR u.role = :role) AND
+            (:status IS NULL OR u.status = :status) AND
+            (:provider IS NULL OR u.provider = :provider) AND
+            (CAST(:search AS string) IS NULL OR
+             LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR
+             LOWER(u.fullName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR
+             (u.phone IS NOT NULL AND LOWER(u.phone) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))))
+            """
+    )
+    Page<User> findAllWithAdvancedFilters(
+            @Param("role") Role role,
+            @Param("status") com.memento3d.identity.domain.model.UserStatus status,
+            @Param("provider") AuthProvider provider,
+            @Param("search") String search,
+            Pageable pageable
+    );
 }
