@@ -28,8 +28,11 @@ import com.memento3d.products.domain.exception.ProductInactiveException;
 import com.memento3d.products.domain.exception.ProductNotFoundException;
 import com.memento3d.products.domain.model.Product;
 import com.memento3d.products.infrastructure.persistence.repository.ProductRepository;
+import com.memento3d.orders.domain.event.OrderConfirmedEvent;
+import com.memento3d.orders.domain.event.OrderCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -61,6 +64,7 @@ public class OrderServiceImpl implements OrderService {
     private final com.memento3d.entitlement.application.service.EntitlementService entitlementService;
     private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
     private final com.memento3d.operations.reviewqueue.application.service.ManualReviewService manualReviewService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private final SecureRandom random = new SecureRandom();
@@ -157,6 +161,9 @@ public class OrderServiceImpl implements OrderService {
                         "fulfillmentType", order.getFulfillmentType() != null ? order.getFulfillmentType() : "PHYSICAL"
                 )
         );
+
+        // Publish Order Confirmed Event for Email Notification
+        applicationEventPublisher.publishEvent(new OrderConfirmedEvent(order.getId()));
     }
 
     @Override
@@ -444,11 +451,17 @@ public class OrderServiceImpl implements OrderService {
                 "ORDER_STATUS_CHANGED",
                 java.util.Map.of(
                         "orderId", saved.getId(),
-                        "userId", saved.getUserId(),
+                        "userId", saved.getUserId() != null ? saved.getUserId() : (order.getUserId() != null ? order.getUserId() : UUID.fromString("00000000-0000-0000-0000-000000000000")),
                         "status", saved.getStatus().name(),
                         "paymentStatus", saved.getPaymentStatus() != null ? saved.getPaymentStatus().name() : "PENDING"
                 )
         );
+
+        if (nextStatus == OrderStatus.CONFIRMED) {
+            applicationEventPublisher.publishEvent(new OrderConfirmedEvent(saved.getId()));
+        } else if (nextStatus == OrderStatus.DELIVERED || nextStatus == OrderStatus.COMPLETED) {
+            applicationEventPublisher.publishEvent(new OrderCompletedEvent(saved.getId()));
+        }
 
         return OrderResponse.fromEntity(saved);
     }
@@ -509,11 +522,17 @@ public class OrderServiceImpl implements OrderService {
                 "ORDER_STATUS_CHANGED",
                 java.util.Map.of(
                         "orderId", updated.getId(),
-                        "userId", updated.getUserId(),
+                        "userId", updated.getUserId() != null ? updated.getUserId() : (order.getUserId() != null ? order.getUserId() : UUID.fromString("00000000-0000-0000-0000-000000000000")),
                         "status", updated.getStatus().name(),
                         "paymentStatus", updated.getPaymentStatus() != null ? updated.getPaymentStatus().name() : "PENDING"
                 )
         );
+
+        if (request.getStatus() == OrderStatus.CONFIRMED) {
+            applicationEventPublisher.publishEvent(new OrderConfirmedEvent(updated.getId()));
+        } else if (request.getStatus() == OrderStatus.DELIVERED || request.getStatus() == OrderStatus.COMPLETED) {
+            applicationEventPublisher.publishEvent(new OrderCompletedEvent(updated.getId()));
+        }
 
         return OrderResponse.fromEntity(updated);
     }
