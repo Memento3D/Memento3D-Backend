@@ -41,6 +41,14 @@ public class ManagerOrderController {
         return ResponseEntity.ok(orderService.getManagerOrders(query, status, page, limit));
     }
 
+    @GetMapping("/counts")
+    @Operation(summary = "Get order counts by status for manager")
+    public ResponseEntity<Map<String, Long>> getOrderStatusCounts(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(orderService.getOrderStatusCounts(userDetails.getId(), userDetails.getRole()));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Get order detail for manager")
     public ResponseEntity<OrderResponse> getOrderDetail(

@@ -37,14 +37,14 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -62,6 +62,7 @@ public class OrderServiceImpl implements OrderService {
     private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
     private final com.memento3d.operations.reviewqueue.application.service.ManualReviewService manualReviewService;
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private final SecureRandom random = new SecureRandom();
 
     @Override
@@ -210,6 +211,21 @@ public class OrderServiceImpl implements OrderService {
                 BigDecimal itemSubtotal = itemUnitPrice.multiply(BigDecimal.valueOf(qty));
                 subtotal = subtotal.add(itemSubtotal);
 
+                Map<String, Object> custMap = null;
+                if (cartItem.getCustomizationData() != null && !cartItem.getCustomizationData().isBlank()) {
+                    try {
+                        custMap = OBJECT_MAPPER.readValue(cartItem.getCustomizationData(), new TypeReference<Map<String, Object>>() {});
+                    } catch (Exception ignored) {}
+                }
+
+                String materialSnap = custMap != null && custMap.get("material") != null ? custMap.get("material").toString() : "Chưa xác định";
+                String sizeSnap = custMap != null && custMap.get("size") != null ? custMap.get("size").toString() : "Chưa xác định";
+                String baseSnap = custMap != null && custMap.get("base") != null ? custMap.get("base").toString() : "Tiêu chuẩn";
+                String finishSnap = custMap != null && custMap.get("finish") != null ? custMap.get("finish").toString() : "Phủ bóng UV bảo vệ";
+                String skuSnap = product.getSlug() != null ? "SKU-" + product.getSlug().toUpperCase() : "SKU-" + product.getId().toString().substring(0, 8);
+                String catSnap = product.getCategory() != null ? product.getCategory().getName() : "Kỷ vật 3D";
+                String techSnap = materialSnap.toLowerCase().contains("resin") ? "SLA (Stereolithography)" : "FDM (Fused Deposition Modeling)";
+
                 OrderItem orderItem = OrderItem.builder()
                         .product(product)
                         .productNameSnapshot(product.getName())
@@ -217,6 +233,13 @@ public class OrderServiceImpl implements OrderService {
                         .quantity(qty)
                         .subtotal(itemSubtotal)
                         .customizationSnapshot(cartItem.getCustomizationData())
+                        .skuSnapshot(skuSnap)
+                        .categoryNameSnapshot(catSnap)
+                        .materialSnapshot(materialSnap)
+                        .dimensionsSnapshot(sizeSnap)
+                        .finishSnapshot(finishSnap)
+                        .baseSnapshot(baseSnap)
+                        .technologySnapshot(techSnap)
                         .build();
 
                 orderItems.add(orderItem);
@@ -293,6 +316,23 @@ public class OrderServiceImpl implements OrderService {
                     .items(new ArrayList<>())
                     .build();
 
+            OrderItem scanItem = OrderItem.builder()
+                    .order(order)
+                    .productNameSnapshot("Kỷ vật 3D chân dung (Scan AI)")
+                    .unitPrice(finalBespokePrice)
+                    .quantity(1)
+                    .subtotal(finalBespokePrice)
+                    .skuSnapshot("BESPOKE-SCAN-3D")
+                    .categoryNameSnapshot("Tượng Chân Dung 3D")
+                    .materialSnapshot("High-Detail Resin SLA")
+                    .technologySnapshot("SLA (Stereolithography)")
+                    .dimensionsSnapshot("Tỷ lệ 1:10 (15-18cm)")
+                    .finishSnapshot("Xử lý bề mặt thủ công & Phủ UV bảo vệ")
+                    .baseSnapshot("Đế gỗ óc chó tự nhiên chạm tên")
+                    .customizationSnapshot("{\"material\": \"High-Detail Resin SLA\", \"technology\": \"SLA\", \"size\": \"15-18cm\", \"base\": \"Đế gỗ óc chó tự nhiên\"}")
+                    .build();
+            order.addItem(scanItem);
+
             order = orderRepository.save(order);
         } else {
             throw new CartEmptyException("Shopping cart is empty. Please add items to your cart before checking out.");
@@ -322,23 +362,28 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public OrderListResponse getUserOrders(UUID userId, Role userRole, int page, int limit) {
+    public OrderListResponse getUserOrders(UUID userId, Role userRole, String query, OrderStatus status, int page, int limit) {
         int pageIndex = Math.max(page - 1, 0);
         int pageSize = limit > 0 ? Math.min(limit, 100) : 20;
         Pageable pageable = PageRequest.of(pageIndex, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        Page<Order> orderPage;
         boolean isStaff = (userRole == Role.ROLE_ADMIN 
                 || userRole == Role.ROLE_MANAGER 
                 || userRole == Role.ROLE_OPERATOR);
-        if (isStaff) {
-            orderPage = orderRepository.findAll(pageable);
-        } else {
-            orderPage = orderRepository.findByUserId(userId, pageable);
+        UUID targetUserId = isStaff ? null : userId;
+        String trimmedQuery = query != null && !query.isBlank() ? query.trim() : null;
+
+        Page<Order> orderPage = orderRepository.searchUserOrders(targetUserId, trimmedQuery, status, pageable);
+
+        // Batch initialize items for current page (avoids N+1 query via @BatchSize(50))
+        for (Order o : orderPage.getContent()) {
+            if (o.getItems() != null) {
+                o.getItems().size();
+            }
         }
 
         return OrderListResponse.builder()
-                .orders(orderPage.getContent().stream().map(OrderResponse::fromEntity).toList())
+                .orders(orderPage.getContent().stream().map(o -> OrderResponse.fromEntity(o, isStaff)).toList())
                 .page(page)
                 .limit(pageSize)
                 .total(orderPage.getTotalElements())
@@ -347,24 +392,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public OrderListResponse getMyOrders(UUID userId, OrderStatus status, int page, int limit) {
-        int pageIndex = Math.max(page - 1, 0);
-        int pageSize = limit > 0 ? Math.min(limit, 100) : 20;
-        Pageable pageable = PageRequest.of(pageIndex, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-
-        Page<Order> orderPage;
-        if (status != null) {
-            orderPage = orderRepository.findByUserIdAndStatus(userId, status, pageable);
-        } else {
-            orderPage = orderRepository.findByUserId(userId, pageable);
-        }
-
-        return OrderListResponse.builder()
-                .orders(orderPage.getContent().stream().map(OrderResponse::fromEntity).toList())
-                .page(page)
-                .limit(pageSize)
-                .total(orderPage.getTotalElements())
-                .build();
+    public OrderListResponse getMyOrders(UUID userId, String query, OrderStatus status, int page, int limit) {
+        return getUserOrders(userId, Role.ROLE_USER, query, status, page, limit);
     }
 
     @Override
@@ -377,8 +406,15 @@ public class OrderServiceImpl implements OrderService {
         String trimmedQuery = query != null && !query.isBlank() ? query.trim() : null;
         Page<Order> orderPage = orderRepository.searchManagerOrders(trimmedQuery, status, pageable);
 
+        // Batch initialize items for current page (avoids N+1 query via @BatchSize(50))
+        for (Order o : orderPage.getContent()) {
+            if (o.getItems() != null) {
+                o.getItems().size();
+            }
+        }
+
         return OrderListResponse.builder()
-                .orders(orderPage.getContent().stream().map(OrderResponse::fromEntity).toList())
+                .orders(orderPage.getContent().stream().map(o -> OrderResponse.fromEntity(o, true)).toList())
                 .page(page)
                 .limit(pageSize)
                 .total(orderPage.getTotalElements())
@@ -430,7 +466,7 @@ public class OrderServiceImpl implements OrderService {
             log.warn("Access denied: User {} cannot view order {}", userId, orderId);
             throw new OrderAccessDeniedException("You are not authorized to view this order");
         }
-        return OrderResponse.fromEntity(order);
+        return OrderResponse.fromEntity(order, isStaff);
     }
 
     @Override
@@ -531,6 +567,30 @@ public class OrderServiceImpl implements OrderService {
                         "paymentStatus", saved.getPaymentStatus() != null ? saved.getPaymentStatus().name() : "CANCELLED"
                 )
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Long> getOrderStatusCounts(UUID userId, Role role) {
+        boolean isStaff = (role == Role.ROLE_ADMIN || role == Role.ROLE_MANAGER || role == Role.ROLE_OPERATOR);
+        List<Object[]> rows = isStaff
+                ? orderRepository.countOrdersGroupedByStatus()
+                : orderRepository.countOrdersGroupedByStatusForUser(userId);
+
+        Map<String, Long> counts = new HashMap<>();
+        long total = 0;
+        if (rows != null) {
+            for (Object[] r : rows) {
+                if (r != null && r.length >= 2 && r[0] != null) {
+                    String st = r[0].toString();
+                    long c = ((Number) r[1]).longValue();
+                    counts.put(st, c);
+                    total += c;
+                }
+            }
+        }
+        counts.put("ALL", total);
+        return counts;
     }
 
     private String generateOrderCode() {

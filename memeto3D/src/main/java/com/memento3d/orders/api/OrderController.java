@@ -65,26 +65,38 @@ public class OrderController {
 
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Get my orders", description = "List orders belonging to the authenticated customer with status filter")
+    @Operation(summary = "Get my orders", description = "List orders belonging to the authenticated customer with search query and status filter")
     public ResponseEntity<OrderListResponse> getMyOrders(
+            @RequestParam(required = false) String query,
             @RequestParam(required = false) OrderStatus status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int limit,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        OrderListResponse response = orderService.getMyOrders(userDetails.getId(), status, page, limit);
+        OrderListResponse response = orderService.getMyOrders(userDetails.getId(), query, status, page, limit);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/me/counts")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Get my order status counts", description = "Retrieves order count per status for filter tabs")
+    public ResponseEntity<Map<String, Long>> getMyOrderStatusCounts(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(orderService.getOrderStatusCounts(userDetails.getId(), userDetails.getRole()));
     }
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "List orders", description = "Retrieves orders. Regular users see their own orders; Admins and Operators see all orders.")
+    @Operation(summary = "List orders", description = "Retrieves orders with search and status filter. Regular users see their own orders; Admins and Operators see all orders.")
     public ResponseEntity<OrderListResponse> listOrders(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) OrderStatus status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         Role role = userDetails.getRole();
-        OrderListResponse response = orderService.getUserOrders(userDetails.getId(), role, page, limit);
+        OrderListResponse response = orderService.getUserOrders(userDetails.getId(), role, query, status, page, limit);
         return ResponseEntity.ok(response);
     }
 

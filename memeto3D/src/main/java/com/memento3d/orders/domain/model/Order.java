@@ -96,6 +96,34 @@ public class Order {
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
+    @Column(name = "customization_fee", precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal customizationFee = BigDecimal.ZERO;
+
+    @Column(name = "production_surcharge", precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal productionSurcharge = BigDecimal.ZERO;
+
+    @Column(name = "shipping_carrier", length = 100)
+    private String shippingCarrier;
+
+    @Column(name = "tracking_code", length = 100)
+    private String trackingCode;
+
+    @Column(name = "shipping_status", length = 50)
+    @Builder.Default
+    private String shippingStatus = "PREPARING";
+
+    @Column(name = "internal_partner_name", length = 255)
+    private String internalPartnerName;
+
+    @Column(name = "internal_cost", precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal internalCost = BigDecimal.ZERO;
+
+    @Column(name = "internal_qc_notes", columnDefinition = "TEXT")
+    private String internalQcNotes;
+
     @org.hibernate.annotations.BatchSize(size = 50)
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default

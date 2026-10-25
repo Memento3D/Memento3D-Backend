@@ -44,19 +44,30 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     @Query(
         value = """
             SELECT o FROM Order o WHERE
+            (:userId IS NULL OR o.userId = :userId) AND
             (:status IS NULL OR o.status = :status) AND
-            (CAST(:query AS string) IS NULL OR LOWER(o.orderCode) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))
-              OR LOWER(o.recipientName) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))
-              OR LOWER(o.phone) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')))
+            (CAST(:query AS string) IS NULL OR
+             LOWER(o.orderCode) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')) OR
+             LOWER(o.recipientName) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')) OR
+             (o.phone IS NOT NULL AND LOWER(o.phone) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))))
             """,
         countQuery = """
             SELECT COUNT(o) FROM Order o WHERE
+            (:userId IS NULL OR o.userId = :userId) AND
             (:status IS NULL OR o.status = :status) AND
-            (CAST(:query AS string) IS NULL OR LOWER(o.orderCode) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))
-              OR LOWER(o.recipientName) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))
-              OR LOWER(o.phone) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')))
+            (CAST(:query AS string) IS NULL OR
+             LOWER(o.orderCode) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')) OR
+             LOWER(o.recipientName) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%')) OR
+             (o.phone IS NOT NULL AND LOWER(o.phone) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))))
             """
     )
+    Page<Order> searchUserOrders(
+            @Param("userId") UUID userId,
+            @Param("query") String query,
+            @Param("status") OrderStatus status,
+            Pageable pageable
+    );
+
     long countByStatus(OrderStatus status);
     long countByCreatedAtAfter(java.time.Instant after);
     long countByUserId(UUID userId);
@@ -76,6 +87,9 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     @Query("SELECT o.status, COUNT(o) FROM Order o GROUP BY o.status")
     List<Object[]> countOrdersGroupedByStatus();
+
+    @Query("SELECT o.status, COUNT(o) FROM Order o WHERE o.userId = :userId GROUP BY o.status")
+    List<Object[]> countOrdersGroupedByStatusForUser(@Param("userId") UUID userId);
 
     @Query("SELECT o.paymentMethod, COUNT(o) FROM Order o WHERE o.paymentMethod IS NOT NULL GROUP BY o.paymentMethod")
     List<Object[]> countOrdersGroupedByPaymentMethod();

@@ -20,9 +20,17 @@ public interface OrderService {
 
     OrderResponse createOrder(CreateOrderRequest request, UUID userId);
 
-    OrderListResponse getUserOrders(UUID userId, Role userRole, int page, int limit);
+    default OrderListResponse getUserOrders(UUID userId, Role userRole, int page, int limit) {
+        return getUserOrders(userId, userRole, null, null, page, limit);
+    }
 
-    OrderListResponse getMyOrders(UUID userId, OrderStatus status, int page, int limit);
+    OrderListResponse getUserOrders(UUID userId, Role userRole, String query, OrderStatus status, int page, int limit);
+
+    default OrderListResponse getMyOrders(UUID userId, OrderStatus status, int page, int limit) {
+        return getMyOrders(userId, null, status, page, limit);
+    }
+
+    OrderListResponse getMyOrders(UUID userId, String query, OrderStatus status, int page, int limit);
 
     OrderListResponse getManagerOrders(String query, OrderStatus status, int page, int limit);
 
@@ -33,4 +41,6 @@ public interface OrderService {
     OrderResponse updateOrder(UUID orderId, UpdateOrderRequest request, UUID userId, Role userRole);
 
     void cancelOrder(UUID orderId, UUID userId, Role userRole);
+
+    java.util.Map<String, Long> getOrderStatusCounts(UUID userId, Role role);
 }
