@@ -11,6 +11,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "products")
+@org.hibernate.annotations.BatchSize(size = 50)
 @Getter
 @Setter
 @NoArgsConstructor

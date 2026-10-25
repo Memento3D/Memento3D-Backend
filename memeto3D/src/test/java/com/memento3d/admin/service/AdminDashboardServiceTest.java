@@ -57,24 +57,35 @@ class AdminDashboardServiceTest {
     @DisplayName("Dashboard summary executes zero entity loading and aggregates via SQL counts/sums")
     void getDashboardSummary_AggregatesFromDatabase() {
         when(userRepository.count()).thenReturn(100L);
-        when(userRepository.countByStatus(UserStatus.ACTIVE)).thenReturn(85L);
-        when(userRepository.countByStatus(UserStatus.INACTIVE)).thenReturn(10L);
-        when(userRepository.countByStatus(UserStatus.LOCKED)).thenReturn(5L);
+        java.util.List<Object[]> userStatusRows = new java.util.ArrayList<>();
+        userStatusRows.add(new Object[]{UserStatus.ACTIVE, 85L});
+        userStatusRows.add(new Object[]{UserStatus.INACTIVE, 10L});
+        userStatusRows.add(new Object[]{UserStatus.LOCKED, 5L});
+        when(userRepository.countUsersGroupedByStatus()).thenReturn(userStatusRows);
         when(userRepository.countByCreatedAtAfter(any(Instant.class))).thenReturn(3L);
 
         when(orderRepository.count()).thenReturn(50L);
-        when(orderRepository.countByStatus(OrderStatus.COMPLETED)).thenReturn(30L);
-        when(orderRepository.calculateTotalRevenue()).thenReturn(BigDecimal.valueOf(10000000));
-        when(orderRepository.calculateRevenueAfter(any(Instant.class))).thenReturn(BigDecimal.valueOf(500000));
+        java.util.List<Object[]> orderStatusRows = new java.util.ArrayList<>();
+        orderStatusRows.add(new Object[]{OrderStatus.COMPLETED, 30L});
+        when(orderRepository.countOrdersGroupedByStatus()).thenReturn(orderStatusRows);
+
+        java.util.List<Object[]> revSummaryRows = new java.util.ArrayList<>();
+        revSummaryRows.add(new Object[]{BigDecimal.valueOf(10000000), BigDecimal.valueOf(500000), BigDecimal.valueOf(500000)});
+        when(orderRepository.calculateRevenueSummary(any(Instant.class), any(Instant.class))).thenReturn(revSummaryRows);
 
         when(productRepository.count()).thenReturn(20L);
         when(productCategoryRepository.count()).thenReturn(5L);
 
         when(reconstructionJobRepository.count()).thenReturn(40L);
-        when(reconstructionJobRepository.countByStatus(ReconstructionJobStatus.done)).thenReturn(35L);
-        when(reconstructionJobRepository.countByStatus(ReconstructionJobStatus.failed)).thenReturn(1L);
-        when(reconstructionJobRepository.countByTier(ReconstructionTier.PREVIEW)).thenReturn(25L);
-        when(reconstructionJobRepository.countByTier(ReconstructionTier.HIGH_QUALITY)).thenReturn(15L);
+        java.util.List<Object[]> jobStatusRows = new java.util.ArrayList<>();
+        jobStatusRows.add(new Object[]{ReconstructionJobStatus.done, 35L});
+        jobStatusRows.add(new Object[]{ReconstructionJobStatus.failed, 1L});
+        when(reconstructionJobRepository.countJobsGroupedByStatus()).thenReturn(jobStatusRows);
+
+        java.util.List<Object[]> jobTierRows = new java.util.ArrayList<>();
+        jobTierRows.add(new Object[]{ReconstructionTier.PREVIEW, 25L});
+        jobTierRows.add(new Object[]{ReconstructionTier.HIGH_QUALITY, 15L});
+        when(reconstructionJobRepository.countJobsGroupedByTier()).thenReturn(jobTierRows);
 
         when(printerRepository.count()).thenReturn(8L);
         when(printerRepository.countByOnlineTrue()).thenReturn(7L);
@@ -96,8 +107,12 @@ class AdminDashboardServiceTest {
     @Test
     @DisplayName("Revenue trend generates correct day intervals")
     void getRevenueTrend_GeneratesPoints() {
-        when(orderRepository.calculateRevenueBetween(any(Instant.class), any(Instant.class)))
-                .thenReturn(BigDecimal.valueOf(250000));
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.util.List<Object[]> dailyRows = new java.util.ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            dailyRows.add(new Object[]{today.minusDays(i).toString(), BigDecimal.valueOf(250000), 2L});
+        }
+        when(orderRepository.calculateDailyRevenueSince(any(Instant.class))).thenReturn(dailyRows);
 
         AdminRevenueTrendResponse trend = dashboardService.getRevenueTrend("7d");
 

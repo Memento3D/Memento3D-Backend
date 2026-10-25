@@ -40,8 +40,8 @@ public class MailConfig {
             sender.setPassword(cleanedPassword);
 
             if (host.toLowerCase().contains("gmail") && cleanedPassword.length() != 16) {
-                log.warn("⚠️ CẢNH BÁO GMAIL SMTP: Mật khẩu ứng dụng Google (App Password) phải có ĐÚNG 16 ký tự. Hiện tại cấu hình có {} ký tự (mật khẩu đang dùng: '{}'). Vui lòng kiểm tra lại Google Account!",
-                        cleanedPassword.length(), cleanedPassword);
+                log.warn("⚠️ CẢNH BÁO GMAIL SMTP: Mật khẩu ứng dụng Google (App Password) phải có ĐÚNG 16 ký tự. Hiện tại cấu hình có {} ký tự. Vui lòng kiểm tra lại Google Account!",
+                        cleanedPassword.length());
             }
         }
 

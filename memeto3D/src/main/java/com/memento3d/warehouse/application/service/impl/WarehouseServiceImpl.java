@@ -157,8 +157,7 @@ public class WarehouseServiceImpl implements WarehouseService {
     @Transactional(readOnly = true)
     public List<WarehouseResponse> getMyWarehouses(UUID userId, String systemRole) {
         if (warehouseSecurityService.isAdmin(systemRole) || warehouseSecurityService.isManager(systemRole)) {
-            return warehouseRepository.findAll().stream()
-                    .filter(w -> w.getStatus() == WarehouseStatus.ACTIVE)
+            return warehouseRepository.findByStatus(WarehouseStatus.ACTIVE).stream()
                     .map(WarehouseResponse::fromEntity)
                     .toList();
         }
@@ -175,8 +174,7 @@ public class WarehouseServiceImpl implements WarehouseService {
                 .toList();
 
         if (memberships.isEmpty()) {
-            return warehouseRepository.findAll().stream()
-                    .filter(w -> w.getStatus() == WarehouseStatus.ACTIVE)
+            return warehouseRepository.findByStatus(WarehouseStatus.ACTIVE).stream()
                     .map(WarehouseResponse::fromEntity)
                     .toList();
         }

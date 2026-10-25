@@ -47,6 +47,30 @@ public class OrderItem {
     @Column(name = "customization_snapshot", columnDefinition = "TEXT")
     private String customizationSnapshot;
 
+    @Column(name = "sku_snapshot", length = 100)
+    private String skuSnapshot;
+
+    @Column(name = "category_name_snapshot", length = 100)
+    private String categoryNameSnapshot;
+
+    @Column(name = "material_snapshot", length = 100)
+    private String materialSnapshot;
+
+    @Column(name = "dimensions_snapshot", length = 100)
+    private String dimensionsSnapshot;
+
+    @Column(name = "technology_snapshot", length = 50)
+    private String technologySnapshot;
+
+    @Column(name = "color_snapshot", length = 50)
+    private String colorSnapshot;
+
+    @Column(name = "finish_snapshot", length = 100)
+    private String finishSnapshot;
+
+    @Column(name = "base_snapshot", length = 100)
+    private String baseSnapshot;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

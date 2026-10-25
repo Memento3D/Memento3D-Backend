@@ -77,6 +77,7 @@ public class ScanServiceImpl implements ScanService {
     private final CloudinaryStorageService cloudinaryStorageService;
     private final com.memento3d.scans.application.service.ScanStatusCacheService scanStatusCacheService;
     private final ScanAccessGuard scanAccessGuard;
+    private final com.memento3d.assets.application.validator.FileSecurityValidator fileSecurityValidator;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -449,8 +450,12 @@ public class ScanServiceImpl implements ScanService {
             throw new ResourceNotFoundException("Scan not found with ID: " + scanId);
         }
 
-        // 5. File format validation (MIME + extension)
-        validateFileFormat(file);
+        // 5. File format and magic bytes security validation
+        if (fileSecurityValidator != null) {
+            fileSecurityValidator.validateImageFile(file);
+        } else {
+            validateFileFormat(file);
+        }
 
         // 6. File size validation (≤ 20 MB)
         if (file.getSize() > MAX_IMAGE_BYTES) {
@@ -481,9 +486,11 @@ public class ScanServiceImpl implements ScanService {
         // 9. Compute next sort_order (append after existing images)
         int nextSortOrder = scanImageRepository.findMaxSortOrderByScanId(scanId) + 1;
 
-        // 10. Determine format from original filename
-        String originalFilename = file.getOriginalFilename() != null
-                ? file.getOriginalFilename() : "unknown";
+        // 10. Determine sanitized format from original filename
+        String rawFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "unknown";
+        String originalFilename = fileSecurityValidator != null 
+                ? fileSecurityValidator.sanitizeFilename(rawFilename) 
+                : rawFilename;
         String ext = extractExtension(originalFilename);
 
 //        // 11. Simulate storage persistence.

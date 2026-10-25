@@ -54,6 +54,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class ScanController {
 
     private final ScanService scanService;
+    private final com.memento3d.quality.application.service.PhotogrammetryPreCheckService photogrammetryPreCheckService;
 
     @GetMapping
     @Operation(
@@ -566,6 +567,25 @@ public class ScanController {
         java.util.List<com.memento3d.quality.api.response.QualityCheckRunSummaryResponse> response =
                 scanService.getQualityCheckRuns(id, currentUser.getId(), currentUser.getRole());
         return ResponseEntity.ok(response);
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/v1/scans/{id}/pre-check (Automated Photogrammetry AI Assessment)
+    // -------------------------------------------------------------------------
+
+    @PostMapping("/{id}/pre-check")
+    @Operation(
+            summary = "Run automated AI photogrammetry pre-check and angular coverage analysis",
+            description = "Evaluates blur, brightness, duplicate angles, coverage score, and gives actionable user guidance before GPU job submission.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    public ResponseEntity<com.memento3d.quality.api.response.PhotogrammetryPreCheckResponse> runPreCheck(
+            @PathVariable("id") UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
+        log.info("Running AI photogrammetry pre-check for scan ID: {} by user: {}", id, currentUser.getId());
+        return ResponseEntity.ok(photogrammetryPreCheckService.evaluateScanReadiness(id));
     }
 
 

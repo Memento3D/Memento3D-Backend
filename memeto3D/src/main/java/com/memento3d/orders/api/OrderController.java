@@ -26,7 +26,14 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import com.memento3d.orders.domain.exception.OrderAccessDeniedException;
+import com.memento3d.orders.domain.model.Order;
+import com.memento3d.payment.api.response.PaymentStatusResponse;
+import com.memento3d.payment.domain.model.PaymentTransaction;
+import com.memento3d.payment.infrastructure.persistence.repository.PaymentTransactionRepository;
+
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -40,6 +47,7 @@ public class OrderController {
 
     private final OrderService orderService;
     private final PaymentService paymentService;
+    private final PaymentTransactionRepository paymentTransactionRepository;
 
     @PostMapping
     @PreAuthorize("isAuthenticated()")
@@ -57,26 +65,38 @@ public class OrderController {
 
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Get my orders", description = "List orders belonging to the authenticated customer with status filter")
+    @Operation(summary = "Get my orders", description = "List orders belonging to the authenticated customer with search query and status filter")
     public ResponseEntity<OrderListResponse> getMyOrders(
+            @RequestParam(required = false) String query,
             @RequestParam(required = false) OrderStatus status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int limit,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        OrderListResponse response = orderService.getMyOrders(userDetails.getId(), status, page, limit);
+        OrderListResponse response = orderService.getMyOrders(userDetails.getId(), query, status, page, limit);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/me/counts")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Get my order status counts", description = "Retrieves order count per status for filter tabs")
+    public ResponseEntity<Map<String, Long>> getMyOrderStatusCounts(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(orderService.getOrderStatusCounts(userDetails.getId(), userDetails.getRole()));
     }
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "List orders", description = "Retrieves orders. Regular users see their own orders; Admins and Operators see all orders.")
+    @Operation(summary = "List orders", description = "Retrieves orders with search and status filter. Regular users see their own orders; Admins and Operators see all orders.")
     public ResponseEntity<OrderListResponse> listOrders(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) OrderStatus status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         Role role = userDetails.getRole();
-        OrderListResponse response = orderService.getUserOrders(userDetails.getId(), role, page, limit);
+        OrderListResponse response = orderService.getUserOrders(userDetails.getId(), role, query, status, page, limit);
         return ResponseEntity.ok(response);
     }
 
@@ -116,6 +136,24 @@ public class OrderController {
 
         PaymentResponse response = paymentService.createPayment(paymentRequest, userDetails.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{orderId}/payments")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Get order payment attempts", description = "Retrieves all payment transactions associated with the order. Enforces ownership check.")
+    public ResponseEntity<List<PaymentStatusResponse>> getOrderPayments(
+            @Parameter(description = "Order UUID") @PathVariable UUID orderId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        Order order = orderService.getOrderById(orderId);
+        boolean isStaff = userDetails.getRole() == Role.ROLE_ADMIN
+                || userDetails.getRole() == Role.ROLE_MANAGER
+                || userDetails.getRole() == Role.ROLE_OPERATOR;
+        if (!isStaff && !order.getUserId().equals(userDetails.getId())) {
+            throw new OrderAccessDeniedException("You are not authorized to view payments for this order");
+        }
+        List<PaymentTransaction> txs = paymentTransactionRepository.findByOrderIdOrderByCreatedAtDesc(orderId);
+        return ResponseEntity.ok(txs.stream().map(PaymentStatusResponse::fromEntity).toList());
     }
 
     @PatchMapping("/{orderId}")

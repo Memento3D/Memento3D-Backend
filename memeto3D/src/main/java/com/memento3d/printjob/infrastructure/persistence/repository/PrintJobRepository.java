@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,6 +25,12 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, UUID> {
     Optional<PrintJob> findWithDetailsById(@Param("id") UUID id);
 
     Optional<PrintJob> findByOrderItemId(UUID orderItemId);
+
+    @EntityGraph(attributePaths = {"printer", "material"})
+    List<PrintJob> findByOrderId(UUID orderId);
+
+    @Query("SELECT j.printer.id, COUNT(j) FROM PrintJob j WHERE j.printer.id IN :printerIds AND j.status IN :statuses GROUP BY j.printer.id")
+    List<Object[]> countActiveJobsByPrinterIdsAndStatuses(@Param("printerIds") java.util.Collection<UUID> printerIds, @Param("statuses") java.util.Collection<PrintJobStatus> statuses);
 
     boolean existsByOrderItemIdAndStatusNot(UUID orderItemId, PrintJobStatus status);
 
@@ -56,4 +63,6 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, UUID> {
     );
 
     long countByStatus(PrintJobStatus status);
+
+    long countByPrinterIdAndStatusIn(UUID printerId, java.util.Collection<PrintJobStatus> statuses);
 }

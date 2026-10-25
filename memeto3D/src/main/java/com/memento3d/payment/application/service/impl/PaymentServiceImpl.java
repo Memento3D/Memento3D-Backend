@@ -57,6 +57,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final ZaloPaySignatureService zaloPaySignatureService;
     private final ZaloPayProperties zaloPayProperties;
     private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
+    private final com.memento3d.payment.application.service.PaymentFraudDetectorService fraudDetectorService;
     private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     private SecureRandom random = new SecureRandom();
@@ -114,6 +115,15 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
 
         transaction = transactionRepository.save(transaction);
+
+        // Fraud & velocity risk assessment
+        if (fraudDetectorService != null) {
+            var riskAssessment = fraudDetectorService.assessTransactionRisk(order, userId, transaction.getId());
+            if (riskAssessment.requiresManualReview()) {
+                log.warn("Payment flagged for manual review due to fraud risk: orderId={}, score={}",
+                        order.getId(), riskAssessment.riskScore());
+            }
+        }
 
         // CASH Method: no external gateway call required
         if (request.getPaymentMethod() == PaymentMethod.CASH) {
@@ -435,6 +445,8 @@ public class PaymentServiceImpl implements PaymentService {
                     .withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
             String datePrefix = formatter.format(Instant.now());
             return datePrefix + "_" + timestamp % 1000000000L + randomPart;
+        } else if (method == PaymentMethod.VNPAY) {
+            return "M3D_" + timestamp + "_" + randomPart;
         } else {
             return "MM_" + timestamp + "_" + randomPart;
         }

@@ -26,6 +26,11 @@ public interface ScanImageRepository extends JpaRepository<ScanImage, UUID> {
            "ORDER BY si.sortOrder ASC, si.createdAt ASC")
     Page<ScanImage> findByScanIdAndDeletedAtIsNull(@Param("scanId") UUID scanId, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"scan"})
+    @Query("SELECT si FROM ScanImage si WHERE si.scan.id = :scanId AND si.deletedAt IS NULL " +
+           "ORDER BY si.sortOrder ASC, si.createdAt ASC")
+    java.util.List<ScanImage> findByScanIdAndDeletedAtIsNull(@Param("scanId") UUID scanId);
+
     /** Counts the current max sort_order so new images get appended. */
     @Query("SELECT COALESCE(MAX(si.sortOrder), -1) FROM ScanImage si " +
            "WHERE si.scan.id = :scanId AND si.deletedAt IS NULL")
