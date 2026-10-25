@@ -139,7 +139,7 @@ Hệ thống định nghĩa 7 Roles cốt lõi trong Enum `Role`:
 
 Trong `SecurityConfig.java`:
 
-1. **CorsFilter**: Cấu hình CORS cho Frontend (`http://localhost:5173`, `http://localhost:5174`, `https://*.memento3d.vn`). Cho phép các HTTP Methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`. Headers: `Authorization`, `Content-Type`, `X-Agent-Token`, `Accept`.
+1. **CorsFilter**: Cấu hình CORS cho Frontend (`http://localhost:5173`, `https://*.memento3d.vn`). Cho phép các HTTP Methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`. Headers: `Authorization`, `Content-Type`, `X-Agent-Token`, `Accept`.
 2. **CsrfFilter**: Vô hiệu hóa (`csrf.disable()`) vì API là stateless REST, sử dụng JWT Bearer Token trong Authorization Header (không bị CSRF attack như cookie-based).
 3. **SessionManagement**: Đặt ở chế độ `SessionCreationPolicy.STATELESS`.
 4. **JwtAuthenticationFilter**:

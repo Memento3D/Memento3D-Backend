@@ -47,7 +47,7 @@ public class SecurityConfig {
     private final OAuth2AuthenticationFailureHandler oauth2AuthenticationFailureHandler;
     private final HttpCookieOAuth2AuthorizationRequestRepository httpCookieOAuth2AuthorizationRequestRepository;
 
-    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176}")
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080,http://localhost:5173}")
     private String allowedOrigins;
 
     @Bean

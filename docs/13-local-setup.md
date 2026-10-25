@@ -86,7 +86,7 @@ npm run dev
 
 > [!NOTE]
 > Frontend sẽ lắng nghe tại:
-> - URL: `http://localhost:5173` (hoặc `http://localhost:5174` nếu port 5173 bận)
+> - URL: `http://localhost:5173` (cố định strictPort 5173)
 
 ---
 

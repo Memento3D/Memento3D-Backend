@@ -27,6 +27,9 @@ public interface PrinterRepository extends JpaRepository<Printer, UUID> {
     Page<Printer> findByStatus(PrinterStatus status, Pageable pageable);
 
     @EntityGraph(attributePaths = "agent")
+    List<Printer> findByStatus(PrinterStatus status);
+
+    @EntityGraph(attributePaths = "agent")
     Optional<Printer> findWithAgentById(UUID id);
 
     /**

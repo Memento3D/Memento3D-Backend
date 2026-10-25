@@ -69,8 +69,17 @@ public interface ReconstructionJobRepository
     long countByTier(com.memento3d.reconstruction.domain.model.ReconstructionTier tier);
     long countByScan_User_Id(UUID userId);
 
+    @Query("SELECT j.status, COUNT(j) FROM ReconstructionJob j GROUP BY j.status")
+    List<Object[]> countJobsGroupedByStatus();
+
+    @Query("SELECT j.tier, COUNT(j) FROM ReconstructionJob j GROUP BY j.tier")
+    List<Object[]> countJobsGroupedByTier();
+
     @Query("SELECT j.tier, j.status, COUNT(j) FROM ReconstructionJob j GROUP BY j.tier, j.status")
     List<Object[]> countGroupedByTierAndStatus();
+
+    @Query("SELECT DISTINCT s.user.id FROM ReconstructionJob j JOIN j.scan s WHERE j.tier = :tier")
+    java.util.Set<UUID> findDistinctUserIdsByTier(@Param("tier") com.memento3d.reconstruction.domain.model.ReconstructionTier tier);
 
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"scan"})
     @Query(

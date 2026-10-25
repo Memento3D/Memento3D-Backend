@@ -22,7 +22,7 @@ public class OAuth2AuthenticationFailureHandler extends SimpleUrlAuthenticationF
 
     private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
 
-    @Value("${app.oauth2.authorized-redirect-uri:http://localhost:3000/oauth2/redirect}")
+    @Value("${app.oauth2.authorized-redirect-uri:http://localhost:5173/oauth2/redirect}")
     private String defaultRedirectUri;
 
     @Override

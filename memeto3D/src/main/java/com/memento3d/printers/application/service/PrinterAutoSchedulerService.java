@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Intelligent Auto-Scheduling Engine for 3D Print Farm.
@@ -48,8 +49,7 @@ public class PrinterAutoSchedulerService {
         log.info("Evaluating auto-scheduling for PrintJob ID: {}, material: {}",
                 printJob.getId(), printJob.getMaterial() != null ? printJob.getMaterial().getSku() : "unknown");
 
-        List<Printer> candidates = printerRepository.findAll().stream()
-                .filter(p -> p.getStatus() == PrinterStatus.IDLE)
+        List<Printer> candidates = printerRepository.findByStatus(PrinterStatus.IDLE).stream()
                 .filter(this::isHeartbeatActive)
                 .toList();
 
@@ -69,12 +69,26 @@ public class PrinterAutoSchedulerService {
             return Optional.empty();
         }
 
+        // Batch fetch active queue depth for all candidate printers in 1 query
+        List<UUID> candidateIds = candidates.stream().map(Printer::getId).toList();
+        List<Object[]> queueCounts = printJobRepository.countActiveJobsByPrinterIdsAndStatuses(
+                candidateIds,
+                List.of(PrintJobStatus.RESERVED, PrintJobStatus.PRINTING, PrintJobStatus.ISSUED)
+        );
+        java.util.Map<UUID, Long> activeJobCounts = new java.util.HashMap<>();
+        for (Object[] row : queueCounts) {
+            if (row != null && row.length >= 2 && row[0] instanceof UUID pid && row[1] instanceof Number cnt) {
+                activeJobCounts.put(pid, cnt.longValue());
+            }
+        }
+
         // Score each candidate printer
         Printer bestPrinter = candidates.stream()
-                .max(Comparator.comparingInt(p -> calculateFitnessScore(p, printJob)))
+                .max(Comparator.comparingInt(p -> calculateFitnessScore(p, printJob, activeJobCounts.getOrDefault(p.getId(), 0L))))
                 .orElse(null);
 
-        if (bestPrinter == null || calculateFitnessScore(bestPrinter, printJob) < 40) {
+        int bestScore = bestPrinter != null ? calculateFitnessScore(bestPrinter, printJob, activeJobCounts.getOrDefault(bestPrinter.getId(), 0L)) : 0;
+        if (bestPrinter == null || bestScore < 40) {
             log.warn("Best printer score below threshold for PrintJob {}. Escalating to Manual Review.", printJob.getJobNumber());
             manualReviewService.enqueueReview(
                     ReviewType.PRINT_QC,
@@ -96,7 +110,7 @@ public class PrinterAutoSchedulerService {
         printJobRepository.save(printJob);
 
         log.info("Successfully scheduled PrintJob {} to Printer {} (Score: {})",
-                printJob.getJobNumber(), bestPrinter.getName(), calculateFitnessScore(bestPrinter, printJob));
+                printJob.getJobNumber(), bestPrinter.getName(), bestScore);
 
         return Optional.of(bestPrinter);
     }
@@ -108,7 +122,7 @@ public class PrinterAutoSchedulerService {
      * - Heartbeat freshness: <= 30s = 15 points, <= 60s = 10 points, <= 120s = 5 points
      * - Printer model capability: 15 points
      */
-    private int calculateFitnessScore(Printer printer, PrintJob printJob) {
+    private int calculateFitnessScore(Printer printer, PrintJob printJob, long activeJobCount) {
         int score = 0;
 
         // 1. Availability status
@@ -116,12 +130,7 @@ public class PrinterAutoSchedulerService {
             score += 40;
         }
 
-        // 2. Queue depth
-        long activeJobCount = printJobRepository.countByPrinterIdAndStatusIn(
-                printer.getId(),
-                List.of(PrintJobStatus.RESERVED, PrintJobStatus.PRINTING, PrintJobStatus.ISSUED)
-        );
-
+        // 2. Queue depth (pre-fetched in batch)
         if (activeJobCount == 0) {
             score += 30;
         } else if (activeJobCount == 1) {

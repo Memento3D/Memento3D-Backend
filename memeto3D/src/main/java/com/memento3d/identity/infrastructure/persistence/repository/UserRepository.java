@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,6 +24,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     long countByStatus(com.memento3d.identity.domain.model.UserStatus status);
     long countByCreatedAtAfter(java.time.Instant after);
     long countByCreatedAtBetween(java.time.Instant start, java.time.Instant end);
+
+    @Query("SELECT u.status, COUNT(u) FROM User u GROUP BY u.status")
+    List<Object[]> countUsersGroupedByStatus();
+
+    @Query("SELECT CAST(u.createdAt AS date), COUNT(u) FROM User u WHERE u.createdAt >= :since GROUP BY CAST(u.createdAt AS date) ORDER BY CAST(u.createdAt AS date) ASC")
+    List<Object[]> countDailyUserRegistrationsSince(@Param("since") java.time.Instant since);
 
     @Query(
         value = """

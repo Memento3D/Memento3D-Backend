@@ -42,49 +42,69 @@ public class AnalyticsServiceImpl implements AnalyticsService {
     @Override
     @Transactional(readOnly = true)
     public Map<String, Object> getDashboardMetrics() {
-        List<Order> allOrders = orderRepository.findAll();
-        List<ReconstructionJob> allJobs = reconstructionJobRepository.findAll();
         long totalScans = scanRepository.count();
         long totalCarts = cartRepository.count();
+        long totalOrders = orderRepository.count();
 
-        List<Order> paidOrders = allOrders.stream()
-                .filter(o -> PAID_STATUSES.contains(o.getStatus()))
-                .toList();
+        // 1. Order KPIs via single SQL aggregate query
+        List<Object[]> paidStats = orderRepository.calculatePaidOrderCountAndRevenue(PAID_STATUSES);
+        long paidOrderCount = 0;
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        if (!paidStats.isEmpty() && paidStats.get(0) != null) {
+            Object[] row = paidStats.get(0);
+            if (row.length >= 1 && row[0] instanceof Number cnt) {
+                paidOrderCount = cnt.longValue();
+            }
+            if (row.length >= 2 && row[1] instanceof BigDecimal rev) {
+                totalRevenue = rev;
+            }
+        }
 
-        BigDecimal totalRevenue = paidOrders.stream()
-                .map(Order::getTotalPrice)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        long paidOrderCount = paidOrders.size();
         BigDecimal aov = paidOrderCount > 0
                 ? totalRevenue.divide(BigDecimal.valueOf(paidOrderCount), 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
-        long digitalOrders = paidOrders.stream()
-                .filter(o -> "DIGITAL".equalsIgnoreCase(o.getFulfillmentType()))
-                .count();
+        // 2. Fulfillment breakdown via single GROUP BY query
+        long digitalOrders = 0;
+        long physicalOrders = 0;
+        List<Object[]> fulfillmentRows = orderRepository.countFulfillmentTypesGroupedByStatusIn(PAID_STATUSES);
+        for (Object[] row : fulfillmentRows) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] instanceof Number cnt) {
+                String type = row[0].toString();
+                if ("DIGITAL".equalsIgnoreCase(type)) {
+                    digitalOrders += cnt.longValue();
+                } else if ("PHYSICAL".equalsIgnoreCase(type)) {
+                    physicalOrders += cnt.longValue();
+                }
+            }
+        }
 
-        long physicalOrders = paidOrders.stream()
-                .filter(o -> "PHYSICAL".equalsIgnoreCase(o.getFulfillmentType()))
-                .count();
+        // 3. Reconstruction job breakdown via single GROUP BY query
+        long previewJobs = 0;
+        long successfulPreviews = 0;
+        long premiumJobs = 0;
+        List<Object[]> jobRows = reconstructionJobRepository.countGroupedByTierAndStatus();
+        for (Object[] row : jobRows) {
+            if (row != null && row.length >= 3 && row[0] != null && row[1] != null && row[2] instanceof Number cnt) {
+                ReconstructionTier tier = (ReconstructionTier) row[0];
+                ReconstructionJobStatus status = (ReconstructionJobStatus) row[1];
+                long count = cnt.longValue();
 
-        long previewJobs = allJobs.stream()
-                .filter(j -> ReconstructionTier.PREVIEW.name().equalsIgnoreCase(j.getTier().name()))
-                .count();
-
-        long successfulPreviews = allJobs.stream()
-                .filter(j -> ReconstructionTier.PREVIEW.name().equalsIgnoreCase(j.getTier().name())
-                        && j.getStatus() == ReconstructionJobStatus.done)
-                .count();
-
-        long premiumJobs = allJobs.stream()
-                .filter(j -> ReconstructionTier.HIGH_QUALITY.name().equalsIgnoreCase(j.getTier().name()))
-                .count();
+                if (tier == ReconstructionTier.PREVIEW) {
+                    previewJobs += count;
+                    if (status == ReconstructionJobStatus.done) {
+                        successfulPreviews += count;
+                    }
+                } else if (tier == ReconstructionTier.HIGH_QUALITY) {
+                    premiumJobs += count;
+                }
+            }
+        }
 
         Map<String, Object> metrics = new LinkedHashMap<>();
         metrics.put("totalScans", totalScans);
         metrics.put("totalCarts", totalCarts);
-        metrics.put("totalOrders", allOrders.size());
+        metrics.put("totalOrders", totalOrders);
         metrics.put("paidOrdersCount", paidOrderCount);
         metrics.put("totalRevenueVnd", totalRevenue);
         metrics.put("averageOrderValueVnd", aov);
@@ -100,18 +120,8 @@ public class AnalyticsServiceImpl implements AnalyticsService {
     @Override
     @Transactional(readOnly = true)
     public Map<String, Object> getConversionMetrics() {
-        List<ReconstructionJob> allJobs = reconstructionJobRepository.findAll();
-        List<Order> allOrders = orderRepository.findAll();
-
-        Set<UUID> previewUserIds = allJobs.stream()
-                .filter(j -> ReconstructionTier.PREVIEW.name().equalsIgnoreCase(j.getTier().name()))
-                .map(j -> j.getScan().getUser().getId())
-                .collect(Collectors.toSet());
-
-        Set<UUID> paidUserIds = allOrders.stream()
-                .filter(o -> PAID_STATUSES.contains(o.getStatus()))
-                .map(Order::getUserId)
-                .collect(Collectors.toSet());
+        Set<UUID> previewUserIds = reconstructionJobRepository.findDistinctUserIdsByTier(ReconstructionTier.PREVIEW);
+        Set<UUID> paidUserIds = orderRepository.findDistinctUserIdsByStatusIn(PAID_STATUSES);
 
         Set<UUID> convertedUsers = new HashSet<>(previewUserIds);
         convertedUsers.retainAll(paidUserIds);

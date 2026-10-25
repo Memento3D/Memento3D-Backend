@@ -38,8 +38,19 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
                 ? categoryRepository.findByActiveTrueOrderByDisplayOrderAsc()
                 : categoryRepository.findAllByOrderByDisplayOrderAsc();
 
+        List<Object[]> rawCounts = publicOnly
+                ? productRepository.countActiveProductsGroupedByCategory()
+                : productRepository.countAllProductsGroupedByCategory();
+
+        java.util.Map<UUID, Long> countMap = new java.util.HashMap<>();
+        for (Object[] row : rawCounts) {
+            if (row != null && row.length >= 2 && row[0] instanceof UUID categoryId && row[1] instanceof Number cnt) {
+                countMap.put(categoryId, cnt.longValue());
+            }
+        }
+
         return categories.stream().map(c -> {
-            long count = productRepository.countByCategoryId(c.getId());
+            long count = countMap.getOrDefault(c.getId(), 0L);
             return ProductCategoryResponse.fromEntity(c, count);
         }).toList();
     }

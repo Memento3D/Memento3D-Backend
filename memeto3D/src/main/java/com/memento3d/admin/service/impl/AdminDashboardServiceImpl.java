@@ -60,27 +60,48 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         Instant startOfToday = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant();
         Instant startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
 
-        // 1. User metrics (Aggregated via SQL)
+        // 1. User metrics: grouped status counts in 1 query + 2 date range count queries
         long totalUsers = userRepository.count();
-        long activeUsers = userRepository.countByStatus(UserStatus.ACTIVE);
-        long inactiveUsers = userRepository.countByStatus(UserStatus.INACTIVE);
-        long lockedUsers = userRepository.countByStatus(UserStatus.LOCKED) + userRepository.countByStatus(UserStatus.SUSPENDED);
+        List<Object[]> userStatusRows = userRepository.countUsersGroupedByStatus();
+        Map<UserStatus, Long> userStatusMap = new HashMap<>();
+        for (Object[] row : userStatusRows) {
+            if (row != null && row.length >= 2 && row[0] instanceof UserStatus status && row[1] instanceof Number cnt) {
+                userStatusMap.put(status, cnt.longValue());
+            }
+        }
+        long activeUsers = userStatusMap.getOrDefault(UserStatus.ACTIVE, 0L);
+        long inactiveUsers = userStatusMap.getOrDefault(UserStatus.INACTIVE, 0L);
+        long lockedUsers = userStatusMap.getOrDefault(UserStatus.LOCKED, 0L) + userStatusMap.getOrDefault(UserStatus.SUSPENDED, 0L);
         long newUsersToday = userRepository.countByCreatedAtAfter(startOfToday);
         long newUsersThisMonth = userRepository.countByCreatedAtAfter(startOfMonth);
 
-        // 2. Order metrics (Aggregated via SQL)
+        // 2. Order metrics: grouped status counts in 1 query
         long totalOrders = orderRepository.count();
         long ordersToday = orderRepository.countByCreatedAtAfter(startOfToday);
-        long pendingOrders = orderRepository.countByStatus(OrderStatus.PENDING) + orderRepository.countByStatus(OrderStatus.PENDING_PAYMENT);
-        long processingOrders = orderRepository.countByStatus(OrderStatus.PROCESSING) + orderRepository.countByStatus(OrderStatus.CONFIRMED);
-        long printingOrders = orderRepository.countByStatus(OrderStatus.PRINTING);
-        long completedOrders = orderRepository.countByStatus(OrderStatus.COMPLETED) + orderRepository.countByStatus(OrderStatus.DELIVERED);
-        long cancelledOrders = orderRepository.countByStatus(OrderStatus.CANCELLED) + orderRepository.countByStatus(OrderStatus.REFUNDED);
+        List<Object[]> orderStatusRows = orderRepository.countOrdersGroupedByStatus();
+        Map<OrderStatus, Long> orderStatusMap = new HashMap<>();
+        for (Object[] row : orderStatusRows) {
+            if (row != null && row.length >= 2 && row[0] instanceof OrderStatus status && row[1] instanceof Number cnt) {
+                orderStatusMap.put(status, cnt.longValue());
+            }
+        }
+        long pendingOrders = orderStatusMap.getOrDefault(OrderStatus.PENDING, 0L) + orderStatusMap.getOrDefault(OrderStatus.PENDING_PAYMENT, 0L);
+        long processingOrders = orderStatusMap.getOrDefault(OrderStatus.PROCESSING, 0L) + orderStatusMap.getOrDefault(OrderStatus.CONFIRMED, 0L);
+        long printingOrders = orderStatusMap.getOrDefault(OrderStatus.PRINTING, 0L);
+        long completedOrders = orderStatusMap.getOrDefault(OrderStatus.COMPLETED, 0L) + orderStatusMap.getOrDefault(OrderStatus.DELIVERED, 0L);
+        long cancelledOrders = orderStatusMap.getOrDefault(OrderStatus.CANCELLED, 0L) + orderStatusMap.getOrDefault(OrderStatus.REFUNDED, 0L);
 
-        // 3. Revenue metrics
-        BigDecimal totalRevenue = orderRepository.calculateTotalRevenue();
-        BigDecimal revenueToday = orderRepository.calculateRevenueAfter(startOfToday);
-        BigDecimal revenueThisMonth = orderRepository.calculateRevenueAfter(startOfMonth);
+        // 3. Revenue metrics: computed in 1 single summary aggregate query
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        BigDecimal revenueToday = BigDecimal.ZERO;
+        BigDecimal revenueThisMonth = BigDecimal.ZERO;
+        List<Object[]> revSummary = orderRepository.calculateRevenueSummary(startOfToday, startOfMonth);
+        if (!revSummary.isEmpty() && revSummary.get(0) != null) {
+            Object[] row = revSummary.get(0);
+            if (row.length >= 1 && row[0] instanceof BigDecimal b) totalRevenue = b;
+            if (row.length >= 2 && row[1] instanceof BigDecimal b) revenueToday = b;
+            if (row.length >= 3 && row[2] instanceof BigDecimal b) revenueThisMonth = b;
+        }
 
         BigDecimal averageOrderValue = BigDecimal.ZERO;
         if (totalOrders > 0 && totalRevenue != null && totalRevenue.compareTo(BigDecimal.ZERO) > 0) {
@@ -91,14 +112,29 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long totalProducts = productRepository.count();
         long totalCategories = productCategoryRepository.count();
 
-        // 5. Reconstruction metrics
+        // 5. Reconstruction metrics: grouped status and tier in 2 queries
         long totalJobs = reconstructionJobRepository.count();
-        long queuedJobs = reconstructionJobRepository.countByStatus(ReconstructionJobStatus.queued);
-        long runningJobs = reconstructionJobRepository.countByStatus(ReconstructionJobStatus.running);
-        long doneJobs = reconstructionJobRepository.countByStatus(ReconstructionJobStatus.done);
-        long failedJobs = reconstructionJobRepository.countByStatus(ReconstructionJobStatus.failed);
-        long previewJobs = reconstructionJobRepository.countByTier(ReconstructionTier.PREVIEW);
-        long premiumJobs = reconstructionJobRepository.countByTier(ReconstructionTier.HIGH_QUALITY);
+        List<Object[]> jobStatusRows = reconstructionJobRepository.countJobsGroupedByStatus();
+        Map<ReconstructionJobStatus, Long> jobStatusMap = new HashMap<>();
+        for (Object[] row : jobStatusRows) {
+            if (row != null && row.length >= 2 && row[0] instanceof ReconstructionJobStatus status && row[1] instanceof Number cnt) {
+                jobStatusMap.put(status, cnt.longValue());
+            }
+        }
+        long queuedJobs = jobStatusMap.getOrDefault(ReconstructionJobStatus.queued, 0L);
+        long runningJobs = jobStatusMap.getOrDefault(ReconstructionJobStatus.running, 0L);
+        long doneJobs = jobStatusMap.getOrDefault(ReconstructionJobStatus.done, 0L);
+        long failedJobs = jobStatusMap.getOrDefault(ReconstructionJobStatus.failed, 0L);
+
+        List<Object[]> jobTierRows = reconstructionJobRepository.countJobsGroupedByTier();
+        Map<ReconstructionTier, Long> jobTierMap = new HashMap<>();
+        for (Object[] row : jobTierRows) {
+            if (row != null && row.length >= 2 && row[0] instanceof ReconstructionTier tier && row[1] instanceof Number cnt) {
+                jobTierMap.put(tier, cnt.longValue());
+            }
+        }
+        long previewJobs = jobTierMap.getOrDefault(ReconstructionTier.PREVIEW, 0L);
+        long premiumJobs = jobTierMap.getOrDefault(ReconstructionTier.HIGH_QUALITY, 0L);
 
         // 6. Printer fleet metrics
         long totalPrinters = printerRepository.count();
@@ -171,26 +207,38 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         };
 
         LocalDate today = LocalDate.now();
-        List<AdminRevenueTrendResponse.RevenueDataPoint> points = new ArrayList<>();
+        Instant startDate = today.minusDays(days - 1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+
+        // 1 single query replaces 30-365 sequential queries
+        List<Object[]> rows = orderRepository.calculateDailyRevenueSince(startDate);
+        Map<String, BigDecimal[]> dailyData = new HashMap<>();
         BigDecimal totalRevenue = BigDecimal.ZERO;
         long totalOrders = 0;
 
-        // Group into daily buckets
+        for (Object[] row : rows) {
+            if (row != null && row.length >= 3 && row[0] != null) {
+                String dateStr = row[0].toString();
+                BigDecimal rev = row[1] instanceof BigDecimal b ? b : (row[1] instanceof Number n ? BigDecimal.valueOf(n.doubleValue()) : BigDecimal.ZERO);
+                long ordCount = row[2] instanceof Number n ? n.longValue() : 0L;
+                dailyData.put(dateStr, new BigDecimal[]{rev, BigDecimal.valueOf(ordCount)});
+            }
+        }
+
+        List<AdminRevenueTrendResponse.RevenueDataPoint> points = new ArrayList<>();
         for (int i = days - 1; i >= 0; i--) {
             LocalDate date = today.minusDays(i);
-            Instant start = date.atStartOfDay(ZoneId.systemDefault()).toInstant();
-            Instant end = date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+            String dateStr = date.toString();
+            BigDecimal[] entry = dailyData.get(dateStr);
+            BigDecimal dayRev = entry != null ? entry[0] : BigDecimal.ZERO;
+            long dayOrders = entry != null ? entry[1].longValue() : 0L;
 
-            BigDecimal dayRev = orderRepository.calculateRevenueBetween(start, end);
-            if (dayRev == null) dayRev = BigDecimal.ZERO;
-
-            // Simple point count using lightweight date query
             totalRevenue = totalRevenue.add(dayRev);
+            totalOrders += dayOrders;
 
             points.add(AdminRevenueTrendResponse.RevenueDataPoint.builder()
-                    .date(date.toString())
+                    .date(dateStr)
                     .revenue(dayRev)
-                    .orders(dayRev.compareTo(BigDecimal.ZERO) > 0 ? 1 : 0)
+                    .orders((int) dayOrders)
                     .build());
         }
 
@@ -214,19 +262,28 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         };
 
         LocalDate today = LocalDate.now();
+        Instant startDate = today.minusDays(days - 1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+
+        // 1 single query replaces 30-365 sequential queries
+        List<Object[]> rows = userRepository.countDailyUserRegistrationsSince(startDate);
+        Map<String, Long> dailyRegistrations = new HashMap<>();
+        for (Object[] row : rows) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] instanceof Number cnt) {
+                dailyRegistrations.put(row[0].toString(), cnt.longValue());
+            }
+        }
+
         List<AdminUserGrowthResponse.UserGrowthPoint> points = new ArrayList<>();
         long cumulative = 0;
 
         for (int i = days - 1; i >= 0; i--) {
             LocalDate date = today.minusDays(i);
-            Instant start = date.atStartOfDay(ZoneId.systemDefault()).toInstant();
-            Instant end = date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
-
-            long count = userRepository.countByCreatedAtBetween(start, end);
+            String dateStr = date.toString();
+            long count = dailyRegistrations.getOrDefault(dateStr, 0L);
             cumulative += count;
 
             points.add(AdminUserGrowthResponse.UserGrowthPoint.builder()
-                    .date(date.toString())
+                    .date(dateStr)
                     .registrations(count)
                     .cumulativeTotal(cumulative)
                     .build());
@@ -242,10 +299,17 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     @Transactional(readOnly = true)
     public AdminCategoryPerformanceResponse getCategoryPerformance() {
         List<ProductCategory> categories = productCategoryRepository.findAllByOrderByDisplayOrderAsc();
-        List<AdminCategoryPerformanceResponse.CategoryMetric> metrics = new ArrayList<>();
+        List<Object[]> rawCounts = productRepository.countAllProductsGroupedByCategory();
+        Map<UUID, Long> productCountMap = new HashMap<>();
+        for (Object[] row : rawCounts) {
+            if (row != null && row.length >= 2 && row[0] instanceof UUID catId && row[1] instanceof Number cnt) {
+                productCountMap.put(catId, cnt.longValue());
+            }
+        }
 
+        List<AdminCategoryPerformanceResponse.CategoryMetric> metrics = new ArrayList<>();
         for (ProductCategory cat : categories) {
-            long productCount = productRepository.countByCategoryId(cat.getId());
+            long productCount = productCountMap.getOrDefault(cat.getId(), 0L);
             metrics.add(AdminCategoryPerformanceResponse.CategoryMetric.builder()
                     .categoryName(cat.getName())
                     .categorySlug(cat.getSlug())

@@ -29,6 +29,12 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
 
     long countByCategoryId(UUID categoryId);
 
+    @Query("SELECT p.category.id, COUNT(p) FROM Product p GROUP BY p.category.id")
+    List<Object[]> countAllProductsGroupedByCategory();
+
+    @Query("SELECT p.category.id, COUNT(p) FROM Product p WHERE p.active = true GROUP BY p.category.id")
+    List<Object[]> countActiveProductsGroupedByCategory();
+
     @EntityGraph(attributePaths = {"category"})
     List<Product> findByFeaturedTrueAndActiveTrue();
 

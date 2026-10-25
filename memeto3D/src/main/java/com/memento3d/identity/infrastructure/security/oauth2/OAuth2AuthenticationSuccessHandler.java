@@ -35,7 +35,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
     private final CustomOAuth2UserService customOAuth2UserService;
 
-    @Value("${app.oauth2.authorized-redirect-uri:http://localhost:3000/oauth2/redirect}")
+    @Value("${app.oauth2.authorized-redirect-uri:http://localhost:5173/oauth2/redirect}")
     private String defaultRedirectUri;
 
     @Override

@@ -134,7 +134,7 @@ class ModelApprovalAndPrintJobQcTest {
                 .status(PrintJobStatus.PRINTING)
                 .build();
 
-        when(printJobRepository.findAll()).thenReturn(List.of(job));
+        when(printJobRepository.findByOrderId(orderId)).thenReturn(List.of(job));
         when(physicalQualityCheckRepository.findFirstByPrintJobIdOrderByCreatedAtDesc(printJobId))
                 .thenReturn(Optional.of(
                         PhysicalQualityCheck.builder()

@@ -137,9 +137,12 @@ public class PhysicalQualityServiceImpl implements PhysicalQualityService {
     @Override
     @Transactional(readOnly = true)
     public void validatePrintJobPassedForShipment(UUID orderId) {
-        List<PrintJob> jobs = printJobRepository.findAll().stream()
-                .filter(j -> orderId.equals(j.getOrderId()))
-                .toList();
+        List<PrintJob> jobs = printJobRepository.findByOrderId(orderId);
+        if (jobs == null || jobs.isEmpty()) {
+            jobs = printJobRepository.findAll().stream()
+                    .filter(j -> orderId.equals(j.getOrderId()))
+                    .toList();
+        }
 
         if (jobs.isEmpty()) {
             return; // Digital or no print job

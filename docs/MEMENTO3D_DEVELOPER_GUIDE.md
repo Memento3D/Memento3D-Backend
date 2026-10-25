@@ -364,7 +364,7 @@ cd Memento3D-Fronted-Web
 npm install
 npm run dev
 ```
-- Web Application: `http://localhost:5173` (hoặc `http://localhost:5174`)
+- Web Application: `http://localhost:5173`
 
 ---
 

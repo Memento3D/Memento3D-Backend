@@ -220,7 +220,7 @@ DELIVERED (Giao hàng thành công)
    ```powershell
    npm run dev
    ```
-4. Truy cập giao diện ứng dụng tại: `http://localhost:5175/` (hoặc `http://localhost:5174/`).
+4. Truy cập giao diện ứng dụng tại: `http://localhost:5173/`.
 
 ---
 
