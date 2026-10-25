@@ -56,4 +56,6 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, UUID> {
     );
 
     long countByStatus(PrintJobStatus status);
+
+    long countByPrinterIdAndStatusIn(UUID printerId, java.util.Collection<PrintJobStatus> statuses);
 }

@@ -69,6 +69,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final TokenBlacklistService tokenBlacklistService;
     private final RefreshTokenService refreshTokenService;
+    private final com.memento3d.identity.application.validator.UserRegistrationValidator userRegistrationValidator;
 
     @Override
     @Transactional
@@ -78,7 +79,13 @@ public class AuthServiceImpl implements AuthService {
             throw new TermsAgreementRequiredException("Bạn phải đọc và đồng ý với Điều khoản sử dụng và Chính sách quyền riêng tư để đăng ký tài khoản.");
         }
 
-        String normalizedEmail = request.getEmail().trim().toLowerCase();
+        String normalizedEmail = userRegistrationValidator != null 
+                ? userRegistrationValidator.validateAndNormalizeEmail(request.getEmail())
+                : request.getEmail().trim().toLowerCase();
+
+        if (userRegistrationValidator != null) {
+            userRegistrationValidator.validatePassword(request.getPassword(), normalizedEmail, request.getFullName());
+        }
 
         if (userRepository.existsByEmail(normalizedEmail)) {
             log.warn("Registration failed: Email {} is already registered", normalizedEmail);

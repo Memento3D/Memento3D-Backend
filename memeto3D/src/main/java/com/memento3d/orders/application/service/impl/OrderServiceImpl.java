@@ -60,6 +60,7 @@ public class OrderServiceImpl implements OrderService {
     private final com.memento3d.pricing.application.service.PricingEngineService pricingEngineService;
     private final com.memento3d.entitlement.application.service.EntitlementService entitlementService;
     private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
+    private final com.memento3d.operations.reviewqueue.application.service.ManualReviewService manualReviewService;
 
     private final SecureRandom random = new SecureRandom();
 
@@ -172,8 +173,11 @@ public class OrderServiceImpl implements OrderService {
         }
 
         // Quote validation: if quoteId is provided, verify and lock it with server-side pricing engine
+        BigDecimal serverVerifiedPrice = null;
         if (request.getQuoteId() != null) {
-            pricingEngineService.validateAndLockQuote(request.getQuoteId(), request.getTotalPrice(), userId);
+            com.memento3d.pricing.domain.model.PriceQuote lockedQuote =
+                    pricingEngineService.validateAndLockQuote(request.getQuoteId(), request.getTotalPrice(), userId);
+            serverVerifiedPrice = lockedQuote.getTotalAmount();
         }
 
         // 1. Check if user has an active cart with eager loaded items & products
@@ -254,16 +258,27 @@ public class OrderServiceImpl implements OrderService {
             cartRepository.save(cart);
             log.info("Cart cleared for user ID={}", userId);
 
-        } else if (request.getScanId() != null && request.getTotalPrice() != null) {
-            // Legacy Bespoke Scan 3D Order
+        } else if (request.getScanId() != null) {
+            // Bespoke Scan 3D Order: Price must be server-authoritative
+            BigDecimal finalBespokePrice = serverVerifiedPrice;
+            if (finalBespokePrice == null) {
+                if (request.getTotalPrice() == null || request.getTotalPrice().compareTo(BigDecimal.valueOf(50000)) < 0) {
+                    throw new com.memento3d.shared.exception.BusinessException(
+                            org.springframework.http.HttpStatus.BAD_REQUEST,
+                            "PRICE_TAMPERING_DETECTED",
+                            "Giá trị đơn hàng chế tác 3D không hợp lệ hoặc bị can thiệp. Vui lòng nhận báo giá chính xác từ hệ thống.");
+                }
+                finalBespokePrice = request.getTotalPrice();
+            }
+
             order = Order.builder()
                     .orderCode(orderCode)
                     .userId(userId)
                     .scanId(request.getScanId())
-                    .subtotal(request.getTotalPrice())
+                    .subtotal(finalBespokePrice)
                     .discountAmount(BigDecimal.ZERO)
                     .shippingFee(BigDecimal.ZERO)
-                    .totalPrice(request.getTotalPrice())
+                    .totalPrice(finalBespokePrice)
                     .currency(request.getCurrency() != null ? request.getCurrency() : "VND")
                     .status(OrderStatus.PENDING)
                     .fulfillmentType(request.getFulfillmentType() != null ? request.getFulfillmentType() : "PHYSICAL")
@@ -480,6 +495,25 @@ public class OrderServiceImpl implements OrderService {
 
         if (order.getStatus() == OrderStatus.COMPLETED || order.getStatus() == OrderStatus.DELIVERED) {
             throw new InvalidOrderStatusException("Cannot cancel an order that has already been delivered or completed.");
+        }
+
+        if (!isStaff && (order.getStatus() == OrderStatus.PRINTING || order.getStatus() == OrderStatus.READY)) {
+            // Customer requested cancellation after production started: enqueue exception for manual review
+            manualReviewService.enqueueReview(
+                    com.memento3d.operations.reviewqueue.domain.model.ReviewType.REFUND,
+                    com.memento3d.operations.reviewqueue.domain.model.ReviewPriority.HIGH,
+                    order.getId(),
+                    order.getOrderCode(),
+                    userId,
+                    BigDecimal.valueOf(0.50),
+                    "CUSTOMER_CANCELLED_DURING_PRODUCTION",
+                    "Khách hàng yêu cầu hủy đơn khi máy in đã bắt đầu sản xuất. Quản lý cần kiểm tra hao phí vật tư để quyết toán.",
+                    "CALCULATE_SCRAP_AND_PARTIAL_REFUND"
+            );
+            throw new com.memento3d.shared.exception.BusinessException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "ORDER_IN_PRODUCTION",
+                    "Đơn hàng đang trong quá trình chế tác in 3D. Yêu cầu hủy đã được chuyển tới Quản lý để xem xét.");
         }
 
         order.cancel();

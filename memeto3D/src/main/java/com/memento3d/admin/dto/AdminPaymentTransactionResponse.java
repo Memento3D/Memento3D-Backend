@@ -29,8 +29,15 @@ public class AdminPaymentTransactionResponse {
     private PaymentMethod paymentMethod;
     private PaymentStatus status;
     private String merchantTransactionId;
+    private String transactionReference;
     private String providerTransactionId;
+    private String gatewayTransactionNo;
+    private String responseCode;
+    private String gatewayStatus;
+    private String bankCode;
+    private String cardType;
     private Instant paidAt;
+    private Instant expiresAt;
     private Instant createdAt;
     private String failureMessage;
 
@@ -46,8 +53,15 @@ public class AdminPaymentTransactionResponse {
                 .paymentMethod(tx.getPaymentMethod())
                 .status(tx.getStatus())
                 .merchantTransactionId(tx.getMerchantTransactionId())
+                .transactionReference(tx.getMerchantTransactionId())
                 .providerTransactionId(tx.getProviderTransactionId())
+                .gatewayTransactionNo(tx.getProviderTransactionId())
+                .responseCode(tx.getResponseCode())
+                .gatewayStatus(tx.getGatewayStatus())
+                .bankCode(tx.getBankCode())
+                .cardType(tx.getCardType())
                 .paidAt(tx.getPaidAt())
+                .expiresAt(tx.getExpiredAt())
                 .createdAt(tx.getCreatedAt())
                 .failureMessage(tx.getFailureMessage())
                 .build();

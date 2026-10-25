@@ -26,7 +26,14 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import com.memento3d.orders.domain.exception.OrderAccessDeniedException;
+import com.memento3d.orders.domain.model.Order;
+import com.memento3d.payment.api.response.PaymentStatusResponse;
+import com.memento3d.payment.domain.model.PaymentTransaction;
+import com.memento3d.payment.infrastructure.persistence.repository.PaymentTransactionRepository;
+
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -40,6 +47,7 @@ public class OrderController {
 
     private final OrderService orderService;
     private final PaymentService paymentService;
+    private final PaymentTransactionRepository paymentTransactionRepository;
 
     @PostMapping
     @PreAuthorize("isAuthenticated()")
@@ -116,6 +124,24 @@ public class OrderController {
 
         PaymentResponse response = paymentService.createPayment(paymentRequest, userDetails.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{orderId}/payments")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Get order payment attempts", description = "Retrieves all payment transactions associated with the order. Enforces ownership check.")
+    public ResponseEntity<List<PaymentStatusResponse>> getOrderPayments(
+            @Parameter(description = "Order UUID") @PathVariable UUID orderId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        Order order = orderService.getOrderById(orderId);
+        boolean isStaff = userDetails.getRole() == Role.ROLE_ADMIN
+                || userDetails.getRole() == Role.ROLE_MANAGER
+                || userDetails.getRole() == Role.ROLE_OPERATOR;
+        if (!isStaff && !order.getUserId().equals(userDetails.getId())) {
+            throw new OrderAccessDeniedException("You are not authorized to view payments for this order");
+        }
+        List<PaymentTransaction> txs = paymentTransactionRepository.findByOrderIdOrderByCreatedAtDesc(orderId);
+        return ResponseEntity.ok(txs.stream().map(PaymentStatusResponse::fromEntity).toList());
     }
 
     @PatchMapping("/{orderId}")

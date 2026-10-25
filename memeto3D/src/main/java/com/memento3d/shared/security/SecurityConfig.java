@@ -81,7 +81,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/webhooks/payments/**",
                                 "/api/payments/webhooks/**",
-                                "/payments/webhooks/**"
+                                "/payments/webhooks/**",
+                                "/api/v1/payments/vnpay/ipn",
+                                "/api/payments/vnpay/ipn"
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/payments/vnpay/return",
+                                "/api/payments/vnpay/return",
+                                "/api/v1/payments/vnpay/ipn",
+                                "/api/payments/vnpay/ipn"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
                         // Local Printer Agent gateway (authenticated by X-Agent-Token inside the service)

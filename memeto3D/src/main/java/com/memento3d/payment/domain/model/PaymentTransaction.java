@@ -66,6 +66,18 @@ public class PaymentTransaction {
     @Column(name = "failure_message", columnDefinition = "TEXT")
     private String failureMessage;
 
+    @Column(name = "response_code", length = 50)
+    private String responseCode;
+
+    @Column(name = "gateway_status", length = 50)
+    private String gatewayStatus;
+
+    @Column(name = "bank_code", length = 50)
+    private String bankCode;
+
+    @Column(name = "card_type", length = 50)
+    private String cardType;
+
     @Column(name = "paid_at")
     private Instant paidAt;
 
@@ -88,6 +100,38 @@ public class PaymentTransaction {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    public String getTransactionReference() {
+        return this.merchantTransactionId;
+    }
+
+    public void setTransactionReference(String transactionReference) {
+        this.merchantTransactionId = transactionReference;
+    }
+
+    public String getGatewayTransactionNo() {
+        return this.providerTransactionId;
+    }
+
+    public void setGatewayTransactionNo(String gatewayTransactionNo) {
+        this.providerTransactionId = gatewayTransactionNo;
+    }
+
+    public Instant getPaymentDate() {
+        return this.paidAt;
+    }
+
+    public void setPaymentDate(Instant paymentDate) {
+        this.paidAt = paymentDate;
+    }
+
+    public Instant getExpiresAt() {
+        return this.expiredAt;
+    }
+
+    public void setExpiresAt(Instant expiresAt) {
+        this.expiredAt = expiresAt;
+    }
+
     public boolean isTerminal() {
         return this.status == PaymentStatus.SUCCESS
                 || this.status == PaymentStatus.PAID
@@ -104,6 +148,19 @@ public class PaymentTransaction {
         this.failureMessage = null;
     }
 
+    public void markVnpaySuccess(String gatewayTransactionNo, String responseCode, String gatewayStatus,
+                                String bankCode, String cardType, Instant paidAt) {
+        this.status = PaymentStatus.SUCCESS;
+        this.providerTransactionId = gatewayTransactionNo;
+        this.responseCode = responseCode;
+        this.gatewayStatus = gatewayStatus;
+        this.bankCode = bankCode;
+        this.cardType = cardType;
+        this.paidAt = paidAt != null ? paidAt : Instant.now();
+        this.failureCode = null;
+        this.failureMessage = null;
+    }
+
     public void confirmCash(UUID managerId) {
         this.status = PaymentStatus.PAID;
         this.confirmedBy = managerId;
@@ -115,6 +172,7 @@ public class PaymentTransaction {
     public void markFailed(String failureCode, String failureMessage) {
         this.status = PaymentStatus.FAILED;
         this.failureCode = failureCode;
+        this.responseCode = failureCode;
         this.failureMessage = failureMessage;
     }
 
