@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.memento3d.shared.exception.ResourceNotFoundException;
+import com.memento3d.shared.util.SafePageRequest;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -37,6 +39,15 @@ public class AdminPaymentController {
 
     private final PaymentTransactionRepository paymentTransactionRepository;
 
+    private static final Map<String, String> PAYMENT_SORT_FIELDS = Map.of(
+            "createdAt", "createdAt",
+            "updatedAt", "updatedAt",
+            "paidAt", "paidAt",
+            "amount", "amount",
+            "status", "status",
+            "paymentMethod", "paymentMethod"
+    );
+
     @GetMapping("")
     @Operation(summary = "Monitor financial payment transactions across VNPAY, MoMo, ZaloPay, and Cash")
     public ResponseEntity<Page<AdminPaymentTransactionResponse>> listPayments(
@@ -46,9 +57,11 @@ public class AdminPaymentController {
             @RequestParam(name = "dateFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant dateFrom,
             @RequestParam(name = "dateTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant dateTo,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sort", defaultValue = "createdAt,desc") String sort
     ) {
-        PageRequest pageRequest = PageRequest.of(Math.max(0, page), size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        PageRequest pageRequest = SafePageRequest.of(
+                page, size, sort, PAYMENT_SORT_FIELDS, "createdAt", Sort.Direction.DESC);
 
         Specification<PaymentTransaction> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();

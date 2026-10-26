@@ -11,7 +11,9 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ProductCategoryResponse {
+public class ProductCategoryResponse implements java.io.Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private UUID id;
     private String name;

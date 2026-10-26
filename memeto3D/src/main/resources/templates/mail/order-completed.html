@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Đơn hàng đã hoàn tất - Memento3D</title>
+    <!--[if mso]>
+    <style type="text/css">
+        table {border-collapse:collapse;border-spacing:0;margin:0;}
+        div, td {padding:0;}
+        div {margin:0 !important;}
+    </style>
+    <noscript>
+    <xml>
+        <o:OfficeDocumentSettings>
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+        </o:OfficeDocumentSettings>
+    </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+        table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+        body { margin: 0; padding: 0; width: 100% !important; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; line-height: 1.6; }
+        @media only screen and (max-width: 600px) {
+            .email-container { width: 100% !important; }
+            .content-padding { padding: 24px 16px !important; }
+            .mobile-stack { display: block !important; width: 100% !important; text-align: left !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f8fafc;">
+    <!-- Preheader text (preview in inbox) -->
+    <div style="display: none; font-size: 1px; color: #f8fafc; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden;">
+        Đơn hàng #<span th:text="${orderCode}">M3D-XXXX</span> đã hoàn tất và giao thành công. Cảm ơn bạn đã đồng hành cùng Memento3D!
+    </div>
+
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc;">
+        <tr>
+            <td align="center" style="padding: 32px 12px;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);">
+                    
+                    <!-- BRAND HEADER -->
+                    <tr>
+                        <td style="background-color: #0f172a; padding: 28px 32px; text-align: left; border-bottom: 3px solid #10b981;">
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <td>
+                                        <div style="font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">
+                                            <span style="color: #38bdf8;">Memento</span>3D
+                                        </div>
+                                        <div style="font-size: 12px; color: #94a3b8; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">
+                                            Chế tác kỷ vật &amp; In 3D chất lượng cao
+                                        </div>
+                                    </td>
+                                    <td align="right">
+                                        <span style="display: inline-block; background-color: #064e3b; color: #34d399; font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                            ✓ Hoàn tất
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- MAIN BODY -->
+                    <tr>
+                        <td class="content-padding" style="padding: 36px 32px;">
+                            
+                            <!-- GREETING & THANKS -->
+                            <h1 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #0f172a;">
+                                Cảm ơn <span th:text="${customerName}">Quý khách</span>!
+                            </h1>
+                            <p style="margin: 0 0 24px 0; font-size: 15px; color: #334155; line-height: 1.6;">
+                                Chúng tôi vô cùng trân trọng sự tin tưởng của bạn dành cho <strong style="color: #0f172a;">Memento3D</strong>. Đơn hàng của bạn đã được hoàn tất thành công và bàn giao trọn vẹn. Hy vọng sản phẩm kỷ vật 3D mang lại niềm vui và ý nghĩa đặc biệt cho bạn và người thân.
+                            </p>
+
+                            <!-- ORDER COMPLETION SUMMARY BADGE -->
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; margin-bottom: 28px;">
+                                <tr>
+                                    <td style="padding: 16px 20px;">
+                                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                            <tr>
+                                                <td class="mobile-stack" style="font-size: 14px; color: #166534; padding: 4px 0;">
+                                                    Mã đơn hàng: <strong style="color: #15803d; font-family: 'Consolas', monospace; font-size: 15px;" th:text="${orderCode}">M3D-20261025-XXXX</strong>
+                                                </td>
+                                                <td class="mobile-stack" align="right" style="font-size: 14px; color: #166534; padding: 4px 0;">
+                                                    Ngày hoàn tất: <span style="font-weight: 700;" th:text="${completedDate}">25/10/2026</span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td class="mobile-stack" style="font-size: 14px; color: #166534; padding: 4px 0;">
+                                                    Trạng thái: <span style="font-weight: 700; color: #15803d;">Đã giao thành công</span>
+                                                </td>
+                                                <td class="mobile-stack" align="right" style="font-size: 14px; color: #166534; padding: 4px 0;">
+                                                    Tổng tiền: <strong style="font-size: 15px; color: #0f172a;" th:text="${formattedTotalPrice}">480.000 ₫</strong>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- SHIPPING & DELIVERY INFO (IF AVAILABLE) -->
+                            <div th:if="${shippingAddress != null or trackingCode != null}" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin-bottom: 28px;">
+                                <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    Thông tin giao nhận
+                                </div>
+                                <div style="font-size: 14px; color: #475569; line-height: 1.5;">
+                                    <div th:if="${recipientName != null}">Người nhận: <strong style="color: #0f172a;" th:text="${recipientName}">Nguyễn Văn A</strong> <span th:if="${phone != null}" th:text="'(' + ${phone} + ')'"></span></div>
+                                    <div th:if="${shippingAddress != null}" style="margin-top: 4px;">Địa chỉ: <span th:text="${shippingAddress}">123 Nguyễn Huệ, Q.1, TP.HCM</span></div>
+                                    <div th:if="${shippingCarrier != null or trackingCode != null}" style="margin-top: 4px;">
+                                        Đơn vị vận chuyển: <strong style="color: #0f172a;" th:text="${shippingCarrier != null ? shippingCarrier : 'Giao hàng tiêu chuẩn'}">Giao Hàng Nhanh</strong>
+                                        <span th:if="${trackingCode != null}"> • Mã vận đơn: <strong style="color: #0284c7; font-family: 'Consolas', monospace;" th:text="${trackingCode}">GHN-123456789</strong></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- PRODUCTS LIST TITLE -->
+                            <div style="font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
+                                Sản phẩm hoàn tất
+                            </div>
+
+                            <!-- PRODUCTS TABLE -->
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 24px; border-collapse: collapse;">
+                                <tbody>
+                                    <tr th:each="item : ${items}" style="border-bottom: 1px solid #f1f5f9;">
+                                        <!-- Product Image (if available) with robust fallback -->
+                                        <td style="padding: 14px 8px; width: 64px; vertical-align: top;">
+                                            <div th:if="${item.imageUrl != null and !#strings.isEmpty(item.imageUrl)}">
+                                                <img th:src="${item.imageUrl}" th:alt="${item.productName}" width="60" height="60" style="display: block; border-radius: 6px; object-fit: cover; border: 1px solid #e2e8f0;" />
+                                            </div>
+                                            <div th:if="${item.imageUrl == null or #strings.isEmpty(item.imageUrl)}" style="width: 58px; height: 58px; background-color: #e2e8f0; border-radius: 6px; text-align: center; line-height: 58px; font-size: 10px; font-weight: 700; color: #64748b; border: 1px solid #cbd5e1;">
+                                                3D MODEL
+                                            </div>
+                                        </td>
+                                        <!-- Item Specs -->
+                                        <td style="padding: 14px 12px; vertical-align: top;">
+                                            <div style="font-size: 14px; font-weight: 600; color: #0f172a;" th:text="${item.productName}">Tên sản phẩm</div>
+                                            <div style="font-size: 12px; color: #64748b; margin-top: 4px; line-height: 1.5;">
+                                                <span th:if="${item.material != null}">Vật liệu: <strong style="color: #334155;" th:text="${item.material}">Resin</strong></span>
+                                                <span th:if="${item.dimensions != null}"> • Kích thước: <strong style="color: #334155;" th:text="${item.dimensions}">10cm</strong></span>
+                                                <span th:if="${item.technology != null}"> • Công nghệ: <span th:text="${item.technology}">SLA</span></span>
+                                                <span th:if="${item.finish != null}"> • Hoàn thiện: <span th:text="${item.finish}">Phủ bóng UV</span></span>
+                                            </div>
+                                            <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
+                                                Số lượng: <strong style="color: #334155;" th:text="${item.quantity}">1</strong>
+                                            </div>
+                                        </td>
+                                        <td align="right" style="padding: 14px 8px; font-size: 14px; color: #0f172a; font-weight: 700; vertical-align: top; width: 110px;" th:text="${item.formattedSubtotal}">
+                                            250.000 ₫
+                                        </td>
+                                    </tr>
+
+                                    <!-- Fallback for bespoke scan orders -->
+                                    <tr th:if="${items == null or #lists.isEmpty(items)}" style="border-bottom: 1px solid #f1f5f9;">
+                                        <td style="padding: 14px 8px; width: 64px; vertical-align: top;">
+                                            <div style="width: 58px; height: 58px; background-color: #e2e8f0; border-radius: 6px; text-align: center; line-height: 58px; font-size: 10px; font-weight: 700; color: #64748b; border: 1px solid #cbd5e1;">
+                                                3D SCAN
+                                            </div>
+                                        </td>
+                                        <td style="padding: 14px 12px; vertical-align: top;">
+                                            <div style="font-size: 14px; font-weight: 600; color: #0f172a;">Đơn hàng Chế tác Kỷ vật 3D Bespoke</div>
+                                            <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Hoàn tất quy trình quét số hóa, tinh chỉnh 3D và bàn giao tác phẩm</div>
+                                        </td>
+                                        <td align="right" style="padding: 14px 8px; font-size: 14px; color: #0f172a; font-weight: 700; vertical-align: top; width: 110px;" th:text="${formattedTotalPrice}">
+                                            500.000 ₫
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <!-- FEEDBACK & REVIEW PROMPT -->
+                            <div style="background-color: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 28px;">
+                                <div style="font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 6px;">
+                                    Bạn có hài lòng với sản phẩm và dịch vụ?
+                                </div>
+                                <div style="font-size: 13px; color: #64748b; margin-bottom: 14px; line-height: 1.5;">
+                                    Đánh giá chân thực của bạn là động lực to lớn giúp đội ngũ kỹ thuật Memento3D không ngừng nâng cao chất lượng in ấn và dịch vụ.
+                                </div>
+                                <a th:href="${orderDetailUrl}" target="_blank" style="display: inline-block; background-color: #f1f5f9; color: #0284c7; text-decoration: none; font-size: 13px; font-weight: 700; padding: 8px 18px; border-radius: 6px; border: 1px solid #bae6fd;">
+                                    ★ Gửi nhận xét &amp; Đánh giá trải nghiệm
+                                </a>
+                            </div>
+
+                            <!-- CTA BUTTON -->
+                            <div style="text-align: center; margin: 32px 0 20px 0;">
+                                <a th:href="${orderDetailUrl}" target="_blank" style="display: inline-block; background-color: #0f172a; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 32px; border-radius: 8px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);">
+                                    Xem đơn hàng của bạn
+                                </a>
+                            </div>
+                            <div style="text-align: center; font-size: 12px; color: #94a3b8;">
+                                Hoặc truy cập liên kết: <a th:href="${orderDetailUrl}" style="color: #0284c7; text-decoration: underline; word-break: break-all;" th:text="${orderDetailUrl}">https://memento3d.vn/orders/...</a>
+                            </div>
+
+                        </td>
+                    </tr>
+
+                    <!-- FOOTER -->
+                    <tr>
+                        <td style="background-color: #f1f5f9; padding: 24px 32px; text-align: center; border-top: 1px solid #e2e8f0;">
+                            <div style="font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+                                Chính sách bảo hành &amp; Hỗ trợ sau bán hàng
+                            </div>
+                            <div style="font-size: 12px; color: #64748b; line-height: 1.6;">
+                                Sản phẩm in 3D Memento3D được bảo hành độ bền và hỗ trợ xử lý kỹ thuật trong vòng 30 ngày.<br>
+                                Hotline: <strong style="color: #0f172a;">0900 123 456</strong> • Email: <a href="mailto:support@memento3d.vn" style="color: #0284c7; text-decoration: none;">support@memento3d.vn</a><br>
+                                © 2026 Memento3D. Mọi quyền được bảo lưu. Email này được gửi tự động, vui lòng không phản hồi trực tiếp.
+                            </div>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
