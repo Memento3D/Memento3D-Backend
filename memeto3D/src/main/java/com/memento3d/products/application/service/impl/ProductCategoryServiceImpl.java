@@ -11,6 +11,8 @@ import com.memento3d.products.infrastructure.persistence.repository.ProductCateg
 import com.memento3d.products.infrastructure.persistence.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "categories", key = "#publicOnly")
     public List<ProductCategoryResponse> getCategories(boolean publicOnly) {
         List<ProductCategory> categories = publicOnly
                 ? categoryRepository.findByActiveTrueOrderByDisplayOrderAsc()
@@ -75,6 +78,7 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "categories", allEntries = true)
     public ProductCategoryResponse createCategory(CreateProductCategoryRequest request) {
         String slug = (request.getSlug() != null && !request.getSlug().isBlank())
                 ? toSlug(request.getSlug())
@@ -100,6 +104,7 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "categories", allEntries = true)
     public ProductCategoryResponse updateCategory(UUID id, UpdateProductCategoryRequest request) {
         ProductCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new CategoryNotFoundException("Category not found with ID: " + id));
@@ -135,6 +140,7 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "categories", allEntries = true)
     public ProductCategoryResponse updateCategoryStatus(UUID id, boolean active) {
         ProductCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new CategoryNotFoundException("Category not found with ID: " + id));
@@ -146,6 +152,7 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "categories", allEntries = true)
     public void deleteCategory(UUID id) {
         ProductCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new CategoryNotFoundException("Category not found with ID: " + id));

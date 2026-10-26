@@ -10,6 +10,7 @@ import com.memento3d.identity.domain.model.Role;
 import com.memento3d.identity.domain.model.UserStatus;
 import com.memento3d.identity.infrastructure.security.CustomUserDetails;
 import com.memento3d.shared.exception.BadRequestException;
+import com.memento3d.shared.util.SafePageRequest;
 import com.memento3d.warehouse.api.request.AssignMemberRequest;
 import com.memento3d.warehouse.application.service.WarehouseService;
 import com.memento3d.warehouse.domain.model.WarehouseRole;
@@ -48,6 +49,18 @@ public class AdminUserController {
     private final AdminUserService adminUserService;
     private final WarehouseService warehouseService;
 
+    /** API sort name -> User entity property. Anything else is rejected. */
+    private static final Map<String, String> USER_SORT_FIELDS = Map.of(
+            "createdAt", "createdAt",
+            "updatedAt", "updatedAt",
+            "lastLoginAt", "lastLoginAt",
+            "fullName", "fullName",
+            "email", "email",
+            "role", "role",
+            "status", "status",
+            "authProvider", "provider"
+    );
+
     @GetMapping("")
     @Operation(summary = "List users with search, role, status, provider filters and pagination", description = "Server-side search across fullName, email, and phone with pagination")
     public ResponseEntity<Page<UserResponse>> listUsers(
@@ -59,12 +72,8 @@ public class AdminUserController {
             @RequestParam(name = "size", defaultValue = "20") int size,
             @RequestParam(name = "sort", defaultValue = "createdAt,desc") String sort
     ) {
-        String[] sortParts = sort.split(",");
-        String sortField = sortParts[0].trim();
-        Sort.Direction direction = (sortParts.length > 1 && "asc".equalsIgnoreCase(sortParts[1].trim()))
-                ? Sort.Direction.ASC : Sort.Direction.DESC;
-
-        PageRequest pageRequest = PageRequest.of(Math.max(0, page), size, Sort.by(direction, sortField));
+        PageRequest pageRequest = SafePageRequest.of(
+                page, size, sort, USER_SORT_FIELDS, "createdAt", Sort.Direction.DESC);
         return ResponseEntity.ok(adminUserService.listUsers(search, role, status, provider, pageRequest));
     }
 

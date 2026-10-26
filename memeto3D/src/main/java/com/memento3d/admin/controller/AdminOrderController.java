@@ -6,6 +6,7 @@ import com.memento3d.orders.domain.model.OrderStatus;
 import com.memento3d.orders.infrastructure.persistence.repository.OrderRepository;
 import com.memento3d.payment.domain.model.PaymentStatus;
 import com.memento3d.shared.exception.ResourceNotFoundException;
+import com.memento3d.shared.util.SafePageRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -31,6 +33,17 @@ public class AdminOrderController {
 
     private final OrderRepository orderRepository;
 
+    /** API sort name -> Order entity property. Anything else is rejected. */
+    private static final Map<String, String> ORDER_SORT_FIELDS = Map.of(
+            "createdAt", "createdAt",
+            "updatedAt", "updatedAt",
+            "status", "status",
+            "paymentStatus", "paymentStatus",
+            "totalAmount", "totalPrice",
+            "totalPrice", "totalPrice",
+            "orderCode", "orderCode"
+    );
+
     @GetMapping("")
     @Operation(summary = "Search and filter all system orders with pagination", description = "Search by order code, recipient name, phone, filter by order status, payment status, and user ID")
     public ResponseEntity<Page<OrderResponse>> listOrders(
@@ -42,12 +55,8 @@ public class AdminOrderController {
             @RequestParam(name = "size", defaultValue = "20") int size,
             @RequestParam(name = "sort", defaultValue = "createdAt,desc") String sort
     ) {
-        String[] sortParts = sort.split(",");
-        String sortField = sortParts[0].trim();
-        Sort.Direction direction = (sortParts.length > 1 && "asc".equalsIgnoreCase(sortParts[1].trim()))
-                ? Sort.Direction.ASC : Sort.Direction.DESC;
-
-        PageRequest pageRequest = PageRequest.of(Math.max(0, page), size, Sort.by(direction, sortField));
+        PageRequest pageRequest = SafePageRequest.of(
+                page, size, sort, ORDER_SORT_FIELDS, "createdAt", Sort.Direction.DESC);
         String cleanSearch = (search != null && !search.isBlank()) ? search.trim() : null;
 
         Page<Order> orderPage = orderRepository.searchAdminOrders(cleanSearch, status, paymentStatus, userId, pageRequest);
