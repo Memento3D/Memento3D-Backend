@@ -95,6 +95,8 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET}
 
 app:
+  ai:
+    default-provider: ${APP_AI_DEFAULT_PROVIDER:HTTP_AI}
   frontend:
     # Used ONLY server-side to build links inside emails (never taken from the request).
     base-url: ${APP_FRONTEND_URL:${FRONTEND_BASE_URL:http://localhost:5173}}
@@ -215,10 +217,6 @@ springdoc:
     filter: true
     display-request-duration: true
     doc-expansion: list
-
-app:
-  ai:
-    default-provider: ${APP_AI_DEFAULT_PROVIDER:HTTP_AI}
 
 
 
