@@ -55,8 +55,41 @@ public class ReconstructionJobController {
                 .maxImages(provider.getMaxImages())
                 .supportedFormats(List.of("image/jpeg", "image/png", "image/webp"))
                 .maxFileSizeMb(20)
-                .guidelines("Chụp góc ảnh rõ nét, bao quát 360 độ quanh chủ thể với ánh sáng tự nhiên đầy đủ. Tránh chụp vật thể trong suốt hoặc phản chiếu cao.")
+                .guidelines("Hỗ trợ chụp từ 1 ảnh rõ nét bằng camera laptop hoặc tải 1-50 ảnh đa góc. AI Hunyuan3D-2 tối ưu cho chủ thể chân dung, tượng nhỏ, đồ lưu niệm thủ công trong điều kiện đủ sáng.")
                 .build());
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/v1/reconstruction-jobs/demo & /api/v1/scans/demo/reconstruction-jobs
+    // -------------------------------------------------------------------------
+    @GetMapping({"/api/v1/reconstruction-jobs/demo", "/api/v1/scans/demo/reconstruction-jobs"})
+    @Operation(summary = "Get gallery demo model metadata for illustration purposes")
+    public ResponseEntity<ReconstructionJobResponse> getDemoJob() {
+        return ResponseEntity.ok(ReconstructionJobResponse.builder()
+                .jobId(UUID.fromString("00000000-0000-0000-0000-000000000000"))
+                .scanId(UUID.fromString("00000000-0000-0000-0000-000000000000"))
+                .status(com.memento3d.reconstruction.domain.model.ReconstructionJobStatus.done)
+                .progress(100)
+                .profile("DEMO_SAMPLE")
+                .errorMessage("Mô hình mẫu tham khảo phòng trưng bày")
+                .createdAt(java.time.Instant.now())
+                .completedAt(java.time.Instant.now())
+                .build());
+    }
+
+    @GetMapping({"/api/v1/reconstruction-jobs/demo/outputs", "/api/v1/reconstruction-jobs/00000000-0000-0000-0000-000000000000/outputs"})
+    @Operation(summary = "Get gallery demo 3D model outputs")
+    public ResponseEntity<List<com.memento3d.models.api.response.ModelOutputResponse>> getDemoOutputs() {
+        return ResponseEntity.ok(List.of(
+                com.memento3d.models.api.response.ModelOutputResponse.builder()
+                        .outputId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                        .jobId(UUID.fromString("00000000-0000-0000-0000-000000000000"))
+                        .format("glb")
+                        .deliveryUrl("https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb")
+                        .fileSizeBytes(117768L)
+                        .createdAt(java.time.Instant.now())
+                        .build()
+        ));
     }
 
     // -------------------------------------------------------------------------

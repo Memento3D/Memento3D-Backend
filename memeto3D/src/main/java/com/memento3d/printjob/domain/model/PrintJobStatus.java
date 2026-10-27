@@ -2,9 +2,16 @@ package com.memento3d.printjob.domain.model;
 
 public enum PrintJobStatus {
     CREATED,
+    PENDING_MODEL_PREPARATION,
+    AWAITING_SLICING,
+    READY_FOR_PRINTING,
     RESERVED,
     ISSUED,
     PRINTING,
+    POST_PROCESSING,
+    SURFACE_FINISHING,
+    QC_INSPECTION,
+    READY_FOR_DELIVERY,
     COMPLETED,
     FAILED,
     CANCELLED

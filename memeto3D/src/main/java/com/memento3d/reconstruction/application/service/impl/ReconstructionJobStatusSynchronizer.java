@@ -153,9 +153,14 @@ public class ReconstructionJobStatusSynchronizer {
                 return null;
             }
 
-            ReconstructionStage stage = response.stage() == null
-                    ? null
-                    : ReconstructionStage.valueOf(response.stage());
+            ReconstructionStage stage = null;
+            if (response.stage() != null) {
+                try {
+                    stage = ReconstructionStage.valueOf(response.stage());
+                } catch (IllegalArgumentException ex) {
+                    stage = ReconstructionStage.preprocessing;
+                }
+            }
 
             Integer progress = response.progress();
 
@@ -166,13 +171,13 @@ public class ReconstructionJobStatusSynchronizer {
             }
 
             switch (response.status()) {
-                case "running" -> {
-                    job.setStage(stage);
-                    job.setProgress(progress);
+                case "running", "needs_selection", "needs_mask_review" -> {
+                    job.setStage(stage != null ? stage : ReconstructionStage.preprocessing);
+                    job.setProgress(progress != null ? progress : 15);
                     job.setLastHeartbeatAt(Instant.now());
 
                     if (job.getStartedAt() == null) {
-                        job.setStartedAt(response.startedAt());
+                        job.setStartedAt(response.startedAt() != null ? response.startedAt() : Instant.now());
                     }
                 }
 

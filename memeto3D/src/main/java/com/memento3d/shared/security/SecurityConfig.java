@@ -97,6 +97,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/scans/*/ratings", "/api/v1/scans/*/rating").permitAll()
                         // Public Storefront Catalog
                         .requestMatchers(HttpMethod.GET,
+                                "/api/v1/reconstruction/capabilities",
+                                "/api/reconstruction/capabilities",
                                 "/api/v1/products", "/api/v1/products/**",
                                 "/api/products", "/api/products/**",
                                 "/api/v1/product-categories", "/api/v1/product-categories/**",

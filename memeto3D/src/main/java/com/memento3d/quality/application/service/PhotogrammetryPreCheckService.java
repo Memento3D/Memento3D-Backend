@@ -27,6 +27,7 @@ public class PhotogrammetryPreCheckService {
 
     private final ScanRepository scanRepository;
     private final ScanImageRepository scanImageRepository;
+    private final com.memento3d.quality.domain.port.ImageValidationProviderRegistry imageValidationProviderRegistry;
 
     private static final int MIN_REQUIRED_PHOTOS = 20;
     private static final int RECOMMENDED_PHOTOS = 45;
@@ -94,6 +95,18 @@ public class PhotogrammetryPreCheckService {
             // Redundancy / duplicate angle heuristic
             if (totalImages > 80) {
                 suggestions.add("Bộ ảnh có mật độ góc chụp rất tốt, sẵn sàng tái tạo độ phân giải cao.");
+            }
+
+            if (!images.isEmpty() && imageValidationProviderRegistry != null) {
+                try {
+                    ScanImage sample = images.get(0);
+                    var valRes = imageValidationProviderRegistry.getDefaultProvider().validate(scanId, sample.getId(), sample.getStoragePath());
+                    if (!valRes.valid()) {
+                        suggestions.add("AI Image Validation: " + valRes.message());
+                    }
+                } catch (Exception ex) {
+                    log.debug("AI image validation check skipped: {}", ex.getMessage());
+                }
             }
         }
 
