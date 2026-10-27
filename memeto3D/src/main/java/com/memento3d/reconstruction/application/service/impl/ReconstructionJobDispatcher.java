@@ -187,15 +187,21 @@ public class ReconstructionJobDispatcher {
                 return;
             }
 
-            if ("running".equals(response.status())) {
+            if ("running".equals(response.status())
+                    || "needs_selection".equals(response.status())
+                    || "needs_mask_review".equals(response.status())) {
                 job.setStatus(ReconstructionJobStatus.running);
-                job.setStartedAt(response.startedAt());
+                job.setStartedAt(response.startedAt() != null ? response.startedAt() : Instant.now());
                 job.setProgress(response.progress());
 
                 if (response.stage() != null) {
-                    job.setStage(
-                            ReconstructionStage.valueOf(response.stage())
-                    );
+                    try {
+                        job.setStage(
+                                ReconstructionStage.valueOf(response.stage())
+                        );
+                    } catch (IllegalArgumentException ex) {
+                        job.setStage(ReconstructionStage.preprocessing);
+                    }
                 }
 
                 // Thời điểm Spring nhận được trạng thái từ AI.

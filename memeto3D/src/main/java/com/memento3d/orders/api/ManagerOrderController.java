@@ -75,4 +75,15 @@ public class ManagerOrderController {
         OrderResponse response = orderService.updateOrderStatus(id, nextStatus, userDetails.getId(), role);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/{id}/feasibility-review")
+    @Operation(summary = "Workshop inspection: approve feasibility, request revision, or reject custom 3D model")
+    public ResponseEntity<OrderResponse> reviewFeasibility(
+            @PathVariable UUID id,
+            @jakarta.validation.Valid @RequestBody com.memento3d.orders.api.request.OrderFeasibilityReviewRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        Role role = userDetails.getRole();
+        return ResponseEntity.ok(orderService.reviewFeasibility(id, request, userDetails.getId(), role));
+    }
 }

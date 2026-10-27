@@ -387,6 +387,13 @@ public class InventoryDataSeeder implements CommandLineRunner {
                         .serialNumber("CREALITY-K1M-2026-005")
                         .provider(PrinterProvider.OCTOPRINT)
                         .status(PrinterStatus.MAINTENANCE)
+                        .build(),
+                Printer.builder()
+                        .name("Elegoo Saturn 4 Ultra 16K #06")
+                        .model("ELEGOO Saturn 4 Ultra 16K Mono LCD")
+                        .serialNumber("ELEGOO-S4U-16K-001")
+                        .provider(PrinterProvider.ELEGOO_SATURN_RESIN)
+                        .status(PrinterStatus.IDLE)
                         .build()
         );
         printerRepository.saveAll(fleet);

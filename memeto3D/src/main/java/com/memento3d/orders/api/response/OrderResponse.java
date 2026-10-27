@@ -123,6 +123,24 @@ public class OrderResponse {
     @Schema(description = "Internal quality control notes (Staff only)")
     private String internalQcNotes;
 
+    @Schema(description = "Workshop feasibility check status (PENDING_REVIEW, FEASIBLE, REVISION_REQUESTED, REJECTED)")
+    private String feasibilityStatus;
+
+    @Schema(description = "Workshop feasibility or revision notes")
+    private String feasibilityNotes;
+
+    @Schema(description = "Estimated production duration in business days")
+    private Integer estimatedProductionDays;
+
+    @Schema(description = "URL of repaired/modified 3D GLB model uploaded by workshop")
+    private String revisionGlbUrl;
+
+    @Schema(description = "Timestamp when customer accepted workshop quotation & revision")
+    private Instant customerAcceptedAt;
+
+    @Schema(description = "Timestamp when workshop reviewed the order")
+    private Instant reviewedAt;
+
     @Builder.Default
     @Schema(description = "List of items in the order")
     private List<OrderItemResponse> items = new ArrayList<>();
@@ -223,6 +241,12 @@ public class OrderResponse {
                 .internalPartnerName(isStaff ? order.getInternalPartnerName() : null)
                 .internalCost(isStaff ? order.getInternalCost() : null)
                 .internalQcNotes(isStaff ? order.getInternalQcNotes() : null)
+                .feasibilityStatus(order.getFeasibilityStatus())
+                .feasibilityNotes(order.getFeasibilityNotes())
+                .estimatedProductionDays(order.getEstimatedProductionDays())
+                .revisionGlbUrl(order.getRevisionGlbUrl())
+                .customerAcceptedAt(order.getCustomerAcceptedAt())
+                .reviewedAt(order.getReviewedAt())
                 .items(itemResponses)
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())

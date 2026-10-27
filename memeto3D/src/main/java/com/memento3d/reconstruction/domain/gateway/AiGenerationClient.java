@@ -14,4 +14,8 @@ public interface AiGenerationClient {
     AiJobResponse getJob(UUID jobId);
 
     byte[] downloadGlb(UUID jobId, UUID attemptId);
+
+    default com.memento3d.quality.domain.port.ImageValidationProvider.ImageValidationResult validateImage(String imageUrl) {
+        return com.memento3d.quality.domain.port.ImageValidationProvider.ImageValidationResult.passed("png", 0L, "Default passed");
+    }
 }

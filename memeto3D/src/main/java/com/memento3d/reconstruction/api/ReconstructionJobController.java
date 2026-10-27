@@ -24,6 +24,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import com.memento3d.reconstruction.api.response.ReconstructionCapabilitiesResponse;
+import com.memento3d.reconstruction.domain.port.ReconstructionProvider;
+import com.memento3d.reconstruction.domain.port.ReconstructionProviderRegistry;
+
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
@@ -39,6 +43,54 @@ import java.util.UUID;
 public class ReconstructionJobController {
 
     private final ReconstructionJobService reconstructionJobService;
+    private final ReconstructionProviderRegistry providerRegistry;
+
+    @GetMapping("/api/v1/reconstruction/capabilities")
+    @Operation(summary = "Get AI reconstruction provider capabilities and photo guidelines")
+    public ResponseEntity<ReconstructionCapabilitiesResponse> getCapabilities() {
+        ReconstructionProvider provider = providerRegistry.getDefaultProvider();
+        return ResponseEntity.ok(ReconstructionCapabilitiesResponse.builder()
+                .provider(provider.getProviderCode())
+                .minImages(provider.getMinImages())
+                .maxImages(provider.getMaxImages())
+                .supportedFormats(List.of("image/jpeg", "image/png", "image/webp"))
+                .maxFileSizeMb(20)
+                .guidelines("Hỗ trợ chụp từ 1 ảnh rõ nét bằng camera laptop hoặc tải 1-50 ảnh đa góc. AI Hunyuan3D-2 tối ưu cho chủ thể chân dung, tượng nhỏ, đồ lưu niệm thủ công trong điều kiện đủ sáng.")
+                .build());
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/v1/reconstruction-jobs/demo & /api/v1/scans/demo/reconstruction-jobs
+    // -------------------------------------------------------------------------
+    @GetMapping({"/api/v1/reconstruction-jobs/demo", "/api/v1/scans/demo/reconstruction-jobs"})
+    @Operation(summary = "Get gallery demo model metadata for illustration purposes")
+    public ResponseEntity<ReconstructionJobResponse> getDemoJob() {
+        return ResponseEntity.ok(ReconstructionJobResponse.builder()
+                .jobId(UUID.fromString("00000000-0000-0000-0000-000000000000"))
+                .scanId(UUID.fromString("00000000-0000-0000-0000-000000000000"))
+                .status(com.memento3d.reconstruction.domain.model.ReconstructionJobStatus.done)
+                .progress(100)
+                .profile("DEMO_SAMPLE")
+                .errorMessage("Mô hình mẫu tham khảo phòng trưng bày")
+                .createdAt(java.time.Instant.now())
+                .completedAt(java.time.Instant.now())
+                .build());
+    }
+
+    @GetMapping({"/api/v1/reconstruction-jobs/demo/outputs", "/api/v1/reconstruction-jobs/00000000-0000-0000-0000-000000000000/outputs"})
+    @Operation(summary = "Get gallery demo 3D model outputs")
+    public ResponseEntity<List<com.memento3d.models.api.response.ModelOutputResponse>> getDemoOutputs() {
+        return ResponseEntity.ok(List.of(
+                com.memento3d.models.api.response.ModelOutputResponse.builder()
+                        .outputId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                        .jobId(UUID.fromString("00000000-0000-0000-0000-000000000000"))
+                        .format("glb")
+                        .deliveryUrl("https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb")
+                        .fileSizeBytes(117768L)
+                        .createdAt(java.time.Instant.now())
+                        .build()
+        ));
+    }
 
     // -------------------------------------------------------------------------
     // POST /api/v1/scans/{scanId}/reconstruction-jobs (Submit Job)

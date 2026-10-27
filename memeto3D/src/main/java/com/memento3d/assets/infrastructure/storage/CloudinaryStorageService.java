@@ -2,6 +2,7 @@ package com.memento3d.assets.infrastructure.storage;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import com.memento3d.assets.domain.port.MediaStoragePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -12,10 +13,16 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class CloudinaryStorageService {
+public class CloudinaryStorageService implements MediaStoragePort {
 
     private final Cloudinary cloudinary;
 
+    @Override
+    public String getProviderName() {
+        return "CLOUDINARY";
+    }
+
+    @Override
     public Map<String, Object> uploadImage(
             MultipartFile file,
             UUID userId,
@@ -37,6 +44,7 @@ public class CloudinaryStorageService {
                 .upload(file.getBytes(), options);
     }
 
+    @Override
     public Map<String, Object> uploadGlb(
             byte[] bytes,
             UUID userId,
@@ -67,6 +75,7 @@ public class CloudinaryStorageService {
      *
      * @return Cloudinary response (use {@code secure_url}, which carries a cache-busting version)
      */
+    @Override
     public Map<String, Object> uploadAvatar(byte[] bytes, UUID userId) throws IOException {
         Map<String, Object> options = ObjectUtils.asMap(
                 "public_id", avatarPublicId(userId),
@@ -80,9 +89,24 @@ public class CloudinaryStorageService {
         return cloudinary.uploader().upload(bytes, options);
     }
 
+    @Override
     public void deleteAvatar(UUID userId) throws IOException {
-        cloudinary.uploader().destroy(avatarPublicId(userId),
-                ObjectUtils.asMap("resource_type", "image", "invalidate", true));
+        cloudinary.uploader().destroy(
+                avatarPublicId(userId),
+                ObjectUtils.asMap("resource_type", "image", "invalidate", true)
+        );
+    }
+
+    @Override
+    public void deleteAsset(String publicId, String resourceType) throws IOException {
+        String type = (resourceType != null && !resourceType.isBlank()) ? resourceType : "image";
+        cloudinary.uploader().destroy(publicId, ObjectUtils.asMap("resource_type", type, "invalidate", true));
+    }
+
+    @Override
+    public String getAccessUrl(String publicId, String resourceType) {
+        String type = (resourceType != null && !resourceType.isBlank()) ? resourceType : "image";
+        return cloudinary.url().resourceType(type).secure(true).generate(publicId);
     }
 
     private static String avatarPublicId(UUID userId) {

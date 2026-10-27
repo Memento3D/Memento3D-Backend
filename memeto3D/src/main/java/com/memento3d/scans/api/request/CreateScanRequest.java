@@ -32,15 +32,18 @@ public class CreateScanRequest {
 
     @JsonProperty("input_mode")
     @JsonAlias({"inputMode"})
-    @Pattern(regexp = "^(image|video)$", message = "Input mode must be 'image' or 'video'")
+    @Pattern(regexp = "(?i)^(image|video|image_set|video_clip)$", message = "Input mode must be 'image' or 'video'")
     @Schema(description = "Capture mode: 'image' or 'video'", example = "image", defaultValue = "image")
     @Builder.Default
     private String inputMode = "image";
 
     public String getInputMode() {
-        if (inputMode == null || inputMode.isBlank()) {
+        if (inputMode == null || inputMode.isBlank() || "IMAGE_SET".equalsIgnoreCase(inputMode)) {
             return "image";
         }
-        return inputMode;
+        if ("VIDEO_CLIP".equalsIgnoreCase(inputMode)) {
+            return "video";
+        }
+        return inputMode.toLowerCase();
     }
 }

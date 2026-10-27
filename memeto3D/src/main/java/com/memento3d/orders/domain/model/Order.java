@@ -124,6 +124,28 @@ public class Order {
     @Column(name = "internal_qc_notes", columnDefinition = "TEXT")
     private String internalQcNotes;
 
+    @Column(name = "feasibility_status", length = 50)
+    @Builder.Default
+    private String feasibilityStatus = "PENDING_REVIEW";
+
+    @Column(name = "feasibility_notes", columnDefinition = "TEXT")
+    private String feasibilityNotes;
+
+    @Column(name = "estimated_production_days")
+    private Integer estimatedProductionDays;
+
+    @Column(name = "revision_glb_url", columnDefinition = "TEXT")
+    private String revisionGlbUrl;
+
+    @Column(name = "reviewed_by")
+    private UUID reviewedBy;
+
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+
+    @Column(name = "customer_accepted_at")
+    private Instant customerAcceptedAt;
+
     @org.hibernate.annotations.BatchSize(size = 50)
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
@@ -148,9 +170,19 @@ public class Order {
     }
 
     public boolean isEligibleForPayment() {
-        return (this.status == OrderStatus.PENDING || this.status == OrderStatus.PENDING_PAYMENT)
+        boolean statusEligible = (this.status == OrderStatus.PENDING || this.status == OrderStatus.PENDING_PAYMENT)
                 && this.paymentStatus != PaymentStatus.PAID
                 && this.paymentStatus != PaymentStatus.SUCCESS;
+
+        if (!statusEligible) return false;
+
+        // If order is custom 3D model scan, it requires workshop feasibility approval before payment
+        if (this.scanId != null) {
+            return "FEASIBLE".equalsIgnoreCase(this.feasibilityStatus) 
+                    || "ACCEPTED".equalsIgnoreCase(this.feasibilityStatus);
+        }
+
+        return true;
     }
 
     public void markAsPaid() {

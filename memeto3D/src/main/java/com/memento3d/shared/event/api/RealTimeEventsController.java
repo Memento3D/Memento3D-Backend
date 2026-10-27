@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
-@RequestMapping("/api/v1/events")
+@RequestMapping({"/api/v1/events", "/events", "/api/events"})
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Real-Time Gateway", description = "Server-Sent Events gateway for real-time status updates and notifications")

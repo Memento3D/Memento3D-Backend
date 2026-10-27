@@ -43,4 +43,8 @@ public interface OrderService {
     void cancelOrder(UUID orderId, UUID userId, Role userRole);
 
     java.util.Map<String, Long> getOrderStatusCounts(UUID userId, Role role);
+
+    OrderResponse reviewFeasibility(UUID orderId, com.memento3d.orders.api.request.OrderFeasibilityReviewRequest request, UUID managerId, Role role);
+
+    OrderResponse acceptWorkshopQuotation(UUID orderId, UUID customerId);
 }
