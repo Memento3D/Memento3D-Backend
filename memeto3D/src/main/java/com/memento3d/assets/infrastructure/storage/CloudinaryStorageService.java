@@ -44,6 +44,7 @@ public class CloudinaryStorageService implements MediaStoragePort {
                 .upload(file.getBytes(), options);
     }
 
+    @Override
     public Map<String, Object> uploadGlb(
             byte[] bytes,
             UUID userId,
@@ -74,6 +75,7 @@ public class CloudinaryStorageService implements MediaStoragePort {
      *
      * @return Cloudinary response (use {@code secure_url}, which carries a cache-busting version)
      */
+    @Override
     public Map<String, Object> uploadAvatar(byte[] bytes, UUID userId) throws IOException {
         Map<String, Object> options = ObjectUtils.asMap(
                 "public_id", avatarPublicId(userId),
@@ -85,6 +87,14 @@ public class CloudinaryStorageService implements MediaStoragePort {
                         .width(512).height(512).crop("fill").gravity("auto").quality("auto")
         );
         return cloudinary.uploader().upload(bytes, options);
+    }
+
+    @Override
+    public void deleteAvatar(UUID userId) throws IOException {
+        cloudinary.uploader().destroy(
+                avatarPublicId(userId),
+                ObjectUtils.asMap("resource_type", "image", "invalidate", true)
+        );
     }
 
     @Override

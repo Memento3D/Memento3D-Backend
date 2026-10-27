@@ -30,13 +30,16 @@ public class MockAiReconstructionProvider implements ReconstructionProvider {
 
     @Override
     public AiJobResponse submit(AiSubmitJobRequest request) {
-        log.info("Submitting reconstruction job via MOCK_AI provider for scan: {}", request.getScanId());
+        log.info("Submitting reconstruction job via MOCK_AI provider for job: {}", request.jobId());
         return new AiJobResponse(
-                request.getJobId(),
+                request.jobId(),
+                request.attemptId(),
                 "running",
                 "meshing",
-                "Mock AI job accepted and in progress",
                 10,
+                null,
+                null,
+                Instant.now(),
                 Instant.now(),
                 null
         );
@@ -46,11 +49,14 @@ public class MockAiReconstructionProvider implements ReconstructionProvider {
     public AiJobResponse getStatus(UUID jobId, String externalJobId) {
         return new AiJobResponse(
                 jobId,
+                null,
                 "done",
                 "texturing",
-                "Mock AI reconstruction completed successfully",
                 100,
+                null,
+                null,
                 Instant.now().minusSeconds(30),
+                Instant.now().minusSeconds(20),
                 Instant.now()
         );
     }

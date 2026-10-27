@@ -34,7 +34,7 @@ public class HttpAiReconstructionProvider implements ReconstructionProvider {
 
     @Override
     public AiJobResponse submit(AiSubmitJobRequest request) {
-        log.info("Submitting reconstruction job via HTTP_AI provider for scan: {}", request.getScanId());
+        log.info("Submitting reconstruction job via HTTP_AI provider for job: {}", request.jobId());
         return aiGenerationClient.submitJob(request);
     }
 
