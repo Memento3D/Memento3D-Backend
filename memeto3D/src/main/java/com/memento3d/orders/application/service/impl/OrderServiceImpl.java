@@ -45,6 +45,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -610,6 +611,114 @@ public class OrderServiceImpl implements OrderService {
         }
         counts.put("ALL", total);
         return counts;
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse reviewFeasibility(UUID orderId, com.memento3d.orders.api.request.OrderFeasibilityReviewRequest request, UUID managerId, Role role) {
+        boolean isStaff = (role == Role.ROLE_ADMIN || role == Role.ROLE_MANAGER || role == Role.ROLE_OPERATOR);
+        if (!isStaff) {
+            throw new OrderAccessDeniedException("Chỉ Quản lý hoặc Kỹ thuật viên xưởng mới có quyền kiểm tra khả năng sản xuất");
+        }
+
+        Order order = getOrderById(orderId);
+
+        String decision = request.getEffectiveDecision() != null ? request.getEffectiveDecision().trim().toUpperCase() : "FEASIBLE";
+        BigDecimal finalPrice = request.getEffectiveFinalPrice();
+
+        // Business rule: Do not modify quotes on already paid orders
+        if ((order.getPaymentStatus() == PaymentStatus.PAID || order.getPaymentStatus() == PaymentStatus.SUCCESS)
+                && finalPrice != null
+                && finalPrice.compareTo(order.getTotalPrice()) != 0) {
+            throw new com.memento3d.shared.exception.BusinessException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "PAID_ORDER_PRICE_IMMUTABLE",
+                    "Không thể chỉnh sửa báo giá của đơn hàng đã hoàn tất thanh toán");
+        }
+
+        order.setReviewedBy(managerId);
+        order.setReviewedAt(Instant.now());
+        order.setFeasibilityNotes(request.getNotes());
+
+        if (request.getEstimatedDays() != null) {
+            order.setEstimatedProductionDays(request.getEstimatedDays());
+        }
+
+        if (request.getRevisionGlbUrl() != null && !request.getRevisionGlbUrl().isBlank()) {
+            order.setRevisionGlbUrl(request.getRevisionGlbUrl().trim());
+        }
+
+        if ("FEASIBLE".equals(decision)) {
+            order.setFeasibilityStatus("FEASIBLE");
+            if (finalPrice != null && finalPrice.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal discount = order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO;
+                BigDecimal shipping = order.getShippingFee() != null ? order.getShippingFee() : BigDecimal.ZERO;
+                order.setSubtotal(finalPrice);
+                order.setTotalPrice(finalPrice.subtract(discount).add(shipping));
+            }
+            log.info("Order ID={} approved as FEASIBLE by manager ID={}", orderId, managerId);
+        } else if ("REVISION_REQUESTED".equals(decision)) {
+            order.setFeasibilityStatus("REVISION_REQUESTED");
+            log.info("Order ID={} marked as REVISION_REQUESTED by manager ID={}", orderId, managerId);
+        } else if ("REJECTED".equals(decision)) {
+            order.setFeasibilityStatus("REJECTED");
+            order.setStatus(OrderStatus.CANCELLED);
+            log.info("Order ID={} marked as REJECTED (CANCELLED) by manager ID={}", orderId, managerId);
+        } else {
+            throw new IllegalArgumentException("Quyết định kiểm tra không hợp lệ: " + decision);
+        }
+
+        Order saved = orderRepository.save(order);
+
+        // Outbox notification to customer
+        outboxPublisher.publish(
+                "ORDER",
+                saved.getId().toString(),
+                "ORDER_FEASIBILITY_REVIEWED",
+                java.util.Map.of(
+                        "orderId", saved.getId(),
+                        "userId", saved.getUserId(),
+                        "decision", decision,
+                        "notes", order.getFeasibilityNotes() != null ? order.getFeasibilityNotes() : "",
+                        "totalPrice", saved.getTotalPrice()
+                )
+        );
+
+        return OrderResponse.fromEntity(saved, true);
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse acceptWorkshopQuotation(UUID orderId, UUID customerId) {
+        Order order = getOrderById(orderId);
+        if (!order.getUserId().equals(customerId)) {
+            throw new OrderAccessDeniedException("Bạn không có quyền thao tác trên đơn hàng của người dùng khác");
+        }
+
+        if (!"FEASIBLE".equalsIgnoreCase(order.getFeasibilityStatus()) && !"REVISION_REQUESTED".equalsIgnoreCase(order.getFeasibilityStatus())) {
+            throw new com.memento3d.shared.exception.BusinessException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "ORDER_NOT_AWAITING_APPROVAL",
+                    "Đơn hàng hiện không ở trạng thái chờ khách hàng duyệt báo giá hoặc mẫu chỉnh sửa");
+        }
+
+        order.setCustomerAcceptedAt(Instant.now());
+        order.setFeasibilityStatus("ACCEPTED");
+        Order saved = orderRepository.save(order);
+        log.info("Customer ID={} accepted workshop quotation/revision for order ID={}", customerId, orderId);
+
+        outboxPublisher.publish(
+                "ORDER",
+                saved.getId().toString(),
+                "CUSTOMER_ACCEPTED_QUOTATION",
+                java.util.Map.of(
+                        "orderId", saved.getId(),
+                        "userId", saved.getUserId(),
+                        "totalPrice", saved.getTotalPrice()
+                )
+        );
+
+        return OrderResponse.fromEntity(saved, false);
     }
 
     private String generateOrderCode() {

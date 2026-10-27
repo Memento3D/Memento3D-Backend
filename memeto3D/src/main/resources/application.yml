@@ -216,4 +216,9 @@ springdoc:
     display-request-duration: true
     doc-expansion: list
 
+app:
+  ai:
+    default-provider: ${APP_AI_DEFAULT_PROVIDER:HTTP_AI}
+
+
 

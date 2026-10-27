@@ -1,217 +1,226 @@
-# Memento3D - Backend Service
+# Memento3D — Backend Service
 
-![Java](https://img.shields.io/badge/Java-17-orange.svg)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4%2F4.1-brightgreen.svg)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%2B-blue.svg)
-![Redis](https://img.shields.io/badge/Redis-7.0-red.svg)
-![Docker](https://img.shields.io/badge/Docker-Enabled-blue.svg)
-
-## 📌 Tổng Quan (Overview)
-
-**Memento3D Backend** (3DForge Backend) là dịch vụ máy chủ trung tâm xử lý dữ liệu cho hệ sinh thái **Memento3D** – nền tảng tạo mô hình 3D từ hình ảnh/video photogrammetry. Dịch vụ được xây dựng trên nền tảng **Java 17** và **Spring Boot**, kết hợp với **PostgreSQL**, **Redis**, và **Cloudinary** để cung cấp các API hiệu năng cao, bảo mật và mở rộng.
-
----
-
-## 🚀 Các Tính Năng Chính (Key Features)
-
-### 1. 🔐 Authenticate & Multi-Role RBAC (7 Actors)
-- **JWT Security**: Xác thực token không lưu vết (stateless JWT access token) cùng với cơ chế xoay vòng và thu hồi refresh token.
-- **Token Blacklist**: Lưu danh sách đen JWT đã thu hồi/đăng xuất trong Redis và database.
-- **Phân quyền người dùng (RBAC 7 Roles)**: Quản lý và phân quyền chặt chẽ cho toàn bộ 7 nhóm tác nhân:
-  - `ROLE_CUSTOMER`: Khách hàng mua sắm, đặt in 3D, quản lý phiên scan.
-  - `ROLE_ADMIN`: Quản trị viên tối cao hệ thống.
-  - `ROLE_MANAGER`: Quản lý xưởng in, điều phối sản xuất và vật tư.
-  - `ROLE_WAREHOUSE`: Thủ kho, quản lý nhập/xuất/tồn kho.
-  - `ROLE_OPERATOR`: Kỹ thuật viên vận hành máy in 3D.
-  - `ROLE_PROVIDER`: Nhà cung ứng vật tư filament/resin.
-- **Quản lý phiên & Xác thực an toàn**: Người dùng vãng lai tự đăng ký tài khoản khách hàng qua API `/api/v1/auth/register`. Tài khoản quản trị và nhân viên nội bộ được phân quyền tập trung qua hệ thống quản trị hoặc cấu hình an toàn, hỗ trợ đặt lại mật khẩu bảo mật qua email SMTP (NIST SP 800-63B).
-
-### 2. 🧱 Quản Lý Vật Liệu & Kho Bãi (Materials & Warehouses)
-- **Material Catalog (F01)**: Quản lý danh mục vật liệu in (PLA, ABS, PETG, Resin...), thông số nhiệt độ đầu đùn, bàn in, mật độ và giá vốn theo gram ($VND/g$).
-- **Warehouse Management (F02)**: Quản lý cơ sở kho vật lý, địa chỉ, trạng thái hoạt động với cơ chế bảo vệ (Deactivate Guard - chặn xóa/vô hiệu hóa khi còn tồn kho hoặc đang giữ hàng cho lệnh in).
-- **Inventory Ledger (F03 - F08)**: Quản lý biến động xuất/nhập kho nguyên tử, tính toán tồn khả dụng và khóa giữ nguyên liệu cho lệnh in.
-
-### 3. 📸 Scan Session & Upload Management
-- **Quản lý phiên Scan**: Tạo, cập nhật, phân trang và truy vấn danh sách scan của người dùng.
-- **Tải lên từng phần (Chunked Multipart Upload)**: Hỗ trợ Resume/Retry cho các file dung lượng lớn thông qua `/api/v1/uploads`.
-- **Cloud Storage Integration**: Tích hợp với Cloudinary API cho việc lưu trữ và quản lý tài nguyên phương tiện.
-
-### 4. 🔬 Engine Kiểm Tra Chất Lượng Ảnh (Quality Check Engine)
-- **Phân tích kỹ thuật chi tiết**: Đánh giá độ sắc nét (sharpness/blur), độ sáng/phơi sáng (brightness/exposure), số lượng đặc trưng (feature count), độ chồng lấp (overlap ratio).
-- **Phát hiện ảnh trùng lặp & nhiễu**: Nhận diện ảnh trùng lặp tuyệt đối/tương đối (hash MD5/perceptual) và phân tích nhiễu (SNR score).
-- **Quality Runs**: Lưu vết và cung cấp API truy vấn kết quả kiểm định kỹ thuật chi tiết theo từng ảnh.
-
-### 5. ⚙️ Tiến Trình Tái Tạo 3D (3D Reconstruction Pipeline)
-- **Hàng chờ và Trạng thái**: Theo dõi trạng thái từng giai đoạn (`queued`, `extracting`, `detecting`, `matching`, `sfm`, `mvs`, `meshing`, `texturing`, `repairing`, `exporting`, `done`).
-- **Đánh giá khả năng in 3D (Printability Check)**: Kiểm tra lưới 3D, watertight status, lỗ hổng và cạnh phi manifold.
-
-### 6. ⭐ Đánh Giá Mô Hình & Thương Mại (Model Rating & Commercial)
-- **Model Quality Feedback**: Cho phép người dùng gửi đánh giá (1 - 5 sao) và bình luận cho mô hình 3D đã khởi tạo.
-- **Product Catalog & Categories**: Cung cấp danh mục sản phẩm in 3D và danh mục ngành hàng cho khách mua sắm.
-
-### 7. 🔄 Transactional Outbox & Event Streaming
-- **Outbox Pattern**: Ghi nhận các sự kiện hệ thống (`scan.events`, `qc.events`, `reconstruction.events`, `order.events`) đảm bảo tính toàn vẹn dữ liệu.
-- **Dead Letter Queue (DLQ)**: Quản lý và retry các sự kiện xử lý thất bại.
+[![Java 21](https://img.shields.io/badge/Java-21%20LTS-orange.svg)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%2B-blue.svg)](https://postgresql.org/)
+[![Flyway](https://img.shields.io/badge/Flyway-V1--V15-red.svg)](https://flywaydb.org/)
+[![Redis](https://img.shields.io/badge/Redis-7.x-red.svg)](https://redis.io/)
+[![Kafka](https://img.shields.io/badge/Kafka-Event--Driven-black.svg)](https://kafka.apache.org/)
+[![VNPAY](https://img.shields.io/badge/VNPAY-Sandbox%20v2.1.0-blue.svg)](https://sandbox.vnpayment.vn/)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0%20%2F%20Swagger-green.svg)](http://localhost:8080/swagger-ui/index.html)
 
 ---
 
-## 🏗️ Cấu Trúc Dự Án (Project Structure)
+## 📌 1. Tổng Quan (Overview)
 
-```
+**Memento3D Backend** là máy chủ trung tâm xử lý dữ liệu và điều phối nghiệp vụ cho toàn bộ hệ sinh thái **Memento3D** – nền tảng tạo mô hình 3D từ hình ảnh/video photogrammetry, thương mại điện tử sản phẩm in 3D cá nhân hóa và quản lý xưởng in thông minh (WMS). 
+
+Dịch vụ được thiết kế theo mô hình **Domain-Driven Modular Monolith & Clean Architecture**, xây dựng trên nền tảng **Java 21 LTS** và **Spring Boot 4.1.x**, kết hợp với **PostgreSQL (Neon Cloud Serverless)**, **Redis 7**, **Apache Kafka**, và **Cloudinary**.
+
+---
+
+## 🚀 2. Các Phân Hệ & Tính Năng Cốt Lõi
+
+### 🔐 2.1. Xác Thực Bảo Mật & 7 Tác Nhân (RBAC 7 Roles)
+- **Stateless JWT Dual-Token:** Access token ngắn hạn (15-60 phút) mã hóa HMAC-SHA256, kết hợp Refresh Token lưu database có mã hóa.
+- **Refresh Token Rotation (Family Detection):** Tự động hủy toàn bộ phiên làm việc (Token Family) nếu phát hiện hành vi tái sử dụng Refresh Token đã thu hồi.
+- **Redis Token Blacklist:** Đưa token vào danh sách đen tức thì khi người dùng đăng xuất hoặc đổi mật khẩu.
+- **Hệ thống 7 Vai Trò (7 Actors):**
+  - `ROLE_USER` / `ROLE_CUSTOMER`: Khách hàng mua sắm, đặt in 3D, quản lý phiên scan.
+  - `ROLE_MANAGER`: Quản lý vận hành xưởng, phê duyệt đơn hàng, xác nhận tiền mặt, phân bổ kho.
+  - `ROLE_ADMIN`: Quản trị viên cấp cao nhất, toàn quyền phân quyền và giám sát hệ thống.
+  - `ROLE_WAREHOUSE`: Thủ kho WMS, quản lý nhập/xuất kho vật liệu theo số lô.
+  - `ROLE_OPERATOR`: Kỹ thuật viên xưởng in, kiểm duyệt QC Gate, điều phối máy in 3D.
+  - `ROLE_PROVIDER`: Đối tác sản xuất gia công ngoài B2B.
+  - `ROLE_DRIVER`: Tài xế giao vận, quản lý trạng thái trực tuyến và xác nhận giao hàng.
+- **Google OAuth2 & OIDC:** Đăng nhập một chạm bằng Google Account, tự động liên kết tài khoản an toàn qua cookie bảo mật ngắn hạn.
+
+### 💳 2.2. Cổng Thanh Toán Đa Kênh (Payment Subsystem)
+- **VNPAY Sandbox (v2.1.0):**
+  - Tạo URL thanh toán an toàn với mã băm chữ ký kiểm tra **HMAC-SHA512**.
+  - Hỗ trợ thanh toán thẻ ATM nội địa (NCB...), Internet Banking và quét mã VNPAY-QR.
+  - Webhook IPN xử lý bất đồng bộ, đảm bảo tính Idempotent và cập nhật trạng thái đơn hàng tức thì.
+- **ZaloPay Sandbox:**
+  - Tích hợp ZaloPay API v2 với chữ ký bảo mật HMAC-SHA256 (`key1` tạo đơn, `key2` xác minh callback).
+- **Tiền mặt (CASH):**
+  - Hỗ trợ đơn hàng COD hoặc nhận hàng thanh toán tại xưởng, có luồng phê duyệt từ Quản lý / Tài xế.
+
+### 📧 2.3. Động Cơ Thông Báo Tự Động (Notifications Engine)
+- **Email Thông Báo Tự Động (Spring Mail + Thymeleaf):**
+  - Gửi email định dạng HTML chuyên nghiệp khi đơn hàng được xác nhận (`ORDER_CONFIRMED`), hoàn tất sản xuất (`ORDER_COMPLETED`), hoặc bắt đầu giao hàng (`ORDER_SHIPPED`).
+  - Gửi email đặt lại mật khẩu bảo mật (Password Reset) theo chuẩn NIST SP 800-63B.
+- **Server-Sent Events (SSE):**
+  - Kênh streaming sự kiện thời gian thực tới trình duyệt web: đẩy thông báo tức thì khi có biến động đơn hàng hoặc kiểm định hoàn tất.
+
+### 🧱 2.4. Quản Lý Vật Liệu & Kho Bãi WMS (F01 - F08)
+- **Material Catalog (F01):** Khai báo chủng loại vật liệu (`PLA`, `PETG`, `ABS`, `RESIN`, `TPU`), nhiệt độ đùn, bàn nhiệt, mật độ $g/cm^3$ và giá vốn theo gram ($VND/g$).
+- **Warehouse Management (F02):** Quản lý cơ sở kho vật lý với cơ chế **Deactivate Guard** (chặn vô hiệu hóa kho khi còn tồn kho hoặc đang giữ chỗ cho lệnh in).
+- **Double-Entry Inventory Ledger (F03 - F08):**
+  - Quản lý nhập kho (Goods Receipts) và xuất kho (Stock Issues) theo số lô/cuộn sợi.
+  - Công thức tính tồn khả dụng tức thì: $\text{Available} = \text{On-Hand} - \text{Reserved}$.
+  - Cơ chế khóa giữ nguyên liệu (`RESERVED`) khi đơn hàng được xác nhận và quyết toán hao hụt thực tế sau khi in xong.
+
+### 🚗 2.5. Quản Lý Đội Ngũ Giao Nhận (Driver Management)
+- **Trạng thái tài xế thời gian thực:** Cập nhật trạng thái (`ACTIVE`, `INACTIVE`, `BUSY`, `OFFLINE`).
+- **Phân công vận đơn:** Gán kiện hàng thành phẩm cho tài xế, theo dõi lộ trình và xác nhận ký nhận (Proof of Delivery).
+
+### ⚡ 2.6. Tối Ưu Hiệu Năng & Outbox Pattern
+- **SafePageRequest:** Tự động chuẩn hóa tham số phân trang (`page`, `size`), giới hạn `size <= 100` để ngăn ngừa tấn công DoS và tràn RAM.
+- **Triệt tiêu N+1 Query:** Tối ưu hóa truy vấn dữ liệu quan hệ với Hibernate `JOIN FETCH` và `@EntityGraph`.
+- **Redis Caching:** Cache danh mục sản phẩm (`product_categories`), cấu hình hệ thống và danh sách đen JWT.
+- **Transactional Outbox & Apache Kafka:** Ghi nhận sự kiện vào bảng `outbox_events` trong cùng database transaction, sau đó publish tới Kafka để đảm bảo tính nhất quán cuối cùng (Eventual Consistency).
+
+---
+
+## 🏗️ 3. Cấu Trúc Mã Nguồn (Package-by-Domain Architecture)
+
+```text
 Memento3D-Backend/
-├── README.md                           # Documentation chính của Backend
-├── docker-compose.yml                  # File Docker Compose môi trường dev/staging
-└── memeto3D/                           # Source code chính ứng dụng Spring Boot
-    ├── db/
-    │   └── init_schema.sql             # SQL script khởi tạo PostgreSQL Database Schema
-    ├── doc/
-    │   └── BE_GUIDELINES.md            # Quy tắc lập trình & tiêu chuẩn Code / Test / DB
+├── README.md                                   # Tài liệu chính của Backend
+├── docker-compose.yml                          # Môi trường chạy PostgreSQL & Redis
+└── memeto3D/                                   # Mã nguồn chính Spring Boot
+    ├── pom.xml                                 # Maven dependencies & Plugins
+    ├── .env.example                            # Khai báo mẫu biến môi trường
     ├── src/
     │   ├── main/
-    │   │   ├── java/com/memeto/team/memeto3d/
-    │   │   │   ├── config/             # Cấu hình Security, OpenAPI, Cloudinary, Redis
-    │   │   │   ├── controller/         # REST Controllers (Auth, Scan, QualityRun, ModelRating, Upload)
-    │   │   │   ├── dto/                # Data Transfer Objects (Requests & Responses)
-    │   │   │   ├── entity/             # JPA Entities
-    │   │   │   ├── exception/          # Custom Exception & Global Exception Handler
-    │   │   │   ├── repository/         # Spring Data JPA Repositories
-    │   │   │   ├── security/           # JWT Filter & UserDetails Implementation
-    │   │   │   └── service/            # Business Logic Services & Interfaces
-    │   │   └── resources/              # application.properties / application.yml
-    │   └── test/                       # Unit tests & Integration tests
-    ├── Dockerfile                      # Multi-stage build Dockerfile
-    ├── docker-compose.yml              # Docker Compose cho app + postgres + redis
-    ├── pom.xml                         # Maven dependencies & JaCoCo coverage plugin
-    └── .env.example                    # Mẫu khai báo biến môi trường
+    │   │   ├── java/com/memento3d/             # Kiến trúc phân tách theo Bounded Context
+    │   │   │   ├── identity/                   # Xác thực, User, JWT, OAuth2, RBAC
+    │   │   │   ├── scans/                      # Quản lý phiên scan & Upload multipart
+    │   │   │   ├── quality/                    # Kiểm định chất lượng ảnh (QC Gate)
+    │   │   │   ├── reconstruction/             # Điều phối lệnh tái tạo 3D (SfM / MVS)
+    │   │   │   ├── models/                     # Quản lý file 3D (GLB/STL/OBJ) & đánh giá
+    │   │   │   ├── orders/                     # Đơn hàng in 3D, snapshot sản phẩm
+    │   │   │   ├── payment/                    # VNPAY Sandbox, ZaloPay, Webhooks
+    │   │   │   ├── warehouse/                  # Vật liệu F01, Cơ sở kho F02, Tồn kho F03-F08
+    │   │   │   ├── driver/                     # Trạng thái tài xế & điều phối giao nhận
+    │   │   │   ├── notification/               # Email Spring Mail, SSE realtime streaming
+    │   │   │   ├── operations/                 # Giám sát máy in 3D & Agent IoT
+    │   │   │   └── shared/                     # ApiResponse, GlobalExceptionHandler, Outbox, Redis
+    │   │   └── resources/
+    │   │       ├── application.yml             # Cấu hình Spring Boot trung tâm
+    │   │       ├── db/migration/               # Flyway Migrations (V1 -> V15)
+    │   │       └── templates/email/            # Giao diện Email HTML (Thymeleaf templates)
+    │   └── test/                               # Bộ kiểm thử Unit & Integration Tests
 ```
 
 ---
 
-## 🛠️ Biến Môi Trường (Environment Variables)
+## 🛠️ 4. Cấu Hình Biến Môi Trường (Environment Variables)
 
-Sao chép file `.env.example` thành `.env` trong thư mục `memeto3D/` và điền cấu hình phù hợp:
+Tạo file `.env` tại thư mục `Memento3D-Backend/memeto3D/` dựa trên mẫu `.env.example`:
 
 ```env
 # Server
 PORT=8080
 
-# Database (PostgreSQL / NeonDB)
-DB_HOST=localhost
-DB_PORT=5431
+# Database (PostgreSQL / Neon Cloud Serverless)
+DB_HOST=ep-cool-butterfly-123456.us-east-2.aws.neon.tech
+DB_PORT=5432
 DB_NAME=memeto3d
-DB_USERNAME=postgres
-DB_PASSWORD=postgres
+DB_USERNAME=your_db_username
+DB_PASSWORD=your_db_password
 
-# Cloudinary Storage
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
-
-# JWT Configuration
-JWT_SECRET=your-super-secret-jwt-key-minimum-256-bits
-JWT_EXPIRATION=3600000
-
-# JPA/Hibernate
-DDL_AUTO=update
-
-# CORS
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
-
-# Redis Cache & Token Blacklist
+# Redis In-Memory Cache
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_TIMEOUT=2000ms
+
+# JWT Security
+JWT_SECRET=your-256-bit-secret-key-at-least-32-characters-long
+JWT_EXPIRATION=3600000
+
+# Cloudinary Storage
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+
+# VNPAY Sandbox (v2.1.0)
+VNPAY_TMN_CODE=YOUR_VNPAY_TMN_CODE
+VNPAY_HASH_SECRET=YOUR_VNPAY_HASH_SECRET
+VNPAY_PAYMENT_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+VNPAY_RETURN_URL=http://localhost:5173/payment/vnpay/return
+VNPAY_IPN_URL=http://localhost:8080/api/v1/payments/vnpay/ipn
+
+# ZaloPay Sandbox
+ZALOPAY_APP_ID=2554
+ZALOPAY_KEY1=your_key_1
+ZALOPAY_KEY2=your_key_2
+ZALOPAY_ENDPOINT=https://sb-openapi.zalopay.vn/v2/create
+
+# Spring Mail (SMTP Email Notifications)
+SPRING_MAIL_HOST=smtp.gmail.com
+SPRING_MAIL_PORT=587
+SPRING_MAIL_USERNAME=your_email@gmail.com
+SPRING_MAIL_PASSWORD=your_app_password
 ```
 
 ---
 
-## 🚦 Hướng Dẫn Chạy Dự Án (Getting Started)
+## 🚦 5. Hướng Dẫn Khởi Chạy Dự Án
 
 ### Yêu cầu hệ thống:
-- **Java**: JDK 17 trở lên
-- **Maven**: 3.8+ (hoặc dùng `mvnw` / `mvnw.cmd` có sẵn)
-- **Docker & Docker Compose** (nếu chạy container)
-- **PostgreSQL**: Version 16+
-- **Redis**: Version 7+
+- **Java**: OpenJDK 21 LTS (hoặc 17 LTS)
+- **Maven**: 3.9+ (hoặc dùng `.\mvnw` đi kèm)
+- **PostgreSQL**: 16+ (hoặc Neon Serverless)
+- **Redis**: 7.x
 
-### 1. Khởi chạy bằng Maven (Local Development)
-
-1. Khởi động cơ sở dữ liệu PostgreSQL và Redis (hoặc dùng docker-compose dịch vụ phụ trợ):
-   ```bash
-   docker compose up -d postgres redis
-   ```
-2. Thực thi script khởi tạo CSDL: `memeto3D/db/init_schema.sql`
-3. Chạy ứng dụng Spring Boot:
-   ```bash
-   cd memeto3D
-   ./mvnw spring-boot:run
-   ```
-   *(Hoặc trên Windows PowerShell: `.\mvnw.cmd spring-boot:run`)*
-
-### 2. Khởi chạy bằng Docker Compose (Full Container Stack)
-
-```bash
-cd memeto3D
-docker compose up -d --build
-```
-Dịch vụ backend sẽ lắng nghe tại cổng `http://localhost:8080`.
-
----
-
-## 🧪 Kiểm Thử & Đo Độ Phủ Code (Testing & JaCoCo Coverage)
-
-Dự án áp dụng quy định kiểm thử nghiêm ngặt theo [BE_GUIDELINES.md](file:///c:/Users/KIETLT/Documents/GitHub/Memento3d/Memento3D-Backend/memeto3D/doc/BE_GUIDELINES.md):
-- **C0 Coverage (Line Coverage)**: Mục tiêu 100%
-- **C1 Coverage (Branch Coverage)**: Minimum ≥ 85%
-
-### Chạy Unit Test và tạo báo cáo Coverage:
+### Khởi chạy môi trường Local:
 ```powershell
-# Trên Windows PowerShell
-cd memeto3D
-.\mvnw.cmd test
+cd Memento3D-Backend\memeto3D
+
+# 1. Compile mã nguồn và bỏ qua test
+.\mvnw clean compile -DskipTests
+
+# 2. Khởi chạy máy chủ Spring Boot
+.\mvnw spring-boot:run
 ```
 
-### Xem Báo Cáo JaCoCo:
-Mở file `target/site/jacoco/index.html` trên trình duyệt để kiểm tra chi tiết độ phủ theo từng package/class.
+Sau khi khởi chạy thành công:
+- **REST API Base URL:** `http://localhost:8080/api/v1`
+- **Swagger Interactive API:** `http://localhost:8080/swagger-ui/index.html`
+- **OpenAPI Schema (JSON):** `http://localhost:8080/v3/api-docs`
 
 ---
 
-## 📖 Tài Liệu API (API Documentation)
+## 📡 6. Bảng Tra Cứu API Endpoints Tiêu Biểu
 
-Ứng dụng tích hợp **Springdoc OpenAPI (Swagger UI)**. Khi ứng dụng đang chạy, bạn có thể truy cập tài liệu tương tác tại:
-
-- **Swagger UI**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
-- **OpenAPI Spec (JSON)**: `http://localhost:8080/v3/api-docs`
-
-### Một số Endpoint tiêu biểu:
-
-| Nhóm Endpoint | Đường dẫn (Path) | Phương thức | Mô tả |
-|---|---|---|---|
-| **Auth** | `/api/v1/auth/register` | `POST` | Đăng ký tài khoản người dùng mới |
-| **Auth** | `/api/v1/auth/login` | `POST` | Đăng nhập và nhận JWT Token (Customer & All Portals) |
-| **Materials** | `/api/v1/materials` | `GET`, `POST` | Quản lý danh mục vật liệu in 3D (F01) |
-| **Warehouses** | `/api/v1/warehouses` | `GET`, `POST` | Quản lý cơ sở kho & bảo vệ hủy kho (F02) |
-| **Categories** | `/api/v1/product-categories` | `GET` | Danh mục ngành hàng sản phẩm 3D thực tế |
-| **Products** | `/api/v1/products` | `GET`, `POST` | Danh mục sản phẩm in 3D thương phẩm |
-| **Scans** | `/api/v1/scans` | `GET` | Lấy danh sách phiên scan (có phân trang & lọc) |
-| **Scans** | `/api/v1/scans` | `POST` | Khởi tạo phiên scan 3D mới |
-| **Scans** | `/api/v1/scans/{id}/upload-images` | `POST` | Upload ảnh cho phiên scan |
-| **Quality Runs** | `/api/v1/quality-runs/{run_id}/images/{image_id}` | `GET` | Xem báo cáo kiểm định kỹ thuật của ảnh |
-| **Uploads** | `/api/v1/uploads/{id}/chunks/{index}` | `POST` | Tải lên từng chunk của file dung lượng lớn |
-| **Model Ratings** | `/api/v1/scans/{scan_id}/ratings` | `POST` | Gửi/Cập nhật đánh giá (1-5 sao) mô hình 3D |
+| Nhóm Phân Hệ | Phương Thức | Đường Dẫn Endpoint | Phân Quyền Yêu Cầu | Mục Đích Nghiệp Vụ |
+|---|:---:|---|---|---|
+| **Identity** | `POST` | `/api/v1/auth/register` | Public | Đăng ký tài khoản khách hàng mới |
+| **Identity** | `POST` | `/api/v1/auth/login` | Public | Đăng nhập nhận JWT Token đa cổng |
+| **Identity** | `POST` | `/api/v1/auth/refresh` | Public | Cấp mới Access Token qua Rotation |
+| **Identity** | `POST` | `/api/v1/auth/logout` | Authenticated | Đăng xuất & thêm token vào Redis Blacklist |
+| **Materials** | `GET`, `POST` | `/api/v1/materials` | `MANAGER`, `OPERATOR`, `ADMIN` | Quản lý danh mục vật liệu in 3D (F01) |
+| **Warehouses** | `GET`, `POST` | `/api/v1/warehouses` | `MANAGER`, `WAREHOUSE`, `ADMIN` | Quản lý cơ sở kho & Deactivate Guard (F02) |
+| **Inventory** | `POST` | `/api/v1/inventory/receipts` | `WAREHOUSE`, `MANAGER` | Nhập kho nguyên vật liệu theo số lô (F04) |
+| **Inventory** | `POST` | `/api/v1/inventory/issues` | `WAREHOUSE`, `MANAGER` | Xuất kho sản xuất / hao hụt (F05) |
+| **Products** | `GET`, `POST` | `/api/v1/products` | Public (`GET`), `MANAGER` (`POST`) | Danh mục sản phẩm in 3D thương phẩm |
+| **Categories** | `GET` | `/api/v1/product-categories` | Public (Redis Cached) | 10 ngành hàng sản phẩm in 3D |
+| **Orders** | `POST` | `/api/v1/orders` | `ROLE_USER` / Customer | Khởi tạo đơn hàng in 3D cá nhân hóa |
+| **Orders** | `GET`, `PUT` | `/api/v1/orders/{id}` | Authenticated | Truy vấn và cập nhật trạng thái đơn hàng |
+| **VNPAY** | `POST` | `/api/v1/payments/vnpay/create` | `ROLE_USER` / Customer | Sinh URL thanh toán VNPAY Sandbox |
+| **VNPAY** | `GET` | `/api/v1/payments/vnpay/ipn` | VNPAY Gateway | Tiếp nhận Webhook IPN đối soát giao dịch |
+| **Driver** | `GET`, `PUT` | `/api/v1/driver/status` | `ROLE_DRIVER` | Quản lý trạng thái trực tuyến của tài xế |
+| **Driver** | `GET` | `/api/v1/driver/deliveries` | `ROLE_DRIVER` | Danh sách kiện hàng đang phụ trách giao |
+| **Notifications** | `GET` | `/api/v1/notifications/stream` | Authenticated | Luồng Server-Sent Events (SSE) thời gian thực |
+| **Scans** | `POST` | `/api/v1/scans` | `ROLE_USER` / Customer | Khởi tạo phiên scan photogrammetry mới |
+| **Uploads** | `POST` | `/api/v1/uploads/{id}/chunks/{idx}` | `ROLE_USER` / Customer | Tải lên từng chunk file ảnh/video nặng |
 
 ---
 
-## 📋 Tiêu Chuẩn Phát Triển (Development Standards)
+## 🧪 7. Kiểm Thử & Đo Độ Phủ Code (Testing & JaCoCo)
 
-Tất cả thành viên trong nhóm phát triển Backend phải đọc và làm theo [BE_GUIDELINES.md](file:///c:/Users/KIETLT/Documents/GitHub/Memento3d/Memento3D-Backend/memeto3D/doc/BE_GUIDELINES.md) trước khi gửi PR:
-1. Tuân thủ mô hình kiến trúc layer: `Controller → Service → Repository`.
-2. Không viết SQL nối chuỗi (phải dùng Parameterized Query / ORM Binding).
-3. Tuyệt đối không để xảy ra lỗi N+1 Query (dùng `JOIN FETCH`, `@EntityGraph` hoặc Batching).
-4. Phân trang tất cả các API trả về danh sách, giới hạn `limit` tối đa.
- 
+```powershell
+cd Memento3D-Backend\memeto3D
+
+# Chạy toàn bộ Unit & Integration Tests
+.\mvnw test
+```
+
+Mở báo cáo độ phủ mã nguồn: `target/site/jacoco/index.html` trên trình duyệt để kiểm tra tỷ lệ Line & Branch coverage.
+
 ---
 
-## 👥 Đội Ngũ Phát Triển & Bản Quyền
-- **Technical Lead & Architect:** Lê Tuấn Kiệt ([KietLT33](https://github.com/KietLT33))
-- Dự án được bảo hộ quyền sở hữu trí tuệ bởi **Memento3D Engineering Team**.
+## 👥 8. Đội Ngũ Phát Triển & Bản Quyền
+- **Technical Lead & Backend Architect:** Lê Tuấn Kiệt ([KietLT33](https://github.com/KietLT33))
+- Dự án được bảo vệ bản quyền bởi **Memento3D Engineering Team**.

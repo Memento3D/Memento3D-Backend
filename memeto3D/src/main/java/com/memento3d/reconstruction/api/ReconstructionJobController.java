@@ -24,6 +24,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import com.memento3d.reconstruction.api.response.ReconstructionCapabilitiesResponse;
+import com.memento3d.reconstruction.domain.port.ReconstructionProvider;
+import com.memento3d.reconstruction.domain.port.ReconstructionProviderRegistry;
+
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
@@ -39,6 +43,21 @@ import java.util.UUID;
 public class ReconstructionJobController {
 
     private final ReconstructionJobService reconstructionJobService;
+    private final ReconstructionProviderRegistry providerRegistry;
+
+    @GetMapping("/api/v1/reconstruction/capabilities")
+    @Operation(summary = "Get AI reconstruction provider capabilities and photo guidelines")
+    public ResponseEntity<ReconstructionCapabilitiesResponse> getCapabilities() {
+        ReconstructionProvider provider = providerRegistry.getDefaultProvider();
+        return ResponseEntity.ok(ReconstructionCapabilitiesResponse.builder()
+                .provider(provider.getProviderCode())
+                .minImages(provider.getMinImages())
+                .maxImages(provider.getMaxImages())
+                .supportedFormats(List.of("image/jpeg", "image/png", "image/webp"))
+                .maxFileSizeMb(20)
+                .guidelines("Chụp góc ảnh rõ nét, bao quát 360 độ quanh chủ thể với ánh sáng tự nhiên đầy đủ. Tránh chụp vật thể trong suốt hoặc phản chiếu cao.")
+                .build());
+    }
 
     // -------------------------------------------------------------------------
     // POST /api/v1/scans/{scanId}/reconstruction-jobs (Submit Job)

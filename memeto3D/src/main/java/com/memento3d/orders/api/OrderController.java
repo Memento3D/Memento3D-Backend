@@ -190,4 +190,13 @@ public class OrderController {
         orderService.cancelOrder(orderId, userDetails.getId(), role);
         return ResponseEntity.ok(orderService.getOrderDetail(orderId, userDetails.getId(), role));
     }
+
+    @PostMapping("/{orderId}/accept-quote")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Customer accepts workshop quotation & model revision", description = "Validates ownership and unlocks order for payment")
+    public ResponseEntity<OrderResponse> acceptWorkshopQuotation(
+            @Parameter(description = "Order UUID") @PathVariable UUID orderId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(orderService.acceptWorkshopQuotation(orderId, userDetails.getId()));
+    }
 }
