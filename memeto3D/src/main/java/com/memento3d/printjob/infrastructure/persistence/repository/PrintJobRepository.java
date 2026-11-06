@@ -16,6 +16,7 @@ import java.util.UUID;
 
 @Repository
 public interface PrintJobRepository extends JpaRepository<PrintJob, UUID> {
+    java.util.Optional<PrintJob> findFirstByOrderItemIdAndStatusNotOrderByCreatedAtDesc(UUID orderItemId,PrintJobStatus status);
 
     @EntityGraph(attributePaths = {"printer", "material"})
     Optional<PrintJob> findByJobNumber(String jobNumber);

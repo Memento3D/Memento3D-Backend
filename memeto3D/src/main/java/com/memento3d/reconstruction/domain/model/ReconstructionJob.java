@@ -100,6 +100,14 @@ public class ReconstructionJob {
     @Column(name = "attempt_id")
     private UUID attemptId;
 
+    @Builder.Default
+    @Column(name="output_kind",nullable=false,length=40)
+    private String outputKind="assembled_preview";
+
+    @Builder.Default
+    @Column(name="customization_ready",nullable=false)
+    private boolean customizationReady=false;
+
     @Column(name = "worker_id", length = 100)
     private String workerId;
 

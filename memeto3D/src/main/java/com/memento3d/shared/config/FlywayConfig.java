@@ -1,22 +1,24 @@
 package com.memento3d.shared.config;
 
-import org.flywaydb.core.Flyway;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class FlywayConfig {
+    @Value("${app.database.flyway-repair-before-migrate:false}")
+    private boolean repairBeforeMigrate;
 
     /**
-     * Executes flyway.repair() before flyway.migrate() to automatically
+     * Only explicitly opted-in maintenance may repair before migrate; never automatically
      * purge any transient/failed migration state from flyway_schema_history
      * before applying pending migrations.
      */
     @Bean
     public FlywayMigrationStrategy flywayMigrationStrategy() {
         return flyway -> {
-            flyway.repair();
+            if (repairBeforeMigrate) flyway.repair();
             flyway.migrate();
         };
     }

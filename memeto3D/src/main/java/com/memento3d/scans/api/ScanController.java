@@ -272,6 +272,7 @@ public class ScanController {
             description = "Appends a new image to an existing scan session. Validates ownership, " +
                     "scan status (blocked when processing/done), file format (jpg/jpeg/png), " +
                     "file size (≤ 20 MB), and storage quota. " +
+                    "Optional view_hint metadata may be front, left, right, or back. " +
                     "Sets needs_quality_check=true when a prior QC run exists so the QC engine " +
                     "re-checks only the new image on the next run.",
             security = @SecurityRequirement(name = "BearerAuth")
@@ -299,14 +300,18 @@ public class ScanController {
     public ResponseEntity<ScanImageUploadResponse> addImageToScan(
             @PathVariable("id") UUID id,
             @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "view_hint", required = false) String viewHint,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         CustomUserDetails currentUser = getAuthenticatedUserDetails(userDetails);
         log.info("Upload image '{}' to scan ID: {} by user: {} role: {}",
                 file != null ? file.getOriginalFilename() : "null",
                 id, currentUser.getId(), currentUser.getRole());
-        ScanImageUploadResponse response =
-                scanService.addImageToScan(id, file, currentUser.getId(), currentUser.getRole());
+        ScanImageUploadResponse response = viewHint == null
+                ? scanService.addImageToScan(
+                        id, file, currentUser.getId(), currentUser.getRole())
+                : scanService.addImageToScan(
+                        id, file, viewHint, currentUser.getId(), currentUser.getRole());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -484,7 +489,8 @@ public class ScanController {
     @PatchMapping("/{id}/images/{imageId}")
     @Operation(
             summary = "Update scan image metadata",
-            description = "Updates user-editable metadata of an image (sort_order, is_excluded, exclude_reason).",
+            description = "Updates user-editable metadata of an image (sort_order, view_hint, is_excluded, exclude_reason). " +
+                    "For Head API reconstruction, assign unique front, left, and right labels; back is optional.",
             security = @SecurityRequirement(name = "BearerAuth")
     )
     @ApiResponses({

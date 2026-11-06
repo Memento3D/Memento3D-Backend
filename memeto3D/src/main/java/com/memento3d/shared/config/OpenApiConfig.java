@@ -1,3 +1,4 @@
+
 package com.memento3d.shared.config;
 
 import io.swagger.v3.oas.models.Components;
@@ -8,7 +9,6 @@ import io.swagger.v3.oas.models.info.License;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -19,14 +19,13 @@ public class OpenApiConfig {
 
     private static final String SECURITY_SCHEME_NAME = "BearerAuth";
 
-    @Value("${server.port:8080}")
-    private String serverPort;
-
     @Bean
     public OpenAPI openAPI() {
-        Server localServer = new Server()
-                .url("http://localhost:" + serverPort)
-                .description("Local Development Server");
+
+        // Relative URL: automatically uses the current Swagger host.
+        Server currentServer = new Server()
+                .url("/")
+                .description("Current Server");
 
         Contact contact = new Contact()
                 .name("Memento3D Team")
@@ -38,7 +37,10 @@ public class OpenApiConfig {
 
         Info info = new Info()
                 .title("Memento3D REST API")
-                .description("API documentation for Memento3D Backend services with JWT authentication and Spring Security.")
+                .description(
+                        "API documentation for Memento3D Backend services "
+                                + "with JWT authentication and Spring Security."
+                )
                 .version("1.0.0")
                 .contact(contact)
                 .license(license);
@@ -48,12 +50,23 @@ public class OpenApiConfig {
                 .type(SecurityScheme.Type.HTTP)
                 .scheme("bearer")
                 .bearerFormat("JWT")
-                .description("Enter your JWT token to authorize protected API endpoints (without 'Bearer ' prefix).");
+                .description(
+                        "Enter your JWT token without the Bearer prefix."
+                );
 
         return new OpenAPI()
                 .info(info)
-                .servers(List.of(localServer))
-                .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
-                .components(new Components().addSecuritySchemes(SECURITY_SCHEME_NAME, securityScheme));
+                .servers(List.of(currentServer))
+                .addSecurityItem(
+                        new SecurityRequirement()
+                                .addList(SECURITY_SCHEME_NAME)
+                )
+                .components(
+                        new Components()
+                                .addSecuritySchemes(
+                                        SECURITY_SCHEME_NAME,
+                                        securityScheme
+                                )
+                );
     }
 }

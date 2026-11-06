@@ -24,12 +24,12 @@ public class HttpAiReconstructionProvider implements ReconstructionProvider {
 
     @Override
     public int getMinImages() {
-        return 1; // Or minimum required by single-image / multi-image AI model
+        return 3;
     }
 
     @Override
     public int getMaxImages() {
-        return 50;
+        return 4;
     }
 
     @Override

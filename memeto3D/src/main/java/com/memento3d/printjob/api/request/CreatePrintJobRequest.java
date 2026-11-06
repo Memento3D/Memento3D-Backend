@@ -1,5 +1,6 @@
 package com.memento3d.printjob.api.request;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
@@ -16,6 +17,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Schema(description = "Request to create a production Print Job")
+@JsonIgnoreProperties(value = {"isOutsource", "outsource", "partnerName"})
 public class CreatePrintJobRequest {
 
     @Schema(description = "Optional customer print order ID")
@@ -27,14 +29,7 @@ public class CreatePrintJobRequest {
     @Schema(description = "Approved model version ID")
     private UUID modelVersionId;
 
-    @Schema(description = "Flag whether job is outsourced")
-    @Builder.Default
-    private boolean isOutsource = false;
-
-    @Schema(description = "Outsource partner name")
-    private String partnerName;
-
-    @Schema(description = "Assigned printer ID (optional if outsource)")
+    @Schema(description = "Assigned printer ID")
     private UUID printerId;
 
     @NotNull(message = "Material ID is required")

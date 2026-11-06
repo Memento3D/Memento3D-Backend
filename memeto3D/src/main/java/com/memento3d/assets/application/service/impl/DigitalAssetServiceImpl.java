@@ -29,6 +29,7 @@ public class DigitalAssetServiceImpl implements DigitalAssetService {
 
     private final DigitalAssetRepository digitalAssetRepository;
     private final EntitlementService entitlementService;
+    private final com.memento3d.models.application.service.ModelDeliveryService modelDelivery;
 
     @Override
     @Transactional(readOnly = true)
@@ -77,9 +78,13 @@ public class DigitalAssetServiceImpl implements DigitalAssetService {
         asset.setDownloadCount(asset.getDownloadCount() + 1);
         digitalAssetRepository.save(asset);
 
-        Instant expiresAt = Instant.now().plus(60, ChronoUnit.MINUTES);
+        Instant expiresAt = "b2".equalsIgnoreCase(asset.getStorageProvider())
+                ? Instant.now().plusSeconds(modelDelivery.urlTtlSeconds())
+                : Instant.now().plus(60, ChronoUnit.MINUTES);
         // Signed or delivery URL with temporal token
-        String signedUrl = asset.getDeliveryUrl() + (asset.getDeliveryUrl().contains("?") ? "&" : "?") + "expires=" + expiresAt.getEpochSecond();
+        String signedUrl = "b2".equalsIgnoreCase(asset.getStorageProvider())
+                ? modelDelivery.url(asset.getStorageProvider(), asset.getStoragePath(), asset.getDeliveryUrl())
+                : asset.getDeliveryUrl() + (asset.getDeliveryUrl().contains("?") ? "&" : "?") + "expires=" + expiresAt.getEpochSecond();
 
         log.info("Generated signed download URL for asset {} by user {}", assetId, currentUserId);
         return DownloadUrlResponse.builder()

@@ -52,6 +52,9 @@ public interface ScanService {
     ScanImageUploadResponse addImageToScan(UUID scanId, MultipartFile file,
                                            UUID currentUserId, Role currentUserRole);
 
+    ScanImageUploadResponse addImageToScan(UUID scanId, MultipartFile file, String viewHint,
+                                           UUID currentUserId, Role currentUserRole);
+
     /**
      * BE - Upload video to a scan.
      */

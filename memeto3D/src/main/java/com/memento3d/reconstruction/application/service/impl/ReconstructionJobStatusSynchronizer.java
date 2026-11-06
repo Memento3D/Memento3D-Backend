@@ -99,7 +99,7 @@ public class ReconstructionJobStatusSynchronizer {
                 // Finalizer tải GLB, upload Cloudinary, lưu output
                 // và chuyển job/scan sang done.
                 if ("done".equals(response.status())) {
-                    finalizer.finish(jobId, attemptId);
+                    finalizer.finish(jobId, attemptId, response);
                     continue;
                 }
 

@@ -66,6 +66,8 @@ public class OrderServiceImpl implements OrderService {
     private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
     private final com.memento3d.operations.reviewqueue.application.service.ManualReviewService manualReviewService;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final com.memento3d.customization.application.service.ModelCustomizationService modelCustomizationService;
+    private final com.memento3d.customization.application.service.PrintDesignService printDesignService;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private final SecureRandom random = new SecureRandom();
@@ -84,6 +86,11 @@ public class OrderServiceImpl implements OrderService {
         if (!order.getUserId().equals(userId)) {
             log.warn("Access denied: User {} does not own order {}", userId, orderId);
             throw new OrderAccessDeniedException("User is not authorized to access this order");
+        }
+        if(printDesignService.isCustom(orderId)) {
+            printDesignService.requireReviewed(orderId);
+            if(!"ACCEPTED".equals(order.getFeasibilityStatus()) || order.getTotalPrice().signum()<=0)
+                throw com.memento3d.customization.application.service.PrintDesignService.conflict("CUSTOM_QUOTE_ACCEPTANCE_REQUIRED","Accept the workshop quote before payment");
         }
         if (!order.isEligibleForPayment()) {
             log.warn("Order {} is not eligible for payment. Current status: {}, paymentStatus: {}",
@@ -172,10 +179,20 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse createOrder(CreateOrderRequest request, UUID userId) {
         log.info("Creating order for user ID={}", userId);
 
+        if(request.getModelOutputId()!=null) {
+            if(request.getIdempotencyKey()==null || !request.getIdempotencyKey().matches("custom:[a-zA-Z0-9-]{1,90}"))
+                throw com.memento3d.customization.application.service.PrintDesignService.conflict("CUSTOM_CHECKOUT_KEY_REQUIRED","A stable custom checkout key is required");
+            printDesignService.lockCheckout(userId);
+        }
+
         // Idempotency check: if request has idempotencyKey and order already exists, return it
         if (request.getIdempotencyKey() != null && !request.getIdempotencyKey().isBlank()) {
-            Optional<Order> existingOrder = orderRepository.findByIdempotencyKey(request.getIdempotencyKey());
+            Optional<Order> existingOrder = request.getModelOutputId()!=null
+                ?orderRepository.findByUserIdAndIdempotencyKey(userId,request.getIdempotencyKey())
+                :orderRepository.findByIdempotencyKey(request.getIdempotencyKey());
             if (existingOrder.isPresent()) {
+                if(!existingOrder.get().getUserId().equals(userId))throw new OrderAccessDeniedException("Checkout key belongs to another user");
+                if(request.getModelOutputId()!=null)printDesignService.assertReplay(existingOrder.get(),request);
                 log.info("Returning existing order for idempotencyKey: {}", request.getIdempotencyKey());
                 return OrderResponse.fromEntity(existingOrder.get());
             }
@@ -198,7 +215,9 @@ public class OrderServiceImpl implements OrderService {
         Order order;
         String orderCode = generateOrderCode();
 
-        if (hasCartItems) {
+        if(request.getModelOutputId()!=null) {
+            order=createCustomOrder(request,userId,orderCode);
+        } else if (hasCartItems) {
             // E-commerce Cart Checkout flow
             List<OrderItem> orderItems = new ArrayList<>();
             BigDecimal subtotal = BigDecimal.ZERO;
@@ -368,6 +387,50 @@ public class OrderServiceImpl implements OrderService {
         return OrderResponse.fromEntity(order);
     }
 
+    private Order createCustomOrder(CreateOrderRequest request,UUID userId,String code) {
+        if(request.getQuoteId()!=null || request.getTotalPrice()!=null || request.getRequestedHeightCm()==null
+            || request.getRequestedHeightCm()<8 || request.getRequestedHeightCm()>20)
+            throw com.memento3d.customization.application.service.PrintDesignService.conflict("INVALID_CUSTOM_PRINT_REQUEST","Select height 8–20 cm; the workshop provides the price");
+        var snapshot=modelCustomizationService.freeze(request.getModelOutputId(),request.getFitResultId(),request.getCustomizationRevision(),userId);
+        if(request.getScanId()!=null&&!request.getScanId().equals(snapshot.scanId()))throw new OrderAccessDeniedException("Model and scan do not match");
+        var order=Order.builder().orderCode(code).userId(userId).scanId(snapshot.scanId()).subtotal(BigDecimal.ZERO)
+            .totalPrice(BigDecimal.ZERO).currency("VND").status(OrderStatus.PENDING).feasibilityStatus("PENDING_REVIEW")
+            .fulfillmentType("PHYSICAL").paymentType("FULL_PAYMENT").idempotencyKey(request.getIdempotencyKey())
+            .paymentStatus(PaymentStatus.PENDING).recipientName(request.getRecipientName()).shippingAddress(request.getShippingAddress())
+            .phone(request.getPhone()).note(request.getNote()).build();
+        var summary=Map.of("kind","CUSTOM_PRINT_V1","modelOutputId",snapshot.modelOutputId(),"fitResultId",snapshot.fitResultId(),
+            "revision",snapshot.revision(),"selection",snapshot.selection(),"assets",snapshot.assets().stream().map(a->Map.of("name",a.name(),"slot",a.slot(),"assetVersionId",a.assetVersionId())).toList(),
+            "requestedHeightCm",request.getRequestedHeightCm(),"material","Resin SLA — workshop review required");
+        var item=OrderItem.builder().productNameSnapshot("Kỷ vật 3D tùy chỉnh").unitPrice(BigDecimal.ZERO).quantity(1).subtotal(BigDecimal.ZERO)
+            .skuSnapshot("CUSTOM-PRINT-V1").materialSnapshot("Resin SLA").technologySnapshot("SLA").dimensionsSnapshot(request.getRequestedHeightCm()+" cm")
+            .customizationSnapshot(printDesignService.json(summary)).build();
+        order.addItem(item);
+
+        order = orderRepository.saveAndFlush(order);
+
+// Lấy OrderItem từ Order đã được persist
+        OrderItem persistedItem = order.getItems().stream()
+                .filter(oi -> "CUSTOM-PRINT-V1".equals(oi.getSkuSnapshot()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Custom OrderItem not found after saving Order"
+                ));
+
+        if (persistedItem.getId() == null) {
+            throw new IllegalStateException(
+                    "Custom OrderItem ID is null after saveAndFlush"
+            );
+        }
+
+        printDesignService.attach(
+                order,
+                persistedItem,
+                snapshot,
+                request.getRequestedHeightCm()
+        );
+        return order;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public OrderListResponse getUserOrders(UUID userId, Role userRole, String query, OrderStatus status, int page, int limit) {
@@ -441,6 +504,7 @@ public class OrderServiceImpl implements OrderService {
         if (!order.canTransitionTo(nextStatus)) {
             throw new InvalidOrderStatusException("Cannot transition order from " + order.getStatus() + " to " + nextStatus);
         }
+        requireCustomProductionTransition(order,nextStatus);
 
         order.setStatus(nextStatus);
         Order saved = orderRepository.save(order);
@@ -511,6 +575,7 @@ public class OrderServiceImpl implements OrderService {
             if (!order.canTransitionTo(request.getStatus())) {
                 throw new InvalidOrderStatusException("Cannot transition order from " + order.getStatus() + " to " + request.getStatus());
             }
+            requireCustomProductionTransition(order,request.getStatus());
             order.setStatus(request.getStatus());
         }
 
@@ -624,7 +689,14 @@ public class OrderServiceImpl implements OrderService {
         Order order = getOrderById(orderId);
 
         String decision = request.getEffectiveDecision() != null ? request.getEffectiveDecision().trim().toUpperCase() : "FEASIBLE";
+        if(printDesignService.isCustom(orderId)&&request.getRevisionGlbUrl()!=null&&!request.getRevisionGlbUrl().isBlank())
+            throw com.memento3d.customization.application.service.PrintDesignService.conflict("CUSTOM_SNAPSHOT_IMMUTABLE","A custom order cannot replace its frozen file; revise the personal design and submit a new order");
         BigDecimal finalPrice = request.getEffectiveFinalPrice();
+
+        if("FEASIBLE".equals(decision)&&printDesignService.isCustom(orderId)) {
+            printDesignService.requireReviewed(orderId);
+            if(finalPrice==null || finalPrice.signum()<=0)throw com.memento3d.customization.application.service.PrintDesignService.conflict("CUSTOM_PRICE_REQUIRED","Provide a positive workshop quote");
+        }
 
         // Business rule: Do not modify quotes on already paid orders
         if ((order.getPaymentStatus() == PaymentStatus.PAID || order.getPaymentStatus() == PaymentStatus.SUCCESS)
@@ -655,6 +727,9 @@ public class OrderServiceImpl implements OrderService {
                 BigDecimal shipping = order.getShippingFee() != null ? order.getShippingFee() : BigDecimal.ZERO;
                 order.setSubtotal(finalPrice);
                 order.setTotalPrice(finalPrice.subtract(discount).add(shipping));
+                if(printDesignService.isCustom(orderId))for(var item:order.getItems()) {
+                    item.setUnitPrice(finalPrice);item.setSubtotal(finalPrice);
+                }
             }
             log.info("Order ID={} approved as FEASIBLE by manager ID={}", orderId, managerId);
         } else if ("REVISION_REQUESTED".equals(decision)) {
@@ -691,6 +766,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponse acceptWorkshopQuotation(UUID orderId, UUID customerId) {
         Order order = getOrderById(orderId);
+        if(printDesignService.isCustom(orderId))printDesignService.requireReviewed(orderId);
         if (!order.getUserId().equals(customerId)) {
             throw new OrderAccessDeniedException("Bạn không có quyền thao tác trên đơn hàng của người dùng khác");
         }
@@ -725,5 +801,12 @@ public class OrderServiceImpl implements OrderService {
         String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         String randPart = String.format("%04d", random.nextInt(10000));
         return "ORD-" + datePart + "-" + randPart;
+    }
+    private void requireCustomProductionTransition(Order order,OrderStatus next) {
+        if(printDesignService.isCustom(order.getId())&&List.of(OrderStatus.CONFIRMED,OrderStatus.PROCESSING,OrderStatus.PRINTING,OrderStatus.READY).contains(next)) {
+            printDesignService.requireReviewed(order.getId());
+            if(!"ACCEPTED".equals(order.getFeasibilityStatus()) || !(order.getPaymentStatus()==PaymentStatus.PAID||order.getPaymentStatus()==PaymentStatus.SUCCESS))
+                throw com.memento3d.customization.application.service.PrintDesignService.conflict("CUSTOM_ORDER_NOT_PAID","Accept and pay the workshop quote before production");
+        }
     }
 }

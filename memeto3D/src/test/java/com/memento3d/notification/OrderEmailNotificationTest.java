@@ -346,7 +346,8 @@ class OrderEmailNotificationTest {
                 entitlementService,
                 outboxPublisher,
                 null,
-                applicationEventPublisher
+                applicationEventPublisher,
+                null, mock(com.memento3d.customization.application.service.PrintDesignService.class)
         );
 
         // Transition from PRINTING -> READY (3D printing finished, but not delivered/completed yet)
@@ -380,7 +381,8 @@ class OrderEmailNotificationTest {
                 entitlementService,
                 outboxPublisher,
                 null,
-                applicationEventPublisher
+                applicationEventPublisher,
+                null, mock(com.memento3d.customization.application.service.PrintDesignService.class)
         );
 
         // Transition SHIPPED -> DELIVERED

@@ -9,6 +9,7 @@ import com.memento3d.identity.domain.model.User;
 import com.memento3d.orders.domain.model.Order;
 import com.memento3d.orders.infrastructure.persistence.repository.OrderRepository;
 import com.memento3d.payment.domain.model.PaymentStatus;
+import com.memento3d.reconstruction.api.request.CreateReconstructionJobRequest;
 import com.memento3d.reconstruction.api.request.CreatePreviewJobRequest;
 import com.memento3d.reconstruction.application.service.impl.ReconstructionJobServiceImpl;
 import com.memento3d.reconstruction.domain.exception.QuotaExceededException;
@@ -168,26 +169,17 @@ class ReconstructionAndEntitlementTest {
                 .scanId(scanId)
                 .build();
 
-        ScanImage scanImage = ScanImage.builder()
-                .id(imageId)
-                .scan(scan)
-                .storagePath("images/test_image.jpg")
-                .originalFilename("test_image.jpg")
-                .fileSizeBytes(1024L)
-                .mimeType("image/jpeg")
-                .format("jpeg")
-                .uploadStatus(com.memento3d.scans.domain.model.ScanImageUploadStatus.uploaded)
-                .cloudinaryPublicId("scans/test_pub_id")
-                .build();
+        ScanImage frontImage = labeledImage(imageId, "front");
+        ScanImage leftImage = labeledImage(UUID.randomUUID(), "left");
+        ScanImage rightImage = labeledImage(UUID.randomUUID(), "right");
+        List<ScanImage> scanImages = List.of(frontImage, leftImage, rightImage);
 
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(paidOrder));
         when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
         when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(scan));
         when(scanRepository.findByIdForUpdate(scanId)).thenReturn(Optional.of(scan));
-        when(scanImageRepository.findFirstByScan_IdAndDeletedAtIsNullOrderByCreatedAtDesc(scanId))
-                .thenReturn(Optional.of(scanImage));
-        when(scanImageRepository.findByIdAndScan_IdAndDeletedAtIsNull(imageId, scanId))
-                .thenReturn(Optional.of(scanImage));
+        when(scanImageRepository.findByScanIdAndDeletedAtIsNull(scanId))
+                .thenReturn(scanImages);
         when(jobRepository.existsByScan_IdAndStatusIn(eq(scanId), any())).thenReturn(false);
 
         when(jobRepository.saveAndFlush(any(ReconstructionJob.class))).thenAnswer(i -> {
@@ -208,6 +200,92 @@ class ReconstructionAndEntitlementTest {
 
         assertDoesNotThrow(() ->
                 reconstructionJobService.submitPremiumJob(orderId, userId, Role.ROLE_USER));
+
+        verify(jobRepository).saveAndFlush(argThat(job -> {
+            Object value = job.getInputSnapshot().get("input_images");
+            return value instanceof List<?> inputs
+                    && inputs.size() == 3
+                    && inputs.stream().map(input -> ((Map<?, ?>) input).get("view_hint"))
+                    .collect(java.util.stream.Collectors.toSet())
+                    .equals(Set.of("front", "left", "right"));
+        }));
+    }
+
+    @Test
+    @DisplayName("Reconstruction submission rejects scans missing a required labeled view")
+    void submitJobRejectsMissingRequiredViewHint() {
+        ScanImage frontImage = labeledImage(imageId, "front");
+        ScanImage leftImage = labeledImage(UUID.randomUUID(), "left");
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(scan));
+        when(scanRepository.findByIdForUpdate(scanId)).thenReturn(Optional.of(scan));
+        when(jobRepository.existsByScan_IdAndStatusIn(eq(scanId), any())).thenReturn(false);
+        when(scanImageRepository.findByScanIdAndDeletedAtIsNull(scanId))
+                .thenReturn(List.of(frontImage, leftImage));
+
+        CreateReconstructionJobRequest request = CreateReconstructionJobRequest.builder()
+                .inputImageId(imageId)
+                .build();
+
+        com.memento3d.scans.domain.exception.ScanConflictException exception =
+                assertThrows(
+                        com.memento3d.scans.domain.exception.ScanConflictException.class,
+                        () -> reconstructionJobService.submitJob(
+                                scanId, request, userId, Role.ROLE_USER
+                        )
+                );
+
+        assertTrue(exception.getMessage().contains("front, left, and right"));
+        verify(jobRepository, never()).saveAndFlush(any(ReconstructionJob.class));
+    }
+
+    @Test
+    @DisplayName("Reconstruction submission defaults the primary image to the front-labeled image")
+    void submitJobSelectsFrontImageWhenInputImageIdIsOmitted() {
+        ScanImage frontImage = labeledImage(imageId, "front");
+        List<ScanImage> scanImages = List.of(
+                frontImage,
+                labeledImage(UUID.randomUUID(), "left"),
+                labeledImage(UUID.randomUUID(), "right")
+        );
+
+        when(scanRepository.findByIdAndDeletedAtIsNull(scanId)).thenReturn(Optional.of(scan));
+        when(scanRepository.findByIdForUpdate(scanId)).thenReturn(Optional.of(scan));
+        when(jobRepository.existsByScan_IdAndStatusIn(eq(scanId), any())).thenReturn(false);
+        when(scanImageRepository.findByScanIdAndDeletedAtIsNull(scanId)).thenReturn(scanImages);
+        when(jobRepository.saveAndFlush(any(ReconstructionJob.class))).thenAnswer(invocation -> {
+            ReconstructionJob job = invocation.getArgument(0);
+            job.setId(UUID.randomUUID());
+            return job;
+        });
+
+        reconstructionJobService.submitJob(
+                scanId,
+                CreateReconstructionJobRequest.builder().profile("default").build(),
+                userId,
+                Role.ROLE_USER
+        );
+
+        verify(jobRepository).saveAndFlush(argThat(job ->
+                imageId.equals(job.getInputImageId())
+                        && job.getInputSnapshot().get("input_images") instanceof List<?> inputs
+                        && inputs.size() == 3
+        ));
+    }
+
+    private ScanImage labeledImage(UUID id, String viewHint) {
+        return ScanImage.builder()
+                .id(id)
+                .scan(scan)
+                .storagePath("images/" + viewHint + ".jpg")
+                .originalFilename(viewHint + ".jpg")
+                .fileSizeBytes(1024L)
+                .mimeType("image/jpeg")
+                .format("jpg")
+                .uploadStatus(com.memento3d.scans.domain.model.ScanImageUploadStatus.uploaded)
+                .cloudinaryPublicId("scans/test_" + viewHint)
+                .viewHint(viewHint)
+                .build();
     }
 
     @Test

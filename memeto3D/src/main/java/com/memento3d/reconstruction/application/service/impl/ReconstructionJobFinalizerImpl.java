@@ -1,6 +1,6 @@
 package com.memento3d.reconstruction.application.service.impl;
 
-import com.memento3d.assets.infrastructure.storage.CloudinaryStorageService;
+import com.memento3d.assets.domain.port.ModelStoragePort;
 import com.memento3d.models.domain.model.ModelOutput;
 import com.memento3d.reconstruction.application.service.ReconstructionJobFinalizer;
 import com.memento3d.reconstruction.domain.gateway.AiGenerationClient;
@@ -34,22 +34,33 @@ public class ReconstructionJobFinalizerImpl
     private final ReconstructionJobRepository jobRepository;
     private final ModelOutputRepository outputRepository;
     private final AiGenerationClient aiClient;
-    private final CloudinaryStorageService storageService;
+    private final ModelStoragePort storageService;
     private final ScanStatusCacheService cacheService;
     private final PlatformTransactionManager transactionManager;
     private final TransactionTemplate transaction;
     private final com.memento3d.assets.infrastructure.persistence.repository.DigitalAssetRepository digitalAssetRepository;
     private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
 
+    private final com.memento3d.customization.application.service.CustomizationFitIngestion customization;
+
+    public ReconstructionJobFinalizerImpl(ReconstructionJobRepository jobs,ModelOutputRepository outputs,AiGenerationClient ai,
+            ModelStoragePort storage,ScanStatusCacheService cache,PlatformTransactionManager tx,
+            com.memento3d.assets.infrastructure.persistence.repository.DigitalAssetRepository digital,
+            com.memento3d.shared.outbox.application.service.OutboxPublisherService outbox) {
+        this(jobs,outputs,ai,storage,cache,tx,digital,outbox,null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
     public ReconstructionJobFinalizerImpl(
             ReconstructionJobRepository jobRepository,
             ModelOutputRepository outputRepository,
             AiGenerationClient aiClient,
-            CloudinaryStorageService storageService,
+            ModelStoragePort storageService,
             ScanStatusCacheService cacheService,
             PlatformTransactionManager transactionManager,
             com.memento3d.assets.infrastructure.persistence.repository.DigitalAssetRepository digitalAssetRepository,
-            com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher
+            com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher,
+            com.memento3d.customization.application.service.CustomizationFitIngestion customization
     ) {
         this.jobRepository = jobRepository;
         this.outputRepository = outputRepository;
@@ -60,6 +71,7 @@ public class ReconstructionJobFinalizerImpl
         this.transaction = new TransactionTemplate(transactionManager);
         this.digitalAssetRepository = digitalAssetRepository;
         this.outboxPublisher = outboxPublisher;
+        this.customization = customization;
     }
 
     private record Context(UUID userId, UUID scanId) {
@@ -67,6 +79,11 @@ public class ReconstructionJobFinalizerImpl
 
     @Override
     public void finish(UUID jobId, UUID attemptId) {
+        finish(jobId,attemptId,null);
+    }
+
+    @Override
+    public void finish(UUID jobId,UUID attemptId,com.memento3d.reconstruction.application.dto.AiJobResponse suppliedStatus) {
         Context context = transaction.execute(tx -> {
             ReconstructionJob job = jobRepository
                     .findByIdForUpdate(jobId)
@@ -99,10 +116,20 @@ public class ReconstructionJobFinalizerImpl
          * HTTP và upload nằm ngoài transaction.
          * Nếu lỗi, scheduler sẽ thử lại; không generate lại model.
          */
+        var upstream=suppliedStatus!=null?suppliedStatus:aiClient.getJob(jobId);
+        if(upstream==null || !jobId.equals(upstream.jobId()) || !attemptId.equals(upstream.attemptId()) || !"done".equals(upstream.status()))
+            throw new IllegalStateException("AI completion does not match this job/attempt");
+        String kind=upstream.outputKind()==null?"assembled_preview":upstream.outputKind();
+        boolean customBase="customization_base".equals(kind);
+        if(!customBase && !"assembled_preview".equals(kind))throw new IllegalStateException("Unsupported AI output kind");
+        if(!customBase && Boolean.TRUE.equals(upstream.customizationReady()))throw new IllegalStateException("Inconsistent AI output kind and customization readiness");
+        if(customBase && (!Boolean.TRUE.equals(upstream.customizationReady()) || Boolean.TRUE.equals(upstream.readyForMachine()) || customization==null))
+            throw new IllegalStateException("AI custom scene is not ready for validated ingestion");
         byte[] bytes = aiClient.downloadGlb(jobId, attemptId);
         String hash = sha256(bytes);
+        var prepared=customBase?customization.prepare(jobId,attemptId,context.userId(),context.scanId(),hash):null;
 
-        Map<String, Object> uploaded;
+        ModelStoragePort.StoredModel uploaded;
 
         try {
             uploaded = storageService.uploadGlb(
@@ -114,23 +141,18 @@ public class ReconstructionJobFinalizerImpl
             );
         } catch (IOException ex) {
             throw new IllegalStateException(
-                    "Failed to upload GLB to Cloudinary",
+                    "Failed to upload GLB to model storage",
                     ex
             );
         }
 
-        String publicId = requiredString(uploaded, "public_id");
-        String assetId = requiredString(uploaded, "asset_id");
-        String url = requiredString(uploaded, "secure_url");
-
-        Object uploadedBytes = uploaded.get("bytes");
-
-        if (!(uploadedBytes instanceof Number size)
-                || size.longValue() != bytes.length) {
-            throw new IllegalStateException(
-                    "Cloudinary returned an unexpected file size"
-            );
+        String publicId = uploaded.objectKey();
+        String assetId = uploaded.assetId();
+        String url = uploaded.location();
+        if (uploaded.sizeBytes() != bytes.length) {
+            throw new IllegalStateException("Model storage returned an unexpected file size");
         }
+        String eventUrl = storageService.downloadUrl(publicId, url);
 
         UUID completedScanId = transaction.execute(tx -> {
             ReconstructionJob job = jobRepository
@@ -157,7 +179,7 @@ public class ReconstructionJobFinalizerImpl
                                 .job(job)
                                 .attemptId(attemptId)
                                 .format("glb")
-                                .storageProvider("cloudinary")
+                                .storageProvider(uploaded.provider())
                                 .storagePublicId(publicId)
                                 .storageAssetId(assetId)
                                 .deliveryUrl(url)
@@ -171,6 +193,9 @@ public class ReconstructionJobFinalizerImpl
                 );
             }
 
+            if(prepared!=null)customization.persist(jobId,attemptId,context.userId(),context.scanId(),prepared);
+            job.setOutputKind(kind);
+            job.setCustomizationReady(prepared!=null);
             job.setStatus(ReconstructionJobStatus.done);
             job.setStage(null);
             job.setProgress(100);
@@ -184,14 +209,14 @@ public class ReconstructionJobFinalizerImpl
             jobRepository.saveAndFlush(job);
             outputRepository.flush();
 
-            if (job.getTier() == com.memento3d.reconstruction.domain.model.ReconstructionTier.HIGH_QUALITY) {
+            if (prepared==null && job.getTier() == com.memento3d.reconstruction.domain.model.ReconstructionTier.HIGH_QUALITY) {
                 digitalAssetRepository.save(
                         com.memento3d.assets.domain.model.DigitalAsset.builder()
                                 .userId(job.getScan().getUser().getId())
                                 .orderItemId(job.getOrderItemId())
                                 .job(job)
                                 .fileFormat("GLB")
-                                .storageProvider("CLOUDINARY")
+                                .storageProvider(uploaded.provider())
                                 .storagePath(publicId)
                                 .deliveryUrl(url)
                                 .fileSizeBytes((long) bytes.length)
@@ -209,7 +234,7 @@ public class ReconstructionJobFinalizerImpl
                                 "jobId", job.getId(),
                                 "orderItemId", job.getOrderItemId() != null ? job.getOrderItemId() : "",
                                 "userId", job.getScan().getUser().getId(),
-                                "modelUrl", url,
+                                "modelUrl", eventUrl,
                                 "sha256", hash
                         )
                 );
@@ -222,7 +247,9 @@ public class ReconstructionJobFinalizerImpl
                                 "jobId", job.getId(),
                                 "scanId", job.getScan().getId(),
                                 "userId", job.getScan().getUser().getId(),
-                                "previewUrl", url,
+                                "previewUrl", eventUrl,
+                                "outputKind", kind,
+                                "customizationReady", prepared!=null,
                                 "tier", "PREVIEW"
                         )
                 );
@@ -258,21 +285,6 @@ public class ReconstructionJobFinalizerImpl
     ) {
         return job.getStatus() == ReconstructionJobStatus.running
                 && attemptId.equals(job.getAttemptId());
-    }
-
-    private String requiredString(
-            Map<String, Object> result,
-            String key
-    ) {
-        Object value = result.get(key);
-
-        if (!(value instanceof String text) || text.isBlank()) {
-            throw new IllegalStateException(
-                    "Cloudinary response is missing " + key
-            );
-        }
-
-        return text;
     }
 
     private String sha256(byte[] bytes) {

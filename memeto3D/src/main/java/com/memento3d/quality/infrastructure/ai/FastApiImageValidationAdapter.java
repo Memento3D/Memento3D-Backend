@@ -27,7 +27,7 @@ public class FastApiImageValidationAdapter implements ImageValidationProvider {
             return aiGenerationClient.validateImage(imageUrl);
         } catch (Exception ex) {
             log.warn("FastAPI image validation failed gracefully: {}", ex.getMessage());
-            return ImageValidationResult.passed("jpeg", 2048L, "FastAPI check bypassed: " + ex.getMessage());
+            return ImageValidationResult.failed("FastAPI image validation is unavailable: " + ex.getMessage());
         }
     }
 }

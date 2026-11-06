@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class ModelOutputResponse {
 
     @JsonProperty("output_id")

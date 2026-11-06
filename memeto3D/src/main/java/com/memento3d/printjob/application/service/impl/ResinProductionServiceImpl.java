@@ -49,6 +49,8 @@ public class ResinProductionServiceImpl implements ResinProductionService {
     private final ModelConversionPort modelConversionPort;
     private final PrinterIntegrationPort printerIntegrationPort;
     private final OutboxPublisherService outboxPublisher;
+    private final com.memento3d.customization.application.service.PrintDesignService printDesignService;
+    private final jakarta.persistence.EntityManager entityManager;
 
     @Override
     @Transactional
@@ -59,6 +61,13 @@ public class ResinProductionServiceImpl implements ResinProductionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy mục đơn hàng: " + orderItemId));
 
         Order order = orderItem.getOrder();
+        boolean custom=printDesignService.isCustom(order.getId());
+        if(custom) {
+            entityManager.lock(order,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            if(order.getStatus()!=OrderStatus.PROCESSING || !"ACCEPTED".equals(order.getFeasibilityStatus())
+                || !(order.getPaymentStatus()==com.memento3d.payment.domain.model.PaymentStatus.PAID || order.getPaymentStatus()==com.memento3d.payment.domain.model.PaymentStatus.SUCCESS))
+                throw com.memento3d.customization.application.service.PrintDesignService.conflict("CUSTOM_ORDER_NOT_PRINTABLE","Accept and pay the quote before preparing production");
+        }
         if (order.getStatus() == OrderStatus.PENDING || order.getStatus() == OrderStatus.PENDING_PAYMENT) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "ORDER_NOT_READY_FOR_PRODUCTION",
                     "Đơn hàng chưa thanh toán hoặc chưa được xác nhận; không đủ điều kiện chuyển sản xuất.");
@@ -81,6 +90,10 @@ public class ResinProductionServiceImpl implements ResinProductionService {
 
         String glbUrl = glbAsset != null ? glbAsset.getDeliveryUrl() : "";
         UUID modelVersionId = orderItem.getId();
+        if(custom) {
+            modelVersionId=printDesignService.requirePrintable(order.getId(),orderItemId,null);
+            glbUrl=printDesignService.view(order.getId(),order.getUserId(),com.memento3d.identity.domain.model.Role.ROLE_OPERATOR).downloadUrl();
+        }
 
         // Chuyển đổi GLB sang STL hình học (nếu có bytes hoặc converter chạy nền)
         ModelConversionPort.ModelDimensions dims = new ModelConversionPort.ModelDimensions(
@@ -89,7 +102,7 @@ public class ResinProductionServiceImpl implements ResinProductionService {
                 request.getDimZMm(),
                 request.getScale()
         );
-        ModelConversionPort.ConversionResult convResult = modelConversionPort.convertGlbToStl(
+        if(!custom) modelConversionPort.convertGlbToStl(
                 modelVersionId,
                 new byte[0], // Handled asynchronously or via cloud asset
                 "mm",
@@ -107,6 +120,10 @@ public class ResinProductionServiceImpl implements ResinProductionService {
             UUID existingDetailId = existing.getId();
             printJob = printJobRepository.findById(existing.getPrintJobId())
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy PrintJob cho detail: " + existingDetailId));
+            if(custom) {
+                printDesignService.requirePrintable(order.getId(),orderItemId,printJob.getModelVersionId());
+                return mapToResponse(printJob,detail,glbUrl);
+            }
         } else {
             // Lấy material mặc định (Resin)
             Material resinMat = materialRepository.findAll().stream()
@@ -115,7 +132,10 @@ public class ResinProductionServiceImpl implements ResinProductionService {
                     .orElseGet(() -> materialRepository.findAll().stream().findFirst()
                             .orElseThrow(() -> new IllegalStateException("Hệ thống chưa cấu hình vật liệu in (Resin)")));
 
-            printJob = PrintJob.builder()
+            var existingJob=printJobRepository.findFirstByOrderItemIdAndStatusNotOrderByCreatedAtDesc(orderItemId,PrintJobStatus.CANCELLED);
+            if(custom && existingJob.isPresent() && existingJob.get().getStatus()!=PrintJobStatus.CREATED)
+                throw com.memento3d.customization.application.service.PrintDesignService.conflict("DUPLICATE_PRINT_JOB","A production job already exists for this item");
+            printJob = custom && existingJob.isPresent() ? existingJob.get() : PrintJob.builder()
                     .jobNumber("RESIN-" + System.currentTimeMillis() % 1000000)
                     .orderId(order.getId())
                     .orderItemId(orderItemId)
@@ -144,7 +164,7 @@ public class ResinProductionServiceImpl implements ResinProductionService {
         detail.setIsHollowed(request.getIsHollowed());
         detail.setHasDrainHoles(request.getHasDrainHoles());
         detail.setSupportDensity(request.getSupportDensity());
-        detail.setStlDeliveryUrl(glbUrl.replace(".glb", ".stl")); // Placeholder until STL artifact confirmed
+        detail.setStlDeliveryUrl(custom ? null : glbUrl.replace(".glb", ".stl"));
 
         printJob.setStatus(PrintJobStatus.AWAITING_SLICING);
         printJobRepository.save(printJob);
@@ -160,6 +180,11 @@ public class ResinProductionServiceImpl implements ResinProductionService {
 
         PrintJob printJob = printJobRepository.findById(printJobId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy PrintJob: " + printJobId));
+        if(printJob.getOrderId()!=null&&printDesignService.isCustom(printJob.getOrderId())) {
+            printDesignService.requirePrintable(printJob.getOrderId(),printJob.getOrderItemId(),printJob.getModelVersionId());
+            if(request.getSliceFileSha256()==null||!request.getSliceFileSha256().matches("[0-9a-fA-F]{64}"))
+                throw com.memento3d.customization.application.service.PrintDesignService.conflict("SLICE_CHECKSUM_REQUIRED","Record the real slicer artifact checksum");
+        }
 
         ResinProductionDetail detail = resinDetailRepository.findByPrintJobId(printJobId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy ResinProductionDetail cho job: " + printJobId));
@@ -411,6 +436,10 @@ public class ResinProductionServiceImpl implements ResinProductionService {
 
     private ResinProductionJobResponse mapToResponse(PrintJob job, ResinProductionDetail detail, String glbUrlOverride) {
         String glbUrl = glbUrlOverride;
+        if(job.getOrderId()!=null&&printDesignService.isCustom(job.getOrderId())) {
+            var order=orderItemRepository.findById(job.getOrderItemId()).orElseThrow().getOrder();
+            glbUrl=printDesignService.view(order.getId(),order.getUserId(),com.memento3d.identity.domain.model.Role.ROLE_OPERATOR).downloadUrl();
+        }
         if (glbUrl == null && detail.getOrderItemId() != null) {
             glbUrl = digitalAssetRepository.findByOrderItemId(detail.getOrderItemId())
                     .stream()

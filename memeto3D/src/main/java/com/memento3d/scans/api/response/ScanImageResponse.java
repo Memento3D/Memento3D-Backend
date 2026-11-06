@@ -51,6 +51,11 @@ public class ScanImageResponse {
     @Schema(example = "0")
     private Integer sortOrder;
 
+    @JsonProperty("view_hint")
+    @Schema(description = "Capture angle metadata used for multi-view reconstruction",
+            allowableValues = {"front", "left", "right", "back"})
+    private String viewHint;
+
     @JsonProperty("upload_status")
     @Schema(example = "uploaded", allowableValues = {"pending", "uploaded", "failed"})
     private String uploadStatus;
@@ -83,6 +88,7 @@ public class ScanImageResponse {
                 .height(image.getHeight())
                 .format(image.getFormat())
                 .sortOrder(image.getSortOrder())
+                .viewHint(image.getViewHint())
                 .uploadStatus(image.getUploadStatus() != null ? image.getUploadStatus().name() : null)
                 .isExcluded(image.getIsExcluded())
                 .excludeReason(image.getExcludeReason())

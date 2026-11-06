@@ -37,7 +37,7 @@ public class HttpAiGenerationClient implements AiGenerationClient {
             @Value("${app.ai.api-key}") String apiKey
     ) {
         this.baseUrl = baseUrl.replaceAll("/+$", "");
-        this.apiKey = apiKey;
+        this.apiKey = apiKey == null ? "" : apiKey.trim();
 
         URI uri = URI.create(this.baseUrl);
 
@@ -45,12 +45,6 @@ public class HttpAiGenerationClient implements AiGenerationClient {
                 || uri.getHost() == null) {
             throw new IllegalArgumentException(
                     "AI base URL must be a valid HTTP or HTTPS URL"
-            );
-        }
-
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalArgumentException(
-                    "AI API key must not be empty"
             );
         }
 
@@ -89,6 +83,7 @@ public class HttpAiGenerationClient implements AiGenerationClient {
 
     @Override
     public AiJobResponse submitJob(AiSubmitJobRequest request) {
+        requireConfiguredApiKey();
         String body;
 
         try {
@@ -124,6 +119,7 @@ public class HttpAiGenerationClient implements AiGenerationClient {
 
     @Override
     public AiJobResponse getJob(UUID jobId) {
+        requireConfiguredApiKey();
         HttpResponse<String> response = send(
                 requestBuilder("/jobs/" + jobId)
                         .GET()
@@ -141,116 +137,65 @@ public class HttpAiGenerationClient implements AiGenerationClient {
             );
         }
 
-        if ("needs_selection".equals(result.status())) {
-            result = advanceSelectionAndApproval(jobId, result.attemptId());
-        } else if ("needs_mask_review".equals(result.status())) {
-            result = approveMask(jobId, result.attemptId());
-        }
-
         return result;
-    }
-
-    private AiJobResponse advanceSelectionAndApproval(UUID jobId, UUID attemptId) {
-        try {
-            HttpResponse<String> selResp = send(
-                    requestBuilder("/jobs/" + jobId + "/selection?attempt_id=" + attemptId)
-                            .GET()
-                            .build()
-            );
-            if (selResp.statusCode() == 200) {
-                var tree = mapper.readTree(selResp.body());
-                String proposalSha = tree.path("proposal_sha256").asText("");
-                String imageSha = tree.path("image_sha256").asText("");
-                var proposals = tree.path("proposals");
-                String detectionId = "d1";
-                if (proposals.isArray() && proposals.size() > 0) {
-                    detectionId = proposals.get(0).path("id").asText("d1");
-                }
-
-                java.util.Map<String, Object> selection = java.util.Map.of(
-                        "mode", "detection",
-                        "detection_id", detectionId,
-                        "confirmed", true,
-                        "image_sha256", imageSha
-                );
-                java.util.Map<String, Object> selectBody = java.util.Map.of(
-                        "attempt_id", attemptId.toString(),
-                        "proposal_sha256", proposalSha,
-                        "selection", selection
-                );
-
-                send(
-                        requestBuilder("/jobs/" + jobId + "/selection")
-                                .header("Content-Type", "application/json")
-                                .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(selectBody)))
-                                .build()
-                );
-
-                return approveMask(jobId, attemptId);
-            }
-        } catch (Exception ex) {
-            // Auto advance degraded gracefully
-        }
-        return new AiJobResponse(jobId, attemptId, "running", "preprocessing", 20, null, null, null, null, null);
-    }
-
-    private AiJobResponse approveMask(UUID jobId, UUID attemptId) {
-        try {
-            java.util.Map<String, Object> approveBody = java.util.Map.of(
-                    "attempt_id", attemptId.toString(),
-                    "decision_id", "auto-decision-" + attemptId,
-                    "actor", "backend-pipeline"
-            );
-
-            HttpResponse<String> appResp = send(
-                    requestBuilder("/jobs/" + jobId + "/review")
-                            .header("Content-Type", "application/json")
-                            .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(approveBody)))
-                            .build()
-            );
-
-            if (appResp.statusCode() == 200 || appResp.statusCode() == 202) {
-                return parseJob(appResp.body());
-            }
-        } catch (Exception ex) {
-            // Auto approve degraded gracefully
-        }
-        return new AiJobResponse(jobId, attemptId, "running", "reconstructing", 40, null, null, null, null, null);
     }
 
     @Override
     public com.memento3d.quality.domain.port.ImageValidationProvider.ImageValidationResult validateImage(String imageUrl) {
+        requireConfiguredApiKey();
+        String body;
         try {
-            String body = mapper.writeValueAsString(java.util.Map.of("input_url", imageUrl));
-            HttpResponse<String> response = send(
-                    requestBuilder("/validate-image")
-                            .header("Content-Type", "application/json")
-                            .POST(HttpRequest.BodyPublishers.ofString(body))
-                            .build()
-            );
+            body = mapper.writeValueAsString(java.util.Map.of("input_url", imageUrl));
+        } catch (IOException ex) {
+            throw new AiClientException("Failed to serialize AI image-validation request", ex);
+        }
 
-            if (response.statusCode() == 200) {
-                var tree = mapper.readTree(response.body());
-                boolean valid = tree.path("valid").asBoolean(true);
-                String status = tree.path("quality_status").asText("PASSED");
-                String format = tree.path("format").asText("png");
-                long size = tree.path("file_size_bytes").asLong(0L);
-                String msg = tree.path("message").asText("Image integrity verified.");
-                return new com.memento3d.quality.domain.port.ImageValidationProvider.ImageValidationResult(valid, status, format, size, msg);
-            }
-            return com.memento3d.quality.domain.port.ImageValidationProvider.ImageValidationResult.failed("Validation returned HTTP " + response.statusCode());
-        } catch (Exception ex) {
-            return com.memento3d.quality.domain.port.ImageValidationProvider.ImageValidationResult.passed("jpeg", 2048L, "FastAPI check skipped/degraded");
+        HttpResponse<String> response = send(
+                requestBuilder("/validate-image")
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build()
+        );
+
+        if (response.statusCode() != 200) {
+            return com.memento3d.quality.domain.port.ImageValidationProvider.ImageValidationResult
+                    .failed("Validation returned HTTP " + response.statusCode());
+        }
+
+        try {
+            var tree = mapper.readTree(response.body());
+            boolean valid = tree.path("valid").asBoolean();
+            String status = tree.path("quality_status").asText("FAILED");
+            String format = tree.path("format").asText("");
+            long size = tree.path("file_size_bytes").asLong(0L);
+            String message = tree.path("message").asText("AI image validation completed.");
+            return new com.memento3d.quality.domain.port.ImageValidationProvider.ImageValidationResult(
+                    valid, status, format, size, message
+            );
+        } catch (IOException ex) {
+            throw new AiClientException("Invalid AI image-validation response", ex);
         }
     }
 
     private HttpRequest.Builder requestBuilder(String path) {
-        return HttpRequest.newBuilder()
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + path))
                 .timeout(Duration.ofSeconds(30))
                 .header("Accept", "application/json")
-                .header("X-API-Key", apiKey)
                 .header("ngrok-skip-browser-warning", "1");
+        if (!apiKey.isBlank()) {
+            builder.header("X-API-Key", apiKey);
+        }
+        return builder;
+    }
+
+    private void requireConfiguredApiKey() {
+        if (apiKey.isBlank()) {
+            throw new AiClientException(
+                    "AI_API_KEY is not configured",
+                    (Integer) null
+            );
+        }
     }
 
     private HttpResponse<String> send(HttpRequest request) {
@@ -311,69 +256,39 @@ public class HttpAiGenerationClient implements AiGenerationClient {
     }
 
     @Override
-    public byte[] downloadGlb(UUID jobId, UUID attemptId) {
-        HttpRequest request = requestBuilder(
-                "/jobs/" + jobId
-                        + "/outputs/glb?attempt_id=" + attemptId
-        )
-                .timeout(Duration.ofMinutes(2))
-                .GET()
-                .build();
-
-        int maxBytes = 50 * 1024 * 1024;
-
+    public com.memento3d.reconstruction.application.dto.AiCustomizationManifest.Download getCustomizationManifest(UUID jobId,UUID attemptId) {
+        byte[] bytes=downloadBounded("/jobs/"+jobId+"/customization?attempt_id="+attemptId,64*1024);
         try {
-            HttpResponse<InputStream> response = httpClient.send(
-                    request,
-                    HttpResponse.BodyHandlers.ofInputStream()
-            );
-
-            try (InputStream input = response.body()) {
-                if (response.statusCode() != 200) {
-                    throw new AiClientException(
-                            "AI GLB download returned HTTP "
-                                    + response.statusCode(),
-                            response.statusCode()
-                    );
-                }
-
-                // Giới hạn dữ liệu giữ trong bộ nhớ ở bản MVP.
-                byte[] bytes = input.readNBytes(maxBytes + 1);
-
-                if (bytes.length > maxBytes) {
-                    throw new AiClientException(
-                            "AI GLB exceeds the 50 MB limit",
-                            (Integer) null
-                    );
-                }
-
-                // GLB bắt đầu bằng magic bytes "glTF".
-                if (bytes.length < 12
-                        || bytes[0] != 'g'
-                        || bytes[1] != 'l'
-                        || bytes[2] != 'T'
-                        || bytes[3] != 'F') {
-                    throw new AiClientException(
-                            "AI returned an invalid GLB header",
-                            (Integer) null
-                    );
-                }
-
+            var scene=mapper.readValue(bytes,com.memento3d.reconstruction.application.dto.AiCustomizationManifest.class);
+            return new com.memento3d.reconstruction.application.dto.AiCustomizationManifest.Download(new String(bytes,java.nio.charset.StandardCharsets.UTF_8),scene);
+        } catch(IOException ex) { throw new AiClientException("Invalid AI customization manifest",ex); }
+    }
+    @Override
+    public byte[] downloadCustomizationAsset(UUID jobId,UUID attemptId,String assetId) {
+        if(assetId==null || !assetId.matches("[a-z0-9][a-z0-9-]{0,99}"))throw new IllegalArgumentException("Invalid fitted asset identifier");
+        return requireGlb(downloadBounded("/jobs/"+jobId+"/customization/assets/"+assetId+"?attempt_id="+attemptId,50*1024*1024));
+    }
+    @Override
+    public byte[] downloadGlb(UUID jobId,UUID attemptId) {
+        return requireGlb(downloadBounded("/jobs/"+jobId+"/outputs/glb?attempt_id="+attemptId,50*1024*1024));
+    }
+    private byte[] requireGlb(byte[] bytes) {
+        if(bytes.length<12 || bytes[0]!='g' || bytes[1]!='l' || bytes[2]!='T' || bytes[3]!='F')
+            throw new AiClientException("AI returned an invalid GLB header",(Integer)null);
+        return bytes;
+    }
+    private byte[] downloadBounded(String path,int maxBytes) {
+        requireConfiguredApiKey();
+        try {
+            var response=httpClient.send(requestBuilder(path).timeout(Duration.ofMinutes(2)).GET().build(),HttpResponse.BodyHandlers.ofInputStream());
+            try(InputStream input=response.body()) {
+                if(response.statusCode()!=200)throw new AiClientException("AI artifact download returned HTTP "+response.statusCode(),response.statusCode());
+                byte[] bytes=input.readNBytes(maxBytes+1);
+                if(bytes.length>maxBytes)throw new AiClientException("AI artifact exceeds the download limit",(Integer)null);
                 return bytes;
             }
-
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-
-            throw new AiClientException(
-                    "AI GLB download was interrupted",
-                    ex
-            );
-        } catch (IOException ex) {
-            throw new AiClientException(
-                    "Failed to download AI GLB",
-                    ex
-            );
-        }
+        } catch(InterruptedException ex) {
+            Thread.currentThread().interrupt();throw new AiClientException("AI artifact download was interrupted",ex);
+        } catch(IOException ex) { throw new AiClientException("Failed to download AI artifact",ex); }
     }
 }

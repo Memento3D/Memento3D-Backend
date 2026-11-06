@@ -425,6 +425,18 @@ public class ScanServiceImpl implements ScanService {
     @Transactional
     public ScanImageUploadResponse addImageToScan(UUID scanId, MultipartFile file,
                                                   UUID currentUserId, Role currentUserRole) {
+        return addImageToScan(scanId, file, null, currentUserId, currentUserRole);
+    }
+
+    @Override
+    @Transactional
+    public ScanImageUploadResponse addImageToScan(
+            UUID scanId,
+            MultipartFile file,
+            String requestedViewHint,
+            UUID currentUserId,
+            Role currentUserRole
+    ) {
         log.info("Adding image '{}' to scan ID: {}, requested by user: {}",
                 file != null ? file.getOriginalFilename() : "null", scanId, currentUserId);
 
@@ -448,6 +460,15 @@ public class ScanServiceImpl implements ScanService {
         }
         if (status == ScanStatus.deleted) {
             throw new ResourceNotFoundException("Scan not found with ID: " + scanId);
+        }
+
+        String viewHint = normalizeViewHint(requestedViewHint);
+        if (viewHint != null
+                && scanImageRepository.existsByScan_IdAndViewHintAndDeletedAtIsNull(
+                scanId, viewHint)) {
+            throw new ScanConflictException(
+                    "Another active image in this scan already has view_hint '" + viewHint + "'"
+            );
         }
 
         // 5. File format and magic bytes security validation
@@ -564,6 +585,7 @@ public class ScanServiceImpl implements ScanService {
 
                 // Existing business logic
                 .sortOrder(nextSortOrder)
+                .viewHint(viewHint)
                 .uploadStatus(ScanImageUploadStatus.uploaded)
                 .isExcluded(false)
                 .needsQualityCheck(priorQcExists)
@@ -951,6 +973,17 @@ public class ScanServiceImpl implements ScanService {
         if (request.getSortOrder() != null) {
             image.setSortOrder(request.getSortOrder());
         }
+        if (request.getViewHint() != null) {
+            String viewHint = normalizeViewHint(request.getViewHint());
+            if (viewHint != null
+                    && scanImageRepository.existsByScan_IdAndViewHintAndIdNotAndDeletedAtIsNull(
+                    scanId, viewHint, imageId)) {
+                throw new ScanConflictException(
+                        "Another active image in this scan already has view_hint '" + viewHint + "'"
+                );
+            }
+            image.setViewHint(viewHint);
+        }
         if (request.getIsExcluded() != null) {
             image.setIsExcluded(request.getIsExcluded());
         }
@@ -1038,5 +1071,19 @@ public class ScanServiceImpl implements ScanService {
         }
 
         return com.memento3d.quality.api.response.QualityCheckRunSummaryResponse.fromEntity(saved);
+    }
+
+    private String normalizeViewHint(String requestedViewHint) {
+        if (requestedViewHint == null || requestedViewHint.isBlank()) {
+            return null;
+        }
+
+        String viewHint = requestedViewHint.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!Set.of("front", "left", "right", "back").contains(viewHint)) {
+            throw new IllegalArgumentException(
+                    "view_hint must be front, left, right, or back"
+            );
+        }
+        return viewHint;
     }
 }

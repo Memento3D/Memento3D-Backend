@@ -51,7 +51,7 @@ public class FileSecurityValidator {
         }
 
         // Strip path traversal sequences and null bytes
-        String cleaned = originalFilename.replaceAll("[/\\\\\\r\\n\\0]", "_");
+        String cleaned = originalFilename.replaceAll("[/\\\\\\r\\n\\x00]", "_");
         cleaned = cleaned.replaceAll("\\.\\.+", "."); // Remove multiple dots
 
         // Strip non-printable / control ASCII characters

@@ -53,9 +53,9 @@ public class ReconstructionJobController {
                 .provider(provider.getProviderCode())
                 .minImages(provider.getMinImages())
                 .maxImages(provider.getMaxImages())
-                .supportedFormats(List.of("image/jpeg", "image/png", "image/webp"))
-                .maxFileSizeMb(20)
-                .guidelines("Hỗ trợ chụp từ 1 ảnh rõ nét bằng camera laptop hoặc tải 1-50 ảnh đa góc. AI Hunyuan3D-2 tối ưu cho chủ thể chân dung, tượng nhỏ, đồ lưu niệm thủ công trong điều kiện đủ sáng.")
+                .supportedFormats(List.of("image/jpeg", "image/png"))
+                .maxFileSizeMb(12)
+                .guidelines("Head API thử nghiệm yêu cầu ba ảnh được gắn nhãn front, left, right; back là tùy chọn. Gắn view_hint cho ảnh scan trước khi tạo job. Hệ thống chưa xác nhận độ giống, khả năng in hoặc hiệu chuẩn sản xuất.")
                 .build());
     }
 
@@ -103,11 +103,11 @@ public class ReconstructionJobController {
     @ApiResponses({
             @ApiResponse(responseCode = "202", description = "Job accepted and queued for 3D reconstruction",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReconstructionJobResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Bad request or missing input_image_id",
+            @ApiResponse(responseCode = "400", description = "Bad request",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Unauthorized"),
             @ApiResponse(responseCode = "404", description = "Scan or image not found"),
-            @ApiResponse(responseCode = "409", description = "Scan already has an active job or invalid state",
+            @ApiResponse(responseCode = "409", description = "Scan already has an active job, invalid state, or is missing labeled front/left/right images",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ReconstructionJobResponse> submitJob(

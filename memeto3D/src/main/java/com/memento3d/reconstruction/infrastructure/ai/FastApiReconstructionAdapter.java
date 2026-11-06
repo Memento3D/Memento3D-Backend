@@ -24,12 +24,12 @@ public class FastApiReconstructionAdapter implements ReconstructionProvider {
 
     @Override
     public int getMinImages() {
-        return 1;
+        return 3;
     }
 
     @Override
     public int getMaxImages() {
-        return 50;
+        return 4;
     }
 
     @Override

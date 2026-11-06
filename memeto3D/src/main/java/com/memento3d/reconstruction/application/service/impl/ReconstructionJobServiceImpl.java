@@ -28,6 +28,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +41,10 @@ import org.springframework.beans.factory.annotation.Value;
 @Slf4j
 public class ReconstructionJobServiceImpl
         implements ReconstructionJobService {
+
+    private static final List<String> REQUIRED_AI_VIEW_HINTS =
+            List.of("front", "left", "right");
+    private static final long MAX_AI_IMAGE_BYTES = 12L * 1024 * 1024;
 
     private static final Set<ReconstructionJobStatus> ACTIVE_STATUSES =
             Set.of(
@@ -57,6 +62,7 @@ public class ReconstructionJobServiceImpl
     private final com.memento3d.identity.infrastructure.persistence.repository.UserRepository userRepository;
     private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
     private final com.memento3d.orders.infrastructure.persistence.repository.OrderRepository orderRepository;
+    private final com.memento3d.models.application.service.ModelDeliveryService modelDelivery;
     private final com.memento3d.entitlement.application.service.EntitlementService entitlementService;
 
     @Value("${app.ai.execution-mode:real}")
@@ -123,29 +129,33 @@ public class ReconstructionJobServiceImpl
             );
         }
 
-        if (request == null || request.getInputImageId() == null) {
-            throw new IllegalArgumentException(
-                    "input_image_id is required"
+        String profile = resolveProfile(request == null ? null : request.getProfile());
+
+        List<ScanImage> scanImages =
+                scanImageRepository.findByScanIdAndDeletedAtIsNull(scanId);
+        List<ScanImage> aiInputImages = selectAiInputImages(scanImages);
+        UUID requestedInputImageId = request == null ? null : request.getInputImageId();
+        ScanImage image = requestedInputImageId == null
+                ? aiInputImages.get(0)
+                : scanImages.stream()
+                        .filter(candidate -> candidate.getId().equals(requestedInputImageId))
+                        .findFirst()
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Input image not found in this scan"
+                        ));
+        validateInputImage(image);
+
+        if (aiInputImages.stream().noneMatch(candidate ->
+                candidate.getId().equals(image.getId()))) {
+            throw new ScanConflictException(
+                    "input_image_id must reference one of the images labeled for reconstruction"
             );
         }
-
-        String profile = resolveProfile(request.getProfile());
-
-        ScanImage image = scanImageRepository
-                .findByIdAndScan_IdAndDeletedAtIsNull(
-                        request.getInputImageId(),
-                        scanId
-                )
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Input image not found in this scan"
-                ));
-
-        validateInputImage(image);
 
         ReconstructionJob job = ReconstructionJob.builder()
                 .scan(scan)
                 .inputImageId(image.getId())
-                .inputSnapshot(buildInputSnapshot(image))
+                .inputSnapshot(buildInputSnapshot(image, aiInputImages))
                 .status(ReconstructionJobStatus.queued)
                 .progress(0)
                 .profile(profile)
@@ -226,7 +236,7 @@ public class ReconstructionJobServiceImpl
         findAccessibleScan(job.getScan().getId(), currentUserId, currentUserRole);
 
         return modelOutputRepository.findByJob_IdOrderByCreatedAtDesc(jobId).stream()
-                .map(com.memento3d.models.api.response.ModelOutputResponse::fromEntity)
+                .map(modelDelivery::toResponse)
                 .toList();
     }
 
@@ -308,6 +318,12 @@ public class ReconstructionJobServiceImpl
                     "Excluded image cannot be used for reconstruction"
             );
         }
+        if (image.getFileSizeBytes() == null
+                || image.getFileSizeBytes() > MAX_AI_IMAGE_BYTES) {
+            throw new ScanConflictException(
+                    "Input image exceeds the Head API limit of 12 MiB"
+            );
+        }
 //          TODO: Bổ sung Quality Check qua interface sau khi
 //          hoàn thiện luồng upload → generate → output.
 //        if (Boolean.TRUE.equals(image.getNeedsQualityCheck())) {
@@ -324,7 +340,47 @@ public class ReconstructionJobServiceImpl
         }
     }
 
-    private Map<String, Object> buildInputSnapshot(ScanImage image) {
+    private List<ScanImage> selectAiInputImages(List<ScanImage> scanImages) {
+        Map<String, ScanImage> imagesByView = new LinkedHashMap<>();
+        for (ScanImage image : scanImages) {
+            String viewHint = image.getViewHint();
+            if (viewHint == null || viewHint.isBlank()) {
+                continue;
+            }
+
+            ScanImage previous = imagesByView.putIfAbsent(viewHint, image);
+            if (previous != null) {
+                throw new ScanConflictException(
+                        "Multiple active scan images are labeled '" + viewHint
+                                + "'; keep only one image for each view"
+                );
+            }
+        }
+
+        List<ScanImage> selected = new ArrayList<>(4);
+        for (String requiredView : REQUIRED_AI_VIEW_HINTS) {
+            ScanImage image = imagesByView.get(requiredView);
+            if (image == null) {
+                throw new ScanConflictException(
+                        "Head reconstruction requires scan images labeled front, left, and right"
+                );
+            }
+            validateInputImage(image);
+            selected.add(image);
+        }
+
+        ScanImage backImage = imagesByView.get("back");
+        if (backImage != null) {
+            validateInputImage(backImage);
+            selected.add(backImage);
+        }
+        return selected;
+    }
+
+    private Map<String, Object> buildInputSnapshot(
+            ScanImage image,
+            List<ScanImage> aiInputImages
+    ) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
 
         snapshot.put("image_id", image.getId().toString());
@@ -337,6 +393,22 @@ public class ReconstructionJobServiceImpl
         snapshot.put("width", image.getWidth());
         snapshot.put("height", image.getHeight());
         snapshot.put("hash_md5", image.getHashMd5());
+
+        List<Map<String, Object>> inputImages = new ArrayList<>();
+        for (ScanImage inputImage : aiInputImages) {
+            Map<String, Object> imageSnapshot = new LinkedHashMap<>();
+            imageSnapshot.put("image_id", inputImage.getId().toString());
+            imageSnapshot.put("view_hint", inputImage.getViewHint());
+            imageSnapshot.put("cloudinary_public_id", inputImage.getCloudinaryPublicId());
+            imageSnapshot.put("cloudinary_asset_id", inputImage.getCloudinaryAssetId());
+            imageSnapshot.put("format", inputImage.getFormat());
+            imageSnapshot.put("file_size_bytes", inputImage.getFileSizeBytes());
+            imageSnapshot.put("width", inputImage.getWidth());
+            imageSnapshot.put("height", inputImage.getHeight());
+            imageSnapshot.put("hash_md5", inputImage.getHashMd5());
+            inputImages.add(imageSnapshot);
+        }
+        snapshot.put("input_images", inputImages);
 
         return snapshot;
     }
@@ -534,9 +606,14 @@ public class ReconstructionJobServiceImpl
         Scan scan = scanRepository.findById(scanId)
                 .orElseThrow(() -> new ResourceNotFoundException("Associated scan not found: " + scanId));
 
-        // Find primary image for scan
-        ScanImage image = scanImageRepository.findFirstByScan_IdAndDeletedAtIsNullOrderByCreatedAtDesc(scanId)
-                .orElseThrow(() -> new ResourceNotFoundException("No valid image found for this scan."));
+        // Premium jobs use the explicitly labeled front image as their primary input.
+        ScanImage image = scanImageRepository.findByScanIdAndDeletedAtIsNull(scanId)
+                .stream()
+                .filter(candidate -> "front".equals(candidate.getViewHint()))
+                .findFirst()
+                .orElseThrow(() -> new ScanConflictException(
+                        "Head reconstruction requires scan images labeled front, left, and right"
+                ));
 
         CreateReconstructionJobRequest jobRequest = CreateReconstructionJobRequest.builder()
                 .inputImageId(image.getId())
@@ -583,7 +660,7 @@ public class ReconstructionJobServiceImpl
         List<com.memento3d.models.domain.model.ModelOutput> outputs = modelOutputRepository.findByJob_IdOrderByCreatedAtDesc(jobId);
         String previewUrl = null;
         if (!outputs.isEmpty()) {
-            previewUrl = outputs.get(0).getDeliveryUrl();
+            previewUrl = modelDelivery.url(outputs.get(0));
         }
 
         return com.memento3d.reconstruction.api.response.PreviewJobDetailsResponse.fromEntity(job, previewUrl);

@@ -1,0 +1,22 @@
+﻿{
+    "Step":  1,
+    "Scope":  "Versioned asset catalog and read-only B2 verification",
+    "Migration":  "V27",
+    "NeonMigrated":  false,
+    "NeonCatalogImported":  false,
+    "B2ObjectsVerified":  15,
+    "B2WriteOperations":  0,
+    "FocusedTests":  72,
+    "FocusedFailures":  0,
+    "FocusedErrors":  0,
+    "FullSuiteTests":  577,
+    "FullSuiteFailures":  36,
+    "FullSuiteErrors":  2,
+    "FullSuiteSkipped":  2,
+    "FullSuiteFailureScope":  "Identity/registration fixtures missing terms agreement or email verification; no catalog test failed",
+    "Postgres":  "Isolated Docker PostgreSQL 17, V27 + Hibernate/JSONB/rollback/concurrency/query-count checks",
+    "Next":  "AI DTO/client/finalizer fit manifest ingestion, then saved drafts",
+    "FocusedLog":  "target/catalog-step1-final-tests.log",
+    "FullLog":  "target/catalog-step1-full-tests.log",
+    "B2Log":  "target/catalog-b2-live-check.log"
+}

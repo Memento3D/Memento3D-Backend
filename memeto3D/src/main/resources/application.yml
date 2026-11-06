@@ -95,6 +95,15 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET:dev-secret-key-1234567890}
 
 app:
+  model-storage:
+    provider: ${MODEL_STORAGE_PROVIDER:cloudinary}
+    b2:
+      endpoint: ${B2_ENDPOINT:https://s3.us-east-005.backblazeb2.com}
+      region: ${B2_REGION:us-east-005}
+      bucket: ${B2_BUCKET:memento3d-models-tiendon}
+      key-id: ${B2_KEY_ID:}
+      application-key: ${B2_APPLICATION_KEY:}
+      url-ttl-seconds: ${B2_URL_TTL_SECONDS:3600}
   frontend:
     # Used ONLY server-side to build links inside emails (never taken from the request).
     base-url: ${APP_FRONTEND_URL:${FRONTEND_BASE_URL:http://localhost:5173}}
@@ -161,8 +170,8 @@ app:
   ai:
     default-provider: ${APP_AI_DEFAULT_PROVIDER:FASTAPI}
     image-validation-provider: ${APP_AI_IMAGE_VALIDATION_PROVIDER:FASTAPI}
-    base-url: ${AI_BASE_URL:http://127.0.0.1:8000}
-    api-key: ${AI_API_KEY:memento3d-dev-service-api-key-987654321}
+    base-url: ${AI_BASE_URL:http://127.0.0.1:8090}
+    api-key: ${AI_API_KEY:}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     dispatch-enabled: ${AI_DISPATCH_ENABLED:false}
     dispatch-delay-ms: 10000
@@ -218,6 +227,5 @@ springdoc:
     filter: true
     display-request-duration: true
     doc-expansion: list
-
 
 

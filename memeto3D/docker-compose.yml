@@ -55,6 +55,13 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      MODEL_STORAGE_PROVIDER: ${MODEL_STORAGE_PROVIDER:-cloudinary}
+      B2_ENDPOINT: ${B2_ENDPOINT:-https://s3.us-east-005.backblazeb2.com}
+      B2_REGION: ${B2_REGION:-us-east-005}
+      B2_BUCKET: ${B2_BUCKET:-memento3d-models-tiendon}
+      B2_KEY_ID: ${B2_KEY_ID:-}
+      B2_APPLICATION_KEY: ${B2_APPLICATION_KEY:-}
+      B2_URL_TTL_SECONDS: ${B2_URL_TTL_SECONDS:-3600}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
@@ -68,6 +75,11 @@ services:
       AI_MOCK_ENABLED: ${AI_MOCK_ENABLED:-false}
       AI_MOCK_OUTPUT_ID: ${AI_MOCK_OUTPUT_ID:-}
       AI_MOCK_DELAY_MS: ${AI_MOCK_DELAY_MS:-2000}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+      VNPAY_PAYMENT_URL: ${VNPAY_PAYMENT_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:5173/payment/vnpay/return}
+      VNPAY_IPN_URL: ${VNPAY_IPN_URL:-http://localhost:8080/api/v1/payments/vnpay/ipn}
     ports:
       - "8080:8080"
     healthcheck:

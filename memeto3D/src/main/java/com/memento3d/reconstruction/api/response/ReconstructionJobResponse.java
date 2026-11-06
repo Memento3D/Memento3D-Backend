@@ -38,6 +38,9 @@ public class ReconstructionJobResponse {
 
     private String profile;
 
+    @JsonProperty("output_kind") private String outputKind;
+    @JsonProperty("customization_ready") private boolean customizationReady;
+
     @JsonProperty("execution_mode")
     private ExecutionMode executionMode;
 
@@ -78,6 +81,8 @@ public class ReconstructionJobResponse {
                 .stage(job.getStage())
                 .progress(job.getProgress())
                 .profile(job.getProfile())
+                .outputKind(job.getOutputKind())
+                .customizationReady(job.getStatus()==ReconstructionJobStatus.done && job.isCustomizationReady())
                 .executionMode(job.getExecutionMode())
                 .retryCount(job.getRetryCount())
                 .errorCode(job.getErrorCode())

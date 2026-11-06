@@ -11,6 +11,8 @@ import com.memento3d.reconstruction.domain.model.ReconstructionStage;
 import com.memento3d.reconstruction.domain.exception.AiClientException;
 import com.memento3d.reconstruction.infrastructure.persistence.repository.ReconstructionJobRepository;
 import com.memento3d.reconstruction.domain.gateway.AiGenerationClient;
+import com.memento3d.scans.domain.model.ScanStatus;
+import com.memento3d.scans.infrastructure.persistence.repository.ScanRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
@@ -20,7 +22,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import com.memento3d.reconstruction.domain.model.ExecutionMode;
 
@@ -29,6 +35,7 @@ import com.memento3d.reconstruction.domain.model.ExecutionMode;
 public class ReconstructionJobDispatcher {
 
     private final ReconstructionJobRepository jobRepository;
+    private final ScanRepository scanRepository;
     private final AiGenerationClient aiClient;
     private final Cloudinary cloudinary;
     private final TransactionTemplate transaction;
@@ -36,12 +43,14 @@ public class ReconstructionJobDispatcher {
 
     public ReconstructionJobDispatcher(
             ReconstructionJobRepository jobRepository,
+            ScanRepository scanRepository,
             AiGenerationClient aiClient,
             Cloudinary cloudinary,
             PlatformTransactionManager transactionManager,
             @Value("${app.ai.dispatch-enabled:false}") boolean enabled
     ) {
         this.jobRepository = jobRepository;
+        this.scanRepository = scanRepository;
         this.aiClient = aiClient;
         this.cloudinary = cloudinary;
         this.transaction = new TransactionTemplate(transactionManager);
@@ -88,18 +97,61 @@ public class ReconstructionJobDispatcher {
             recordAcceptance(request, response);
 
         } catch (AiClientException ex) {
-            /*
-             * Giữ queued và giữ nguyên attempt.
-             * Lần sau gửi lại cùng request để AI chống nhận trùng.
-             */
-            log.warn(
-                    "AI dispatch pending: jobId={}, upstreamStatus={}",
-                    jobId,
-                    ex.getUpstreamStatus()
-            );
+            if (isPermanentAiRejection(ex)) {
+                failQueuedJob(jobId, "AI_REQUEST_REJECTED", ex.getMessage());
+                log.error(
+                        "AI rejected reconstruction request: jobId={}, upstreamStatus={}",
+                        jobId,
+                        ex.getUpstreamStatus()
+                );
+            } else {
+                /*
+                 * Giữ queued và giữ nguyên attempt để retry lỗi mạng/AI tạm thời.
+                 */
+                log.warn(
+                        "AI dispatch pending: jobId={}, upstreamStatus={}",
+                        jobId,
+                        ex.getUpstreamStatus()
+                );
+            }
+        } catch (InvalidAiInputSnapshotException ex) {
+            failQueuedJob(jobId, "INVALID_AI_INPUT", ex.getMessage());
+            log.warn("AI dispatch rejected invalid input snapshot: jobId={}", jobId);
         } catch (Exception ex) {
             log.error("Failed to dispatch AI job {}", jobId, ex);
         }
+    }
+
+    private boolean isPermanentAiRejection(AiClientException exception) {
+        Integer status = exception.getUpstreamStatus();
+        return "AI_API_KEY is not configured".equals(exception.getMessage())
+                || (status != null
+                && status >= 400
+                && status < 500
+                && status != 408
+                && status != 429);
+    }
+
+    private void failQueuedJob(UUID jobId, String errorCode, String message) {
+        transaction.executeWithoutResult(tx -> {
+            ReconstructionJob job = jobRepository
+                    .findByIdForUpdate(jobId)
+                    .orElseThrow();
+            if (job.getStatus() != ReconstructionJobStatus.queued) {
+                return;
+            }
+
+            job.setStatus(ReconstructionJobStatus.failed);
+            job.setErrorCode(errorCode);
+            job.setErrorMessage(message);
+            job.setCompletedAt(Instant.now());
+            jobRepository.save(job);
+
+            if (job.getScan().getStatus() == ScanStatus.processing) {
+                job.getScan().setStatus(ScanStatus.ready);
+                scanRepository.save(job.getScan());
+            }
+        });
     }
 
     private AiSubmitJobRequest prepareRequest(UUID jobId) {
@@ -125,23 +177,72 @@ public class ReconstructionJobDispatcher {
                 );
             }
 
-            Object value = job.getInputSnapshot()
-                    .get("cloudinary_public_id");
-
-            if (!(value instanceof String publicId)
-                    || publicId.isBlank()) {
-                throw new IllegalStateException(
-                        "Job input snapshot has no Cloudinary public ID"
-                );
-            }
-
             if (job.getAttemptId() == null) {
                 job.setAttemptId(UUID.randomUUID());
             }
 
+            List<AiSubmitJobRequest.InputImage> inputImages =
+                    buildAiInputImages(job.getInputSnapshot());
+
+            jobRepository.saveAndFlush(job);
+
+            return new AiSubmitJobRequest(
+                    job.getId(),
+                    job.getAttemptId(),
+                    inputImages,
+                    "default"
+            );
+        });
+    }
+
+    private List<AiSubmitJobRequest.InputImage> buildAiInputImages(
+            Map<String, Object> inputSnapshot
+    ) {
+        Object value = inputSnapshot.get("input_images");
+        if (!(value instanceof List<?> rows) || rows.size() < 3 || rows.size() > 4) {
+            throw new InvalidAiInputSnapshotException(
+                    "Job snapshot must contain three required labeled views and optional back; re-create this job"
+            );
+        }
+
+        List<AiSubmitJobRequest.InputImage> inputImages = new ArrayList<>(rows.size());
+        Set<String> imageIds = new HashSet<>();
+        Set<String> viewHints = new HashSet<>();
+        for (Object row : rows) {
+            if (!(row instanceof Map<?, ?> image)) {
+                throw new InvalidAiInputSnapshotException(
+                        "Job snapshot contains an invalid input image entry; re-create this job"
+                );
+            }
+
+            Object imageIdValue = image.get("image_id");
+            Object publicIdValue = image.get("cloudinary_public_id");
+            Object viewHintValue = image.get("view_hint");
+            if (!(imageIdValue instanceof String imageIdText)
+                    || !(publicIdValue instanceof String publicId)
+                    || publicId.isBlank()
+                    || !(viewHintValue instanceof String viewHint)
+                    || !Set.of("front", "left", "right", "back").contains(viewHint)
+                    || !imageIds.add(imageIdText)
+                    || !viewHints.add(viewHint)) {
+                throw new InvalidAiInputSnapshotException(
+                        "Job snapshot contains missing or duplicate image metadata; re-create this job"
+                );
+            }
+
+            UUID imageId;
+            try {
+                imageId = UUID.fromString(imageIdText);
+            } catch (IllegalArgumentException ex) {
+                throw new InvalidAiInputSnapshotException(
+                        "Job snapshot contains an invalid image UUID; re-create this job",
+                        ex
+                );
+            }
+
             /*
-             * Ảnh hiện tại được upload dưới dạng image/public.
-             * Không dùng storagePath như URL và không tự nối chuỗi URL.
+             * Images are uploaded as public Cloudinary assets. Generate the
+             * HTTPS URL from the persisted public ID instead of storage_path.
              */
             String inputUrl = cloudinary.url()
                     .secure(true)
@@ -149,16 +250,29 @@ public class ReconstructionJobDispatcher {
                     .type("upload")
                     .generate(publicId);
 
-            jobRepository.saveAndFlush(job);
-
-            return new AiSubmitJobRequest(
-                    job.getId(),
-                    job.getAttemptId(),
-                    job.getInputImageId(),
+            inputImages.add(new AiSubmitJobRequest.InputImage(
+                    imageId,
                     inputUrl,
-                    job.getProfile()
+                    viewHint
+            ));
+        }
+
+        if (!viewHints.containsAll(Set.of("front", "left", "right"))) {
+            throw new InvalidAiInputSnapshotException(
+                    "Job snapshot is missing a required front, left, or right view; re-create this job"
             );
-        });
+        }
+        return List.copyOf(inputImages);
+    }
+
+    private static final class InvalidAiInputSnapshotException extends RuntimeException {
+        private InvalidAiInputSnapshotException(String message) {
+            super(message);
+        }
+
+        private InvalidAiInputSnapshotException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 
     private void recordAcceptance(

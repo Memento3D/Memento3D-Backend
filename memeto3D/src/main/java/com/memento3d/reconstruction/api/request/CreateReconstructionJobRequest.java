@@ -1,8 +1,7 @@
 package com.memento3d.reconstruction.api.request;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -18,8 +17,11 @@ import java.util.UUID;
 @Builder
 public class CreateReconstructionJobRequest {
 
-    @NotNull(message = "input_image_id is required")
     @JsonProperty("input_image_id")
+    @Schema(
+            description = "Deprecated optional compatibility field. If omitted, the front-labeled image is selected automatically.",
+            deprecated = true
+    )
     private UUID inputImageId;
 
     @Builder.Default

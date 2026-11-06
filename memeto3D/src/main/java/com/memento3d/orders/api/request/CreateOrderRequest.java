@@ -21,6 +21,13 @@ public class CreateOrderRequest {
     @Schema(description = "Optional scan session UUID for bespoke 3D scan order", example = "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d")
     private UUID scanId;
 
+    @Schema(description="Immutable custom model OUTPUT ID; selects custom checkout instead of the cart")
+    private UUID modelOutputId;
+    private UUID fitResultId;
+    private Long customizationRevision;
+    @jakarta.validation.constraints.Min(8) @jakarta.validation.constraints.Max(20)
+    private Integer requestedHeightCm;
+
     @Schema(description = "Optional total price (server will recalculate based on active cart and product prices if empty)", example = "250000.00")
     private BigDecimal totalPrice;
 

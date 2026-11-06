@@ -42,6 +42,7 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class PrintJobServiceTest {
+    @Mock private com.memento3d.customization.application.service.PrintDesignService printDesignService;
 
     @Mock private PrintJobRepository printJobRepository;
     @Mock private StockReservationRepository reservationRepository;

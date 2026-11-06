@@ -33,6 +33,7 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ModelApprovalAndPrintJobQcTest {
+    @Mock private com.memento3d.customization.application.service.PrintDesignService printDesignService;
 
     @Mock
     private ModelVersionRepository modelVersionRepository;

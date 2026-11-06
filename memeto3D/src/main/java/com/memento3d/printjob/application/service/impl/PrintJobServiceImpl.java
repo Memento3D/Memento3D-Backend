@@ -58,23 +58,39 @@ public class PrintJobServiceImpl implements PrintJobService {
     private final com.memento3d.orders.infrastructure.persistence.repository.OrderRepository orderRepository;
     private final com.memento3d.modelreview.infrastructure.persistence.repository.ModelVersionRepository modelVersionRepository;
     private final com.memento3d.shared.outbox.application.service.OutboxPublisherService outboxPublisher;
+    private final com.memento3d.customization.application.service.PrintDesignService printDesignService;
+    private final jakarta.persistence.EntityManager entityManager;
 
     @Override
     @Transactional
     public PrintJobResponse createPrintJob(CreatePrintJobRequest request, UUID actorId) {
+        printDesignService.validateVersionBinding(request.getModelVersionId(),request.getOrderId());
         Material material = materialRepository.findById(request.getMaterialId())
                 .orElseThrow(() -> new ResourceNotFoundException("Material not found with id: " + request.getMaterialId()));
 
         Printer printer = null;
-        if (!request.isOutsource() && request.getPrinterId() != null) {
+        if (request.getPrinterId() != null) {
             printer = printerRepository.findById(request.getPrinterId())
                     .orElseThrow(() -> new ResourceNotFoundException("Printer not found with id: " + request.getPrinterId()));
         }
 
         // Validate order linkage and model approval if order is attached
+        if(request.getOrderItemId()!=null && request.getOrderId()==null)
+            throw new BusinessException(HttpStatus.BAD_REQUEST,"ORDER_REQUIRED","An order item requires its order ID");
         if (request.getOrderId() != null) {
             com.memento3d.orders.domain.model.Order order = orderRepository.findById(request.getOrderId())
                     .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + request.getOrderId()));
+
+            if(request.getOrderItemId()!=null && order.getItems().stream().noneMatch(i->i.getId().equals(request.getOrderItemId())))
+                throw new BusinessException(HttpStatus.BAD_REQUEST,"ORDER_ITEM_MISMATCH","Order item does not belong to this order");
+            if(printDesignService.isCustom(order.getId())) {
+                entityManager.lock(order,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+                if(order.getStatus()!=com.memento3d.orders.domain.model.OrderStatus.PROCESSING
+                    || !(order.getPaymentStatus()==com.memento3d.payment.domain.model.PaymentStatus.PAID || order.getPaymentStatus()==com.memento3d.payment.domain.model.PaymentStatus.SUCCESS)
+                    || !"ACCEPTED".equals(order.getFeasibilityStatus()))
+                    throw new BusinessException(HttpStatus.CONFLICT,"CUSTOM_ORDER_NOT_PRINTABLE","Custom order must be accepted, paid and PROCESSING");
+                request.setModelVersionId(printDesignService.requirePrintable(order.getId(),request.getOrderItemId(),request.getModelVersionId()));
+            }
 
             if (request.getOrderItemId() != null) {
                 if (printJobRepository.existsByOrderItemIdAndStatusNot(request.getOrderItemId(), PrintJobStatus.CANCELLED)) {
@@ -90,6 +106,7 @@ public class PrintJobServiceImpl implements PrintJobService {
                     throw new BusinessException(HttpStatus.BAD_REQUEST, "MODEL_NOT_APPROVED",
                             "Model version " + version.getVersionNumber() + " must be APPROVED before physical printing.");
                 }
+                if(printDesignService.isCustom(order.getId())) {version.setStatus("LOCKED");modelVersionRepository.save(version);}
             } else if (order.getScanId() != null) {
                 java.util.Optional<com.memento3d.modelreview.domain.model.ModelVersion> latestApproved =
                         modelVersionRepository.findFirstByScan_IdOrderByVersionNumberDesc(order.getScanId());
@@ -106,8 +123,7 @@ public class PrintJobServiceImpl implements PrintJobService {
                 .orderId(request.getOrderId())
                 .orderItemId(request.getOrderItemId())
                 .modelVersionId(request.getModelVersionId())
-                .isOutsource(request.isOutsource())
-                .partnerName(request.getPartnerName())
+                .isOutsource(false)
                 .printer(printer)
                 .material(material)
                 .estimatedGram(request.getEstimatedGram())

@@ -34,6 +34,8 @@ public class ModelReviewServiceImpl implements ModelReviewService {
     private final ScanRepository scanRepository;
     private final ReconstructionJobRepository jobRepository;
     private final OutboxPublisherService outboxPublisher;
+    private final jakarta.persistence.EntityManager entityManager;
+    private final com.memento3d.customization.application.service.PrintDesignService printDesignService;
 
     private static final int MAX_REVISION_QUOTA = 3;
 
@@ -54,6 +56,7 @@ public class ModelReviewServiceImpl implements ModelReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("Model version not found: " + versionId));
 
         validateScanOwnership(version.getScan(), currentUserId, currentUserRole);
+        requirePersonalVersion(versionId);
 
         if (version.isLocked()) {
             throw new BusinessException(HttpStatus.CONFLICT, "VERSION_LOCKED", "Locked model versions cannot be modified or re-approved.");
@@ -98,6 +101,7 @@ public class ModelReviewServiceImpl implements ModelReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("Model version not found: " + versionId));
 
         validateScanOwnership(version.getScan(), currentUserId, currentUserRole);
+        requirePersonalVersion(versionId);
 
         if (version.isLocked()) {
             throw new BusinessException(HttpStatus.CONFLICT, "VERSION_LOCKED", "Locked model versions cannot have revisions requested.");
@@ -146,6 +150,7 @@ public class ModelReviewServiceImpl implements ModelReviewService {
     @Override
     @Transactional
     public ModelVersion createModelVersion(UUID scanId, UUID jobId, String modelUrl) {
+        entityManager.find(Scan.class,scanId,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         Scan scan = scanRepository.findById(scanId)
                 .orElseThrow(() -> new ResourceNotFoundException("Scan not found: " + scanId));
 
@@ -176,5 +181,8 @@ public class ModelReviewServiceImpl implements ModelReviewService {
         if (!isStaff && !scan.getUser().getId().equals(currentUserId)) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN_SCAN_ACCESS", "You do not own this model/scan.");
         }
+    }
+    private void requirePersonalVersion(UUID id) {
+        if(printDesignService.isFrozenVersion(id))throw new BusinessException(HttpStatus.CONFLICT,"CUSTOM_SNAPSHOT_IMMUTABLE","Review the frozen file through its order; personal revisions cannot modify it");
     }
 }

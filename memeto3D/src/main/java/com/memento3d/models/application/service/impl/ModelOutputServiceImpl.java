@@ -20,6 +20,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ModelOutputServiceImpl implements ModelOutputService {
 
+    private final com.memento3d.models.application.service.ModelDeliveryService modelDelivery;
     private final ScanRepository scanRepository;
     private final ModelOutputRepository outputRepository;
     private final ScanAccessGuard scanAccessGuard;
@@ -51,7 +52,7 @@ public class ModelOutputServiceImpl implements ModelOutputService {
         return outputRepository
                 .findByJob_Scan_IdOrderByCreatedAtDesc(scanId)
                 .stream()
-                .map(ModelOutputResponse::fromEntity)
+                .map(modelDelivery::toResponse)
                 .toList();
     }
 
@@ -68,7 +69,7 @@ public class ModelOutputServiceImpl implements ModelOutputService {
         Scan scan = output.getJob().getScan();
         scanAccessGuard.requireAccess(scan, currentUserId, currentUserRole);
 
-        return ModelOutputResponse.fromEntity(output);
+        return modelDelivery.toResponse(output);
     }
 
     @Override

@@ -23,4 +23,12 @@ public interface ModelOutputRepository
     List<ModelOutput> findByJob_IdOrderByCreatedAtDesc(
             UUID jobId
     );
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths={"job","job.scan","job.scan.user"})
+    @org.springframework.data.jpa.repository.Query("select o from ModelOutput o where o.id=:id")
+    Optional<ModelOutput> findSceneOutput(@org.springframework.data.repository.query.Param("id") UUID id);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select o from ModelOutput o where o.id=:id")
+    Optional<ModelOutput> findSceneOutputForUpdate(@org.springframework.data.repository.query.Param("id") UUID id);
 }

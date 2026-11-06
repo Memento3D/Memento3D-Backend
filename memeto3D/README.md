@@ -139,6 +139,27 @@ Sau khi ứng dụng khởi chạy thành công:
 - **Swagger UI**: [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
 - **OpenAPI JSON**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 
+### Kết nối Head API (RDF + hair-cap MVP)
+
+Backend gửi job sang AI service tại `AI_BASE_URL` (mặc định `http://127.0.0.1:8090`). Đặt `AI_API_KEY` trong `.env` của BE bằng cùng secret với `HEADAPI_API_KEY` của AI; không dùng giá trị mẫu trong production. Giữ `AI_DISPATCH_ENABLED=false` cho tới khi BE có thể kết nối được AI service và cấu hình đúng key.
+
+Head API yêu cầu ba ảnh có nhãn góc **front**, **left**, **right**; ảnh **back** là tùy chọn. `view_hint` là metadata trong database gắn với bản ghi scan image, không chỉnh sửa file ảnh. FE có thể gửi `view_hint` ngay khi upload multipart ảnh; với ảnh đã upload, gán/cập nhật nhãn qua:
+
+```http
+PATCH /api/v1/scans/{scanId}/images/{imageId}
+Content-Type: application/json
+
+{"view_hint": "front"}
+```
+
+Lặp lại cho ảnh trái/phải và tùy chọn ảnh sau. `GET /api/v1/scans/{scanId}/images` trả kèm `view_hint`; mỗi góc chỉ được gán cho một ảnh chưa xóa trong scan. Gửi `{"view_hint": ""}` để bỏ nhãn. Ảnh đã có từ trước cần được gán nhãn trước khi tạo job. Migration Flyway V26 thêm cột metadata này; không cần cập nhật ảnh gốc.
+
+Sau khi gán đủ nhãn, tạo job qua `POST /api/v1/scans/{scanId}/reconstruction-jobs` với body `{"profile":"default"}`. `input_image_id` không cần gửi nữa; BE chọn ảnh `front` làm ảnh chính cho bản ghi job rồi chụp snapshot các ảnh `front`/`left`/`right` (và `back` nếu có), tạo HTTPS Cloudinary URL phía server và gửi JSON `input_images` cùng `image_id`, `input_url`, `view_hint` sang AI. BE không suy đoán góc chụp từ `sort_order`. Endpoint `/api/v1/reconstruction/capabilities` công bố giới hạn 3–4 ảnh; mỗi ảnh AI nhận tối đa 12 MiB. Luồng premium tự tạo job cũng cần các nhãn này và dùng ảnh `front` làm ảnh chính.
+
+API key của AI chỉ được gửi từ BE tới AI qua `X-API-Key`; không đưa key này tới FE. AI hiện là pipeline thử nghiệm, không khẳng định độ giống, khả năng in hay hiệu chuẩn sản xuất.
+
+Hướng dẫn nối React FE theo luồng scan → reconstruction → order/payment → sản xuất in: [FE_SCAN_TO_PRINT_FLOW_VI.md](./doc/FE_SCAN_TO_PRINT_FLOW_VI.md). Tài liệu cũng ghi rõ các đoạn workflow hiện chưa được BE tự động liên kết.
+
 ---
 
 ## 📖 Tài Liệu Tham Khảo

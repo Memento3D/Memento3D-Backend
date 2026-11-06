@@ -68,6 +68,9 @@ public class ScanImage {
     @Builder.Default
     private Integer sortOrder = 0;
 
+    @Column(name = "view_hint", length = 10)
+    private String viewHint;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "exif_data")
     private Map<String, Object> exifData;
