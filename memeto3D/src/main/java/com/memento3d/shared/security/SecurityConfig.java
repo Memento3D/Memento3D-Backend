@@ -118,6 +118,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/users/me/**", "/api/v1/users/me", "/api/v1/auth/me", "/api/auth/me", "/auth/me", "/api/me", "/users/me", "/api/users/me").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout", "/api/auth/logout", "/auth/logout").authenticated()
                         // Admin Endpoints strictly restricted to ROLE_ADMIN
+                        .requestMatchers(HttpMethod.GET, "/api/v1/admin/analytics/dashboard", "/api/v1/admin/analytics/conversions").hasAnyRole("ADMIN", "MANAGER")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         // Any other endpoint requires authentication by default
                         .anyRequest().authenticated()
